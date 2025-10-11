@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FullCalendar Test</title>
+    <!-- FullCalendar CSS -->
+    <link rel="stylesheet" href="assets/plugins/fullcalendar/fullcalendar.min.css">
+    
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="assets/plugins/bootstrap/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>FullCalendar Test</h1>
+        <div id="calendar" style="min-height: 600px;"></div>
+    </div>
+
+    <!-- Jquery Core Js -->
+    <script src="assets/bundles/libscripts.bundle.js"></script>
+    
+    <!-- Lib Scripts Plugin Js -->
+    <script src="assets/bundles/vendorscripts.bundle.js"></script>
+    
+    <!-- Custom Js -->
+    <script src="assets/bundles/mainscripts.bundle.js"></script>
+    
+    <!-- Calender Javascripts -->
+    <script src="assets/bundles/fullcalendarscripts.bundle.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            
+            // Check if FullCalendar is available
+            if (typeof FullCalendar === 'undefined') {
+                console.error('FullCalendar is not available');
+                document.getElementById('calendar').innerHTML = '<p style="color: red;">Error: FullCalendar library not loaded!</p>';
+                return;
+            }
+            
+            console.log('FullCalendar is available');
+            
+            var calendarEl = document.getElementById('calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                events: [
+                    {
+                        title: 'Test Event',
+                        start: new Date().toISOString().split('T')[0]
+                    }
+                ]
+            });
+            
+            calendar.render();
+            console.log('Calendar rendered');
+        });
+    </script>
+</body>
+</html>
