@@ -240,8 +240,16 @@
                             <li> 
                                 <a href="{{ url('/doctor/patients') }}"><i class="zmdi zmdi-accounts"></i><span>My Patients</span></a>
                             </li>
-                            <li> 
-                                <a href="{{ url('/doctor/appointments') }}"><i class="zmdi zmdi-calendar"></i><span>Appointments</span></a>
+                            <li>
+                                <a href="{{ url('/doctor/appointments') }}"><i class="zmdi zmdi-calendar-check"></i><span>Appointments</span></a>
+                             </li>
+                             <li>
+                                 <!-- Removed doctor patient link -->
+                             </li>
+                             <li> <a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-balance-wallet"></i><span>Payments</span> </a>
+                                <ul class="ml-menu">
+                                    <li><a href="{{ url('/doctor/payments') }}">All Payments</a></li>
+                                </ul>
                             </li>
                             @break
 

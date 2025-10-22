@@ -94,9 +94,9 @@
                     <div class="body">
                         <div class="col-12">
                             <div class="mt-2">
-                                <h6 class="text-uppercase">Total Amount</h6>
+                                <h6 class="text-uppercase">Total Amount (Successful)</h6>
                                 <h4 class="text-primary">
-                                    ₦{{ number_format($payments->sum('amount'), 2) }}
+                                    ₦{{ number_format($payments->whereIn('status', ['completed', 'paid'])->sum('amount'), 2) }}
                                 </h4>
                             </div>
                         </div>
@@ -168,7 +168,7 @@
                                         <td>
                                             @if($payment->status === 'completed')
                                                 <span class="badge bg-success">Completed</span>
-                                            @elseif($payment->status === 'pending')
+                                            @elseif($payment->status === 'pending' || $payment->status === 'pending_cash_verification')
                                                 <span class="badge bg-warning">Pending</span>
                                             @elseif($payment->status === 'failed')
                                                 <span class="badge bg-danger">Failed</span>
@@ -221,12 +221,6 @@
 <script src="{{ asset('assets/bundles/libscripts.bundle.js') }}"></script>
 <script src="{{ asset('assets/bundles/vendorscripts.bundle.js') }}"></script>
 <script src="{{ asset('assets/bundles/datatablescripts.bundle.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/dataTables.buttons.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.bootstrap4.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.colVis.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.flash.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.html5.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.print.min.js') }}"></script>
 <script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script>
 <script src="{{ asset('assets/js/pages/tables/jquery-datatable.js') }}"></script>
 </body>

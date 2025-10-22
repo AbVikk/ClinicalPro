@@ -83,7 +83,7 @@
                                     <strong>Status:</strong> 
                                     @if($payment->status === 'completed')
                                         <span class="badge bg-success">Completed</span>
-                                    @elseif($payment->status === 'pending')
+                                    @elseif($payment->status === 'pending' || $payment->status === 'pending_cash_verification')
                                         <span class="badge bg-warning">Pending</span>
                                     @elseif($payment->status === 'failed')
                                         <span class="badge bg-danger">Failed</span>

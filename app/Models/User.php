@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Carbon\Carbon;
 
 class User extends Authenticatable
 {
@@ -72,6 +73,21 @@ class User extends Authenticatable
             'password' => 'hashed',
             'date_of_birth' => 'date',
         ];
+    }
+
+    // Accessor for age_gender
+    public function getAgeGenderAttribute()
+    {
+        if ($this->date_of_birth && $this->gender) {
+            $age = Carbon::parse($this->date_of_birth)->age;
+            return $age . ' / ' . ucfirst($this->gender);
+        } elseif ($this->date_of_birth) {
+            $age = Carbon::parse($this->date_of_birth)->age;
+            return $age . ' / N/A';
+        } elseif ($this->gender) {
+            return 'N/A / ' . ucfirst($this->gender);
+        }
+        return 'N/A / N/A';
     }
 
     // Role checking methods
@@ -170,48 +186,80 @@ class User extends Authenticatable
         return $this->hasMany(Prescription::class, 'patient_id');
     }
 
+    // Medical history relationship
+    public function medicalHistories()
+    {
+        // For patients, this links to their medical history
+        return $this->hasMany(MedicalHistory::class, 'patient_id');
+    }
+
+    // EMR relationships for patient data across appointments
+    public function vitals()
+    {
+        // Vitals through appointments
+        return $this->hasManyThrough(Vitals::class, Appointment::class, 'patient_id', 'appointment_id');
+    }
+
+    public function clinicalNotes()
+    {
+        // Clinical notes through appointments
+        return $this->hasManyThrough(ClinicalNote::class, Appointment::class, 'patient_id', 'appointment_id');
+    }
+
+    public function medications()
+    {
+        // Medications through appointments
+        return $this->hasManyThrough(Medication::class, Appointment::class, 'patient_id', 'appointment_id');
+    }
+
     // New relationships for the updated database structure
     public function clinic()
     {
-        return $this->belongsTo(Clinic::class, 'clinic_id');
+        return $this->belongsTo(Clinic::class);
     }
 
-    public function consultationsAsPatient()
-    {
-        return $this->hasMany(Consultation::class, 'patient_id');
-    }
-
-    public function consultationsAsDoctor()
-    {
-        return $this->hasMany(Consultation::class, 'doctor_id');
-    }
-
-    public function disbursements()
-    {
-        return $this->hasMany(Disbursement::class, 'recipient_id');
-    }
-
-    /**
-     * Get the department the user belongs to.
-     */
     public function department()
     {
         return $this->belongsTo(Department::class);
     }
 
-    /**
-     * Get the attendance records for the user.
-     */
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    // Doctor-specific relationships
+    public function doctorProfile()
+    {
+        return $this->hasOne(Doctor::class);
+    }
+
+    // Pharmacy relationships
+    public function pharmacyOrders()
+    {
+        return $this->hasMany(PharmacyOrder::class, 'ordered_by');
+    }
+
+    // Attendance relationships
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
     }
-    
-    /**
-     * Get the leave requests for the user.
-     */
+
+    // Leave request relationships
     public function leaveRequests()
     {
         return $this->hasMany(LeaveRequest::class);
+    }
+
+    // Invitation relationships
+    public function sentInvitations()
+    {
+        return $this->hasMany(Invitation::class, 'invited_by');
+    }
+
+    public function receivedInvitations()
+    {
+        return $this->hasMany(Invitation::class, 'email');
     }
 }

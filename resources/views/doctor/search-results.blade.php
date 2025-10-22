@@ -20,7 +20,7 @@
 </head>
 <body class="theme-cyan">
 <!-- Page Loader -->
-@include('admin.sidemenu')
+@include('doctor.sidemenu')
 
 <section class="content search_result_page">
    <div class="block-header">

@@ -19,7 +19,7 @@
 </head>
 <body class="theme-cyan">
 <!-- Page Loader -->
-@include('admin.sidemenu')
+@include('doctor.sidemenu')
 
 <!-- Main Content -->
 <section class="content">

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Links</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="assets/plugins/bootstrap/css/bootstrap.min.css">
+    <!-- Custom Css -->
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/color_skins.css">
+</head>
+<body class="theme-cyan">
+    <div class="container">
+        <h1>Test Links</h1>
+        
+        <p>These links should work:</p>
+        
+        <p><a href="https://google.com" class="btn btn-primary">External Link (Google)</a></p>
+        
+        <p><a href="/doctor/dashboard" class="btn btn-success">Dashboard Link</a></p>
+        
+        <p><a href="/doctor/appointments" class="btn btn-info">Appointments Link</a></p>
+        
+        <p><a href="/doctor/requests" class="btn btn-warning">Requests Link</a></p>
+        
+        <div id="log"></div>
+    </div>
+    
+    <!-- Jquery Core Js -->
+    <script src="assets/bundles/libscripts.bundle.js"></script>
+    <script src="assets/bundles/vendorscripts.bundle.js"></script>
+    <script src="assets/bundles/mainscripts.bundle.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('log').innerHTML = '<p>Page loaded</p>';
+            
+            // Add click handlers
+            document.querySelectorAll('a').forEach(function(link) {
+                link.addEventListener('click', function(e) {
+                    document.getElementById('log').innerHTML += '<p>Link clicked: ' + this.href + '</p>';
+                    console.log('Link clicked:', this.href);
+                    // Uncomment to prevent navigation for testing
+                    // e.preventDefault();
+                });
+                
+                link.addEventListener('mouseover', function(e) {
+                    document.getElementById('log').innerHTML += '<p>Link hovered: ' + this.href + '</p>';
+                    console.log('Link hovered:', this.href);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

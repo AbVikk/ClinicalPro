@@ -62,6 +62,24 @@
                         </ul>
                     </div>
                     <div class="body">
+                        @if(session('success'))
+                            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                {{ session('success') }}
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                        @endif
+
+                        @if(session('error'))
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                {{ session('error') }}
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                        @endif
+
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped table-hover js-basic-example dataTable">
                                 <thead>
@@ -78,428 +96,44 @@
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    @forelse($payments as $payment)
                                     <tr>
-                                        <td>21</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
+                                        <td>{{ $payment->id }}</td>
+                                        <td>{{ $payment->transaction_date ? $payment->transaction_date->format('m/d/Y') : 'N/A' }}</td>
+                                        <td>{{ $payment->user->name ?? 'N/A' }}</td>
+                                        <td>{{ $payment->appointment->doctor->name ?? 'N/A' }}</td>
+                                        <td>{{ number_format($payment->amount, 2) }}</td>
+                                        <td>0</td>
+                                        <td>0%</td>
+                                        <td>{{ number_format($payment->amount, 2) }}</td>
                                         <td>
-                                            <button class="btn btn-sm btn-info" title="View">
+                                            <a href="{{ route('admin.payments.invoice', $payment->id) }}" class="btn btn-sm btn-info" title="View">
                                                 <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
+                                            </a>
+                                            <a href="{{ route('admin.payments.edit', $payment->id) }}" class="btn btn-sm btn-primary" title="Edit">
                                                 <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
+                                            </a>
+                                            <form action="{{ route('admin.payments.destroy', $payment->id) }}" method="POST" style="display: inline;">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this payment?')">
+                                                    <i class="zmdi zmdi-delete"></i>
+                                                </button>
+                                            </form>
                                         </td>
                                     </tr>
+                                    @empty
                                     <tr>
-                                        <td>17</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
+                                        <td colspan="9" class="text-center">No payments found</td>
                                     </tr>
-                                    <tr>
-                                        <td>16</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>15</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>14</td>
-                                        <td>02/21/2017</td>
-                                        <td>Lori Perkins</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>12</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>22</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>11</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Jessica Patterson</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>105</td>
-                                        <td>02/21/2017</td>
-                                        <td>Lori Perkins</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>56</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>34</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Jessica Patterson</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>21</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>17</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>16</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>15</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>14</td>
-                                        <td>02/21/2017</td>
-                                        <td>Lori Perkins</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>12</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>22</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>11</td>
-                                        <td>02/21/2017</td>
-                                        <td>Christina Thomas</td>
-                                        <td>Jessica Patterson</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>105</td>
-                                        <td>02/21/2017</td>
-                                        <td>Lori Perkins</td>
-                                        <td>Juan Freeman</td>
-                                        <td>102</td>
-                                        <td>10</td>
-                                        <td>10%</td>
-                                        <td>210</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" title="View">
-                                                <i class="zmdi zmdi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-primary" title="Edit">
-                                                <i class="zmdi zmdi-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" title="Delete">
-                                                <i class="zmdi zmdi-delete"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
+                                    @endforelse
                                 </tbody>
                             </table>
+                        </div>
+                        
+                        <!-- Pagination -->
+                        <div class="pagination justify-content-center">
+                            {{ $payments->links() }}
                         </div>
                     </div>
                 </div>

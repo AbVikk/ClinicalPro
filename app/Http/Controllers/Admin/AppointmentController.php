@@ -61,6 +61,19 @@ class AppointmentController extends Controller
         $appointment->doctor_id = $doctorId;
         $appointment->save();
         
+        // Create notification for the doctor
+        $patient = $appointment->patient;
+        if ($patient) {
+            $message = "New appointment assigned: {$patient->name} scheduled for " . $appointment->appointment_time->format('M d, Y g:i A');
+            \App\Models\Notification::create([
+                'user_id' => $doctor->id,
+                'type' => 'appointment',
+                'message' => $message,
+                'is_read' => false,
+                'channel' => 'database', // Default channel for in-app notifications
+            ]);
+        }
+        
         return response()->json(['success' => 'Doctor assigned successfully']);
     }
 
@@ -75,7 +88,24 @@ class AppointmentController extends Controller
     {
         $appointment = Appointment::findOrFail($id);
         
+        $oldStatus = $appointment->status;
         $appointment->update($request->only(['appointment_date', 'status', 'reason']));
+        
+        // Create notification for the patient if status changed to confirmed
+        if ($oldStatus != 'confirmed' && $appointment->status == 'confirmed') {
+            $doctor = $appointment->doctor;
+            $patient = $appointment->patient;
+            if ($doctor && $patient) {
+                $message = "Your appointment with Dr. {$doctor->name} has been confirmed for " . $appointment->appointment_time->format('M d, Y g:i A');
+                \App\Models\Notification::create([
+                    'user_id' => $patient->id,
+                    'type' => 'appointment',
+                    'message' => $message,
+                    'is_read' => false,
+                    'channel' => 'database', // Default channel for in-app notifications
+                ]);
+            }
+        }
         
         return response()->json(['success' => 'Appointment updated successfully']);
     }

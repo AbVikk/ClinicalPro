@@ -46,6 +46,12 @@ class PharmacistController extends Controller
             $pageTitle = 'All Pharmacists';
         }
 
+        // Check if request is AJAX
+        if ($request->ajax()) {
+            // Return only the table content for AJAX requests
+            return view('admin.pharmacists.partials.table', compact('pharmacists'))->render();
+        }
+
         return view('admin.pharmacists.index', compact('pharmacists', 'pageTitle', 'roleFilter'));
     }
 

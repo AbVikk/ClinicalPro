@@ -19,7 +19,7 @@
 </head>
 <body class="theme-cyan">
 <!-- Page Loader -->
-@include('admin.sidemenu')
+@include('doctor.sidemenu')
 
 <!-- Chat-launcher -->
 <div class="chat-launcher"></div>

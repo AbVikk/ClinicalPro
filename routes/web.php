@@ -37,6 +37,12 @@ Route::get('/test-public-route', function () {
     return response()->json(['message' => 'Public route working']);
 });
 
+// Test route for services API (public for testing)
+Route::get('/test-services-api', function () {
+    $services = App\Models\Service::all();
+    return response()->json($services);
+});
+
 // Paystack webhook route (public, no authentication)
 Route::post('/paystack/webhook', [App\Http\Controllers\PaystackWebhookController::class, 'handleWebhook']);
 
@@ -146,6 +152,12 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::post('/admin/doctor/schedule', [App\Http\Controllers\Admin\DoctorController::class, 'storeSchedule'])->name('admin.doctor.schedule.store');
     Route::post('/admin/doctor/schedule/update', [App\Http\Controllers\Admin\DoctorController::class, 'updateSchedule'])->name('admin.doctor.schedule.update');
     
+    // HOD routes (moved before parameterized routes to avoid conflicts)
+    Route::get('/admin/doctor/hods', [App\Http\Controllers\Admin\DoctorController::class, 'listHODs'])->name('admin.doctor.hods');
+    Route::put('/admin/doctor/assign-hod/{user}', [App\Http\Controllers\Admin\DoctorController::class, 'assignHOD'])->name('admin.doctor.assign-hod');
+    Route::put('/admin/doctor/assign-doctor-role/{user}', [App\Http\Controllers\Admin\DoctorController::class, 'assignDoctorRole'])->name('admin.doctor.assign-doctor-role');
+    
+    // Parameterized routes (must come after HOD routes)
     Route::get('/admin/doctor/{doctor}', [App\Http\Controllers\Admin\DoctorController::class, 'show'])->name('admin.doctor.profile');
     
     Route::get('/admin/doctor/{doctor}/edit', [App\Http\Controllers\Admin\DoctorController::class, 'edit'])->name('admin.doctor.edit');
@@ -187,8 +199,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/admin/book-appointment', [App\Http\Controllers\Admin\BookAppointmentController::class, 'index'])->name('admin.book-appointment');
     Route::post('/admin/book-appointment/patient-info', [App\Http\Controllers\Admin\BookAppointmentController::class, 'getPatientInfo'])->name('admin.book-appointment.patient-info');
     Route::post('/admin/book-appointment/available-doctors', [App\Http\Controllers\Admin\BookAppointmentController::class, 'getAvailableDoctors'])->name('admin.book-appointment.available-doctors');
+    Route::post('/admin/book-appointment/search-patients', [App\Http\Controllers\Admin\BookAppointmentController::class, 'searchPatients'])->name('admin.book-appointment.search-patients');
     Route::post('/admin/book-appointment', [App\Http\Controllers\Admin\BookAppointmentController::class, 'store'])->name('admin.book-appointment.store');
     Route::post('/admin/book-appointment/walk-in-patient', [App\Http\Controllers\Admin\BookAppointmentController::class, 'storeWalkInPatient'])->name('admin.book-appointment.walk-in-patient');
+    Route::get('/admin/book-appointment/payment', [App\Http\Controllers\Admin\BookAppointmentController::class, 'showAppointmentPayment'])->name('admin.book-appointment.payment');
     
     // Doctor Availability routes
     Route::get('/admin/doctors/availability', [App\Http\Controllers\Admin\BookAppointmentController::class, 'showAvailabilityForm'])->name('admin.doctors.availability');
@@ -313,22 +327,45 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::delete('/admin/payments/{payment}', [App\Http\Controllers\Admin\PaymentController::class, 'destroy'])->name('admin.payments.destroy');
     Route::get('/admin/payments/{payment}/invoice', [App\Http\Controllers\Admin\PaymentController::class, 'invoice'])->name('admin.payments.invoice');
     // Add this route for the invoice page in sidemenu
-    Route::get('/admin/invoice', function () {
-        return view('admin.invoice');
-    })->name('admin.payments.invoice.list');
+    Route::get('/admin/invoice', [App\Http\Controllers\Admin\PaymentController::class, 'invoiceList'])->name('admin.payments.invoice.list');
     
     // Paystack routes
     Route::post('/admin/payments/paystack/initialize', [App\Http\Controllers\Admin\PaymentController::class, 'initializePaystack'])->name('admin.payments.paystack.initialize');
     Route::get('/admin/payments/paystack/callback', [App\Http\Controllers\Admin\PaymentController::class, 'handlePaystackCallback'])->name('admin.payments.paystack.callback');
-    
-    // Admin Wallet Top-Up routes
-    Route::get('/admin/wallet/topup', [App\Http\Controllers\Admin\PaymentController::class, 'showTopUpForm'])->name('admin.payment.topup');
-    Route::post('/admin/wallet/topup/initialize', [App\Http\Controllers\Admin\PaymentController::class, 'initializeTopUp'])->name('admin.payment.initialize-topup');
-    Route::get('/admin/wallet/topup/verify', [App\Http\Controllers\Admin\PaymentController::class, 'verifyPayment'])->name('admin.payment.verify');
-    Route::get('/admin/wallet/test-webhook', function () {
-        return view('admin.wallet.test_webhook');
-    })->name('admin.wallet.test-webhook');
+
+    // Custom payment status pages
+    Route::get('/admin/payments/success', function () {
+        return view('admin.payments.success');
+    })->name('admin.payments.success');
+    Route::get('/admin/payments/failed', function () {
+        return view('admin.payments.failed');
+    })->name('admin.payments.failed');
+    Route::get('/admin/payments/pending', [App\Http\Controllers\Admin\PaymentController::class, 'showPendingPayment'])->name('admin.payments.pending');
+
+// Admin Wallet Top-Up routes
+Route::get('/admin/wallet/topup', [App\Http\Controllers\Admin\PaymentController::class, 'showTopUpForm'])->name('admin.payment.topup');
+Route::post('/admin/wallet/topup/initialize', [App\Http\Controllers\Admin\PaymentController::class, 'initializeTopUp'])->name('admin.payment.initialize-topup');
+
+// Service Management routes
+Route::get('/admin/services', [App\Http\Controllers\Admin\ServiceController::class, 'index'])->name('admin.services.index');
+Route::get('/admin/services/all', [App\Http\Controllers\Admin\ServiceController::class, 'showAll'])->name('admin.services.all');
+Route::get('/admin/services/create', [App\Http\Controllers\Admin\ServiceController::class, 'create'])->name('admin.services.create');
+Route::post('/admin/services', [App\Http\Controllers\Admin\ServiceController::class, 'store'])->name('admin.services.store');
+Route::get('/admin/services/{service}/edit', [App\Http\Controllers\Admin\ServiceController::class, 'edit'])->name('admin.services.edit');
+Route::put('/admin/services/{service}', [App\Http\Controllers\Admin\ServiceController::class, 'update'])->name('admin.services.update');
+Route::delete('/admin/services/{service}', [App\Http\Controllers\Admin\ServiceController::class, 'destroy'])->name('admin.services.destroy');
+Route::get('/admin/services/api', [App\Http\Controllers\Admin\ServiceController::class, 'apiIndex'])->name('admin.services.api');
+Route::get('/admin/services/test', [App\Http\Controllers\Admin\ServiceController::class, 'test'])->name('admin.services.test');
+
+// Appointment Payment routes
+Route::match(['get', 'post'], '/admin/appointment/payment/initialize', [App\Http\Controllers\Admin\PaymentController::class, 'initializeAppointmentPayment'])->name('admin.appointment.payment.initialize');
 });
+
+// Payment verification route (must be outside auth middleware for Paystack callbacks)
+Route::get('/admin/wallet/topup/verify', [App\Http\Controllers\Admin\PaymentController::class, 'verifyPayment'])->name('admin.payment.verify');
+Route::get('/admin/wallet/test-webhook', function () {
+    return view('admin.wallet.test_webhook');
+})->name('admin.wallet.test-webhook');
 
 // HOD routes
 Route::middleware(['auth', 'role:hod'])->group(function () {
@@ -354,9 +391,438 @@ Route::middleware(['auth', 'role:matron'])->group(function () {
 Route::middleware(['auth', 'role:doctor'])->group(function () {
     Route::get('/doctor/dashboard', [App\Http\Controllers\Doctor\DashboardController::class, 'index'])->name('doctor.dashboard');
     
+    // Appointments routes
+    Route::get('/doctor/appointments', [App\Http\Controllers\Doctor\DashboardController::class, 'appointments'])->name('doctor.appointments');
+    
+    // Appointment details routes
+    Route::get('/doctor/appointments/{appointment}/details', [App\Http\Controllers\Doctor\DashboardController::class, 'showAppointmentDetails'])->name('doctor.appointments.details');
+    Route::post('/doctor/appointments/{appointment}/save-details', [App\Http\Controllers\Doctor\DashboardController::class, 'saveAppointmentDetails'])->name('doctor.appointments.save-details');
+    
+    // Notification routes
+    Route::post('/doctor/notifications/{notification}/mark-as-read', [App\Http\Controllers\Doctor\DashboardController::class, 'markNotificationAsRead'])->name('doctor.notifications.mark-as-read-single');
+    
+    // Clean Appointments routes for testing
+    Route::get('/doctor/appointments-clean', function () {
+        // Get the authenticated doctor's ID
+        $doctorId = \Illuminate\Support\Facades\Auth::user()->id;
+        
+        // Get filter parameters
+        $search = request()->get('search');
+        $filter = request()->get('filter', 'all'); // all, chat, direct
+        $tab = request()->get('tab', 'upcoming'); // upcoming, cancelled, completed
+        
+        // Build the base query for appointments
+        $baseQuery = \App\Models\Appointment::with(['patient.patient', 'appointmentReason'])
+            ->where('doctor_id', $doctorId);
+            
+        // Apply search filter
+        if ($search) {
+            $baseQuery->whereHas('patient', function ($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%');
+            });
+        }
+        
+        // Apply type filter
+        if ($filter !== 'all') {
+            $baseQuery->where('type', $filter);
+        }
+        
+        // Clone the base query for each tab
+        $upcomingQuery = clone $baseQuery;
+        $cancelledQuery = clone $baseQuery;
+        $completedQuery = clone $baseQuery;
+        
+        // Apply status filters for each tab
+        $upcomingQuery->where(function($query) {
+            $query->where(function($q) {
+                // Include appointments that are pending/new (requests)
+                $q->whereIn('status', ['pending', 'new']);
+            })->orWhere(function($q) {
+                // OR confirmed future appointments
+                $q->where('status', 'confirmed')
+                  ->where('appointment_time', '>', now());
+            });
+        });
+        
+        $cancelledQuery->where('status', 'cancelled');
+        $completedQuery->where('status', 'completed');
+        
+        // Get paginated results for the active tab
+        $perPage = 10;
+        switch ($tab) {
+            case 'cancelled':
+                $appointments = $cancelledQuery->orderBy('appointment_time', 'desc')->paginate($perPage)->appends(['tab' => 'cancelled', 'search' => $search, 'filter' => $filter]);
+                break;
+            case 'completed':
+                $appointments = $completedQuery->orderBy('appointment_time', 'desc')->paginate($perPage)->appends(['tab' => 'completed', 'search' => $search, 'filter' => $filter]);
+                break;
+            case 'upcoming':
+            default:
+                $appointments = $upcomingQuery->orderBy('appointment_time', 'asc')->paginate($perPage)->appends(['tab' => 'upcoming', 'search' => $search, 'filter' => $filter]);
+                break;
+        }
+        
+        // Get counts for all tabs (without pagination)
+        $upcomingCount = $upcomingQuery->count();
+        $cancelledCount = $cancelledQuery->count();
+        $completedCount = $completedQuery->count();
+        
+        return view('doctor.appointments_clean', compact(
+            'appointments',
+            'upcomingCount', 
+            'cancelledCount', 
+            'completedCount',
+            'search',
+            'filter',
+            'tab'
+        ));
+    })->name('doctor.appointments.clean');
+    
+    // Requests routes
+    Route::get('/doctor/requests', [App\Http\Controllers\Doctor\DashboardController::class, 'requests'])->name('doctor.requests');
+    Route::post('/doctor/requests/{appointment}/accept', [App\Http\Controllers\Doctor\DashboardController::class, 'acceptRequest'])->name('doctor.requests.accept');
+    Route::post('/doctor/requests/{appointment}/reject', [App\Http\Controllers\Doctor\DashboardController::class, 'rejectRequest'])->name('doctor.requests.reject');
+    Route::get('/doctor/requests/count', [App\Http\Controllers\Doctor\DashboardController::class, 'getRequestCount'])->name('doctor.requests.count');
+    
+    // Appointment session routes
+    Route::post('/doctor/appointments/{appointment}/start', [App\Http\Controllers\Doctor\DashboardController::class, 'startAppointment'])->name('doctor.appointments.start');
+    Route::post('/doctor/appointments/{appointment}/end', [App\Http\Controllers\Doctor\DashboardController::class, 'endAppointment'])->name('doctor.appointments.end');
+    Route::get('/doctor/appointments/{appointment}/details', [App\Http\Controllers\Doctor\DashboardController::class, 'showAppointmentDetails'])->name('doctor.appointments.details');
+    Route::post('/doctor/appointments/{appointment}/save-details', [App\Http\Controllers\Doctor\DashboardController::class, 'saveAppointmentDetails'])->name('doctor.appointments.save-details');
+    Route::get('/doctor/patients/{patient}/appointment-history', [App\Http\Controllers\Doctor\DashboardController::class, 'showAppointmentHistory'])->name('doctor.patients.appointment-history');
+    Route::get('/doctor/appointments/{appointment}/end', [App\Http\Controllers\Doctor\DashboardController::class, 'endAppointment'])->name('doctor.appointments.end.get');
+    
+    // Notification routes
+    Route::post('/doctor/notifications/mark-as-read', [App\Http\Controllers\Doctor\DashboardController::class, 'markNotificationsAsRead'])->name('doctor.notifications.mark-as-read');
+    
     // Prescription routes
-    Route::post('/doctor/consultations/prescribe', [App\Http\Controllers\Doctor\PrescriptionController::class, 'prescribe'])->name('doctor.consultations.prescribe');
+    Route::post('/doctor/consultations/prescribe',[App\Http\Controllers\Doctor\PrescriptionController::class, 'prescribe'])->name('doctor.consultations.prescribe');
     Route::get('/doctor/prescriptions/{id}', [App\Http\Controllers\Doctor\PrescriptionController::class, 'checkFulfillment'])->name('doctor.prescriptions.check');
+    
+    // Patient profile route
+    Route::get('/doctor/patient/{patient}', [App\Http\Controllers\Doctor\DashboardController::class, 'showPatient'])->name('doctor.patient.show');
+    
+    // Patient index route
+    Route::get('/doctor/patient', [App\Http\Controllers\Doctor\DashboardController::class, 'indexPatient'])->name('doctor.patient.index');
+    
+    // Test doctor patient routes
+    /*
+    Route::get('/doctor/test-patient-routes', function () {
+        // Get a patient that has appointments with the current doctor
+        $doctorId = \Illuminate\Support\Facades\Auth::user()->id;
+        $patient = \App\Models\Patient::with('user')
+            ->whereHas('appointments', function ($query) use ($doctorId) {
+                $query->where('doctor_id', $doctorId);
+            })
+            ->first();
+            
+        if (!$patient) {
+            return response()->json(['error' => 'No patients found for this doctor']);
+        }
+        
+        try {
+            $indexRoute = route('doctor.patient.index');
+            $showRoute = route('doctor.patient.show', $patient);
+            
+            return response()->json([
+                'success' => true,
+                'routes' => [
+                    'index' => $indexRoute,
+                    'show' => $showRoute
+                ],
+                'patient' => [
+                    'id' => $patient->id,
+                    'name' => $patient->user->name
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Route generation failed: ' . $e->getMessage()
+            ]);
+        }
+    })->name('doctor.test.patient.routes');
+    */
+    
+    // Test patient routes view
+    /*
+    Route::get('/doctor/test-patient-routes-view', function () {
+        return view('doctor.test-patient-routes');
+    })->name('doctor.test.patient.routes.view');
+    */
+    
+    // Link debug view
+    /*
+    Route::get('/doctor/link-debug', [App\Http\Controllers\Doctor\DashboardController::class, 'linkDebug'])->name('doctor.link.debug');
+    */
+    
+    // Link test page
+    /*
+    Route::get('/doctor/link-test', function () {
+        $samplePatient = \App\Models\Patient::with('user')
+            ->whereHas('appointments', function ($query) {
+                $query->where('doctor_id', \Illuminate\Support\Facades\Auth::user()->id);
+            })
+            ->first();
+        return view('doctor.link-test', compact('samplePatient'));
+    })->name('doctor.link.test');
+    */
+    
+    // Link verification test page
+    /*
+    Route::get('/doctor/link-verification-test', function () {
+        return view('doctor.link-verification-test');
+    })->name('doctor.link.verification.test');
+    */
+    
+    // Debug appointment data
+    /*
+    Route::get('/doctor/debug-appointment-data', function () {
+        $doctorId = \Illuminate\Support\Facades\Auth::user()->id;
+        
+        // Get a sample appointment with all relationships
+        $appointment = \App\Models\Appointment::with(['patient.patient', 'appointmentReason', 'doctor'])
+            ->where('doctor_id', $doctorId)
+            ->first();
+            
+        if (!$appointment) {
+            return response()->json(['error' => 'No appointments found for this doctor']);
+        }
+        
+        // Check if patient relationship exists
+        $hasPatient = isset($appointment->patient);
+        $hasPatientPatient = $hasPatient && isset($appointment->patient->patient);
+        $patientId = $hasPatientPatient ? $appointment->patient->patient->id : null;
+        
+        // Try to generate the route
+        $route = null;
+        if ($patientId) {
+            try {
+                $route = route('doctor.patient.show', $patientId);
+            } catch (\Exception $e) {
+                $route = 'Error generating route: ' . $e->getMessage();
+            }
+        }
+        
+        return response()->json([
+            'appointment_id' => $appointment->id,
+            'has_patient' => $hasPatient,
+            'has_patient_patient' => $hasPatientPatient,
+            'patient_id' => $patientId,
+            'route' => $route,
+            'patient_data' => $hasPatient ? [
+                'id' => $appointment->patient->id,
+                'name' => $appointment->patient->name,
+                'email' => $appointment->patient->email,
+                'patient_relationship' => $hasPatientPatient ? [
+                    'id' => $appointment->patient->patient->id,
+                    'user_id' => $appointment->patient->patient->user_id,
+                ] : null
+            ] : null,
+            'appointment_data' => $appointment->toArray()
+        ]);
+    })->name('doctor.debug.appointment.data');
+    */
+    
+    // Simple link test
+    /*
+    Route::get('/doctor/simple-link-test', function () {
+        $samplePatient = \App\Models\Patient::with('user')
+            ->whereHas('appointments', function ($query) {
+                $query->where('doctor_id', \Illuminate\Support\Facades\Auth::user()->id);
+            })
+            ->first();
+        return view('doctor.simple-link-test', compact('samplePatient'));
+    })->name('doctor.simple.link.test');
+    */
+    
+    // Debug route
+    /*
+    Route::get('/doctor/debug', function () {
+        return view('doctor.debug');
+    })->name('doctor.debug');
+    */
+    
+    // Test appointments route
+    /*
+    Route::get('/doctor/test-appointments', function () {
+        return view('doctor.test-appointments');
+    })->name('doctor.test.appointments');
+    */
+    
+    // Route test page
+    /*
+    Route::get('/doctor/route-test', function () {
+        return view('doctor.route-test');
+    })->name('doctor.route.test');
+    */
+    
+    // Simple patient profile test
+    /*
+    Route::get('/doctor/test-patient-profile', function () {
+        // Get a patient with appointments
+        $patient = \App\Models\Patient::with('user')->first();
+        
+        if (!$patient) {
+            return response()->json(['error' => 'No patients found']);
+        }
+        
+        try {
+            $route = route('doctor.patient.show', $patient->id);
+            return response()->json([
+                'success' => true,
+                'route' => $route,
+                'patient_id' => $patient->id,
+                'patient_name' => $patient->user->name ?? 'Unknown'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Route generation failed: ' . $e->getMessage()
+            ]);
+        }
+    })->name('doctor.test.patient.profile');
+    */
+    
+    // Patient test page
+    /*
+    Route::get('/doctor/patient-test', function () {
+        return view('doctor.patient-test');
+    })->name('doctor.patient.test');
+    */
+    
+    // Test patient data route
+    /*
+    Route::get('/doctor/test-patient-data', function () {
+        $doctorId = Auth::id();
+        echo "Doctor ID: " . $doctorId . "<br>";
+        
+        // Test 1: Count all patients
+        $allPatients = \App\Models\Patient::count();
+        echo "Total patients: " . $allPatients . "<br>";
+        
+        // Test 2: Count appointments for this doctor
+        $doctorAppointments = \App\Models\Appointment::where('doctor_id', $doctorId)->count();
+        echo "Doctor appointments: " . $doctorAppointments . "<br>";
+        
+        // Test 3: Count patients with appointments for this doctor (using join)
+        $patientsWithAppointments = \App\Models\Patient::join('appointments', 'patients.user_id', '=', 'appointments.patient_id')
+            ->where('appointments.doctor_id', $doctorId)
+            ->distinct()
+            ->count('patients.id');
+        echo "Patients with appointments: " . $patientsWithAppointments . "<br>";
+        
+        // Test 4: Get actual patient data
+        if ($patientsWithAppointments > 0) {
+            $patients = \App\Models\Patient::with('user')
+                ->join('appointments', 'patients.user_id', '=', 'appointments.patient_id')
+                ->where('appointments.doctor_id', $doctorId)
+                ->select('patients.*')
+                ->distinct()
+                ->limit(5)
+                ->get();
+                
+            echo "<h3>Sample patients:</h3>";
+            foreach ($patients as $patient) {
+                echo "Patient ID: " . $patient->id . ", User ID: " . $patient->user_id . ", Name: " . ($patient->user->name ?? 'N/A') . "<br>";
+            }
+        }
+        
+        return;
+    })->name('doctor.test.patient.data');
+    */
+    
+    // Debug route to check requests data
+    /*
+    Route::get('/doctor/debug-requests', function () {
+        $doctorId = \Illuminate\Support\Facades\Auth::user()->id;
+        $requests = \App\Models\Appointment::with(['patient.patient', 'appointmentReason'])
+            ->where('doctor_id', $doctorId)
+            ->whereIn('status', ['pending', 'new'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+            
+        return response()->json([
+            'requests_count' => $requests->count(),
+            'requests' => $requests->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'patient_exists' => $request->patient ? true : false,
+                    'patient_patient_exists' => $request->patient && $request->patient->patient ? true : false,
+                    'patient_data' => $request->patient ? [
+                        'id' => $request->patient->id,
+                        'name' => $request->patient->name,
+                        'patient_id' => $request->patient->patient ? $request->patient->patient->id : null,
+                    ] : null,
+                ];
+            })
+        ]);
+    })->name('doctor.debug.requests');
+    */
+    
+    // Debug route to check patient data
+    /*
+    Route::get('/doctor/debug-patients', function () {
+        $doctorId = \Illuminate\Support\Facades\Auth::user()->id;
+        
+        // Get patients who have appointments with this doctor
+        $patients = \App\Models\Patient::with('user')
+            ->whereHas('appointments', function ($query) use ($doctorId) {
+                $query->where('doctor_id', $doctorId);
+            })
+            ->get();
+            
+        // Also get all appointments for this doctor
+        $appointments = \App\Models\Appointment::with(['patient', 'patient.user'])
+            ->where('doctor_id', $doctorId)
+            ->get();
+            
+        // Get all patients (for comparison)
+        $allPatients = \App\Models\Patient::with('user')->get();
+            
+        return response()->json([
+            'doctor_id' => $doctorId,
+            'patients_count' => $patients->count(),
+            'patients' => $patients->map(function ($patient) {
+                return [
+                    'id' => $patient->id,
+                    'user_id' => $patient->user_id,
+                    'user_name' => $patient->user ? $patient->user->name : null,
+                    'user_email' => $patient->user ? $patient->user->email : null,
+                ];
+            }),
+            'appointments_count' => $appointments->count(),
+            'appointments' => $appointments->map(function ($appointment) {
+                return [
+                    'id' => $appointment->id,
+                    'doctor_id' => $appointment->doctor_id,
+                    'patient_id' => $appointment->patient_id,
+                    'patient_name' => $appointment->patient ? $appointment->patient->name : null,
+                    'patient_has_user' => $appointment->patient ? ($appointment->patient->user ? true : false) : false,
+                ];
+            }),
+            'all_patients_count' => $allPatients->count(),
+            'all_patients' => $allPatients->map(function ($patient) {
+                return [
+                    'id' => $patient->id,
+                    'user_id' => $patient->user_id,
+                    'user_name' => $patient->user ? $patient->user->name : null,
+                    'user_email' => $patient->user ? $patient->user->email : null,
+                ];
+            }),
+        ]);
+    })->name('doctor.debug.patients');
+    */
+    
+    // Debug links page
+    /*
+    Route::get('/doctor/debug-links', [App\Http\Controllers\Doctor\DashboardController::class, 'debugLinks'])->name('doctor.debug.links');
+    */
+    
+    // Debug patients page
+    /*
+    Route::get('/doctor/debug-patients-view', function () {
+        return view('doctor.debug-patients');
+    })->name('doctor.debug.patients.view');
+    */
 });
 
 // Clinic staff routes
@@ -382,3 +848,176 @@ Route::middleware(['auth', 'role:donor'])->group(function () {
 Route::middleware(['auth', 'role:primary_pharmacist|senior_pharmacist|clinic_pharmacist'])->group(function () {
     Route::get('/pharmacy/dashboard', [App\Http\Controllers\Pharmacy\DashboardController::class, 'index'])->name('pharmacy.dashboard');
 });
+
+// Test routes to debug HOD access
+Route::get('/test-hod-route', function () {
+    return response()->json(['message' => 'HOD route test working']);
+});
+
+Route::middleware(['auth', 'role:admin'])->group(function () {
+    Route::get('/admin/test', function () {
+        return response()->json(['message' => 'Admin test route working']);
+    });
+});
+
+// Test route for debugging appointment accept
+Route::get('/test-accept-appointment/{id}', function ($id) {
+    $appointment = \App\Models\Appointment::find($id);
+    if (!$appointment) {
+        return response()->json(['error' => 'Appointment not found']);
+    }
+    
+    try {
+        $appointment->update([
+            'status' => 'confirmed',
+            'appointment_time' => $appointment->appointment_time
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Appointment accepted successfully',
+            'appointment' => $appointment
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()]);
+    }
+})->middleware('auth');
+
+// Test route to create a cancelled appointment
+Route::get('/test-create-cancelled-appointment', function () {
+    try {
+        $appointment = \App\Models\Appointment::create([
+            'doctor_id' => 2, // Assuming doctor ID 2 exists
+            'patient_id' => 3, // Assuming patient ID 3 exists
+            'appointment_time' => now()->addDays(2),
+            'type' => 'direct',
+            'status' => 'cancelled',
+            'reason' => 'Test cancelled appointment',
+            'appointment_reason_id' => 1 // Assuming reason ID 1 exists
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Cancelled appointment created successfully',
+            'appointment' => $appointment
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()]);
+    }
+})->middleware('auth');
+
+// Test route to manually create an appointment
+/*
+Route::get('/test-create-appointment', function () {
+    try {
+        // Create a test appointment
+        $appointment = new \App\Models\Appointment();
+        $appointment->patient_id = 3; // Assuming patient ID 3 exists
+        $appointment->doctor_id = 5; // Assuming doctor ID 5 exists
+        $appointment->appointment_time = now()->addDays(2);
+        $appointment->type = 'telehealth';
+        $appointment->status = 'pending';
+        $appointment->notes = 'Test appointment created manually';
+        
+        if ($appointment->save()) {
+            // Create notification for the doctor
+            $doctor = \App\Models\User::find(5);
+            $patient = \App\Models\User::find(3);
+            if ($doctor && $patient) {
+                $message = "New appointment request: {$patient->name} scheduled for " . $appointment->appointment_time->format('M d, Y g:i A');
+                \App\Models\Notification::create([
+                    'user_id' => $doctor->id,
+                    'type' => 'appointment',
+                    'message' => $message,
+                    'is_read' => false,
+                    'channel' => 'database',
+                ]);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Appointment created successfully',
+                'appointment' => $appointment
+            ]);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save appointment'
+            ]);
+        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error creating appointment: ' . $e->getMessage()
+        ]);
+    }
+})->name('test.create.appointment');
+*/
+
+// Test route to debug patient profile links
+Route::get('/test-patient-link', function () {
+    // Get a specific appointment to test with
+    $appointment = \App\Models\Appointment::with(['patient.patient'])->first();
+    
+    if (!$appointment) {
+        return response()->json(['error' => 'No appointments found']);
+    }
+    
+    if (!$appointment->patient) {
+        return response()->json(['error' => 'Patient relationship not loaded']);
+    }
+    
+    // Check if patient->patient relationship exists
+    if (!$appointment->patient->patient) {
+        return response()->json([
+            'error' => 'Patient->patient relationship not loaded',
+            'patient_data' => $appointment->patient,
+            'patient_patient_data' => $appointment->patient->patient,
+            'patient_patient_exists' => isset($appointment->patient->patient),
+            'patient_patient_type' => gettype($appointment->patient->patient)
+        ]);
+    }
+    
+    // Check if the patient model has an ID
+    $patient = $appointment->patient->patient;
+    if (!$patient->id) {
+        return response()->json([
+            'error' => 'Patient model has no ID',
+            'patient_data' => $patient
+        ]);
+    }
+    
+    // Try to generate the route
+    try {
+        // Test different ways of generating the route
+        $route1 = route('doctor.patient.show', $patient);
+        $route2 = route('doctor.patient.show', $patient->id);
+        $route3 = route('doctor.patient.show', ['patient' => $patient->id]);
+        
+        return response()->json([
+            'success' => true,
+            'routes' => [
+                'route1 (model)' => $route1,
+                'route2 (id)' => $route2,
+                'route3 (array)' => $route3
+            ],
+            'patient_id' => $patient->id,
+            'patient_name' => $appointment->patient->name,
+            'patient_data' => [
+                'id' => $patient->id,
+                'user_id' => $patient->user_id,
+                'class' => get_class($patient),
+                'route_key_name' => $patient->getRouteKeyName()
+            ],
+            'appointment_patient_data' => [
+                'id' => $appointment->patient->id,
+                'name' => $appointment->patient->name
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => 'Route generation failed: ' . $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+    }
+})->middleware('auth');

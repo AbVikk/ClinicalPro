@@ -6,12 +6,15 @@ class Patient extends Model
 {
     protected $fillable = [
         'user_id', // Foreign key to users table
-        'name',
-        'email',
         'phone',
-        'date_of_birth',
-        'address',
+        'medical_history',
     ];
+
+    // Explicitly define the route key name
+    public function getRouteKeyName()
+    {
+        return 'id';
+    }
 
     // Relationships
     public function user()
@@ -21,7 +24,7 @@ class Patient extends Model
 
     public function appointments()
     {
-        return $this->hasMany(Appointment::class);
+        return $this->hasMany(Appointment::class, 'patient_id');
     }
 
     public function chats()
@@ -37,5 +40,29 @@ class Patient extends Model
     public function donations()
     {
         return $this->hasMany(Donation::class);
+    }
+
+    public function medicalHistories()
+    {
+        return $this->hasMany(MedicalHistory::class);
+    }
+
+    // EMR relationships
+    public function vitals()
+    {
+        // Vitals through appointments
+        return $this->hasManyThrough(Vitals::class, Appointment::class, 'patient_id', 'appointment_id');
+    }
+
+    public function clinicalNotes()
+    {
+        // Clinical notes through appointments
+        return $this->hasManyThrough(ClinicalNote::class, Appointment::class, 'patient_id', 'appointment_id');
+    }
+
+    public function medications()
+    {
+        // Medications through appointments
+        return $this->hasManyThrough(Medication::class, Appointment::class, 'patient_id', 'appointment_id');
     }
 }

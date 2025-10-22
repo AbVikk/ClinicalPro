@@ -199,6 +199,55 @@
     line-height: 1.33
 }
 
+/* Fix for doctor profile links that are being blocked by JavaScript overlays */
+.doctor-profile-link {
+    /* 1. Ensure the element itself can register clicks */
+    pointer-events: auto !important; 
+    
+    /* 2. Ensure the cursor changes correctly */
+    cursor: pointer !important;
+
+    /* 3. Bring the link visually above any parent element that might be blocking it (like a TR overlay) */
+    position: relative; 
+    z-index: 999; /* Use a high number to guarantee visibility on top */
+    
+    /* 4. Ensure links are properly styled */
+    text-decoration: none !important;
+}
+
+/* Additional fix for view profile links in appointment items */
+.appointment-item .view-profile-link,
+.request-item .view-profile-link,
+.upcoming-item .view-profile-link {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    position: relative;
+    z-index: 999;
+}
+
+/* Style for disabled buttons to match the link appearance */
+.btn.btn-secondary[disabled] {
+    cursor: not-allowed !important;
+}
+
+/* Override any framework CSS that might be causing the "no-drop" cursor */
+.doctor-profile-link,
+a.doctor-profile-link {
+    cursor: pointer !important;
+}
+
+/* Ensure links don't inherit disabled styles */
+.doctor-profile-link:not([disabled]) {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+/* Fix for disabled links to ensure they still look disabled but are not using button elements */
+.doctor-profile-link[style*="pointer-events: none"] {
+    opacity: 0.65;
+    cursor: not-allowed !important;
+}
+
 .bootstrap-switch.bootstrap-switch-disabled,
 .bootstrap-switch.bootstrap-switch-readonly,
 .bootstrap-switch.bootstrap-switch-indeterminate {
@@ -221,14 +270,17 @@
 
 .bootstrap-switch.bootstrap-switch-animate .bootstrap-switch-container {
     -webkit-transition: margin-left 0.5s;
-    transition: margin-left 0.5s
+}
+
+.bootstrap-switch .bootstrap-switch-container {
+    transition: margin-left 0.5s;
 }
 
 .bootstrap-switch.bootstrap-switch-inverse .bootstrap-switch-handle-on {
     border-bottom-left-radius: 0;
     border-top-left-radius: 0;
     border-bottom-right-radius: 3px;
-    border-top-right-radius: 3px
+    border-top-right-radius: 3px;
 }
 
 .bootstrap-switch.bootstrap-switch-inverse .bootstrap-switch-handle-off {

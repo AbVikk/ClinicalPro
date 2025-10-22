@@ -244,7 +244,14 @@
                             <li><a href="{{ route('admin.clinic-staff.add') }}">Add Nurse</a></li>
                         </ul>
                     </li>
-                    <li><a href="{{ route('admin.invitations.index') }}"><i class="zmdi zmdi-email"></i><span>Invitations</span> </a></li>
+                                      
+                    <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-email"></i><span>Invitations</span> </a>
+                        <ul class="ml-menu">
+                            <li><a href="{{ route('admin.invitations.index') }}"><i class=""></i><span>All Invitations</span> </a></li>
+                            <li><a href="{{ route('admin.invitations.create') }}">Create Invitation</a></li>
+                        </ul>
+                    </li>  
+                    
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-account-o"></i><span>Patients</span> </a>
                         <ul class="ml-menu">
                             <li><a href="{{ url('/admin/patients') }}">All Patients</a></li>
@@ -254,7 +261,7 @@
                     <li class="header">FINANCE</li>
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-balance-wallet"></i><span>Payments</span> </a>
                         <ul class="ml-menu">
-                            <li><a href="{{ url('/admin/payments') }}">Payments</a></li>
+                            <li><a href="{{ url('/admin/payments') }}">Payments</a></li> 
                             <li><a href="{{ url('/admin/payments/create') }}">Add Payment</a></li>
                             <li><a href="{{ url('/admin/invoice') }}">Invoice</a></li>
                             <li><a href="{{ route('admin.payment.topup') }}">Wallet Top-Up</a></li>
@@ -294,6 +301,7 @@
                     </li>
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-accounts"></i><span>Department Heads</span> </a>
                         <ul class="ml-menu">
+                            <li><a href="{{ route('admin.doctor.hods') }}">All Department Heads</a></li>
                             <li><a href="{{ route('admin.doctor.specialization.departments') }}">Assign HOD</a></li>
                         </ul>
                     </li>

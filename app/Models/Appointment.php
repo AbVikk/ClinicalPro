@@ -45,4 +45,25 @@ class Appointment extends Model
     {
         return $this->belongsTo(AppointmentReason::class);
     }
+
+    // EMR relationships
+    public function appointmentDetail()
+    {
+        return $this->hasOne(AppointmentDetail::class);
+    }
+
+    public function vitals()
+    {
+        return $this->hasOne(Vitals::class);
+    }
+
+    public function clinicalNote()
+    {
+        return $this->hasOne(ClinicalNote::class);
+    }
+
+    public function medications()
+    {
+        return $this->hasMany(Medication::class);
+    }
 }

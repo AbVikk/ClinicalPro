@@ -75,6 +75,12 @@
                             </div>
                         @endif
                         
+                        @if(session('error'))
+                            <div class="alert alert-danger">
+                                {{ session('error') }}
+                            </div>
+                        @endif
+                        
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped table-hover js-basic-example dataTable">
                                 <thead>
@@ -157,15 +163,19 @@
                                                         <i class="zmdi zmdi-edit"></i> Edit
                                                     </a>
                                                     @if($doctor->status == 'verified')
-                                                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to suspend this doctor?')) { document.getElementById('suspend-form-{{ $doctor->id }}').submit(); }">
+                                                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to suspend this doctor?')) { document.getElementById('suspend-form-{{ $doctor->user_id }}').submit(); }">
                                                         <i class="zmdi zmdi-block"></i> Suspend
                                                     </a>
                                                     @else
-                                                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to activate this doctor?')) { document.getElementById('activate-form-{{ $doctor->id }}').submit(); }">
+                                                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to activate this doctor?')) { document.getElementById('activate-form-{{ $doctor->user_id }}').submit(); }">
                                                         <i class="zmdi zmdi-check"></i> Activate
                                                     </a>
                                                     @endif
-                                                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to delete this doctor? This action cannot be undone.')) { document.getElementById('delete-form-{{ $doctor->id }}').submit(); }">
+                                                    <!-- Assign HOD Button -->
+                                                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to assign this doctor as HOD? This will change their role to HOD and assign them as department head.')) { document.getElementById('assign-hod-form-{{ $doctor->user_id }}').submit(); }">
+                                                        <i class="zmdi zmdi-account-box"></i> Assign HOD
+                                                    </a>
+                                                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to delete this doctor? This action cannot be undone.')) { document.getElementById('delete-form-{{ $doctor->user_id }}').submit(); }">
                                                         <i class="zmdi zmdi-delete"></i> Delete
                                                     </a>
                                                     @else
@@ -180,21 +190,39 @@
                                             </div>
                                             
                                             <!-- Suspend Form -->
-                                            <form id="suspend-form-{{ $doctor->id }}" action="{{ route('admin.doctor.update', $doctor->user_id) }}" method="POST" style="display: none;">
+                                            <form id="suspend-form-{{ $doctor->user_id }}" action="{{ route('admin.doctor.update', $doctor->user_id) }}" method="POST" style="display: none;">
                                                 @csrf
                                                 @method('PUT')
                                                 <input type="hidden" name="status" value="suspended">
+                                                <input type="hidden" name="first_name" value="{{ $doctor->user->name ?? '' }}">
+                                                <input type="hidden" name="last_name" value="">
+                                                <input type="hidden" name="email" value="{{ $doctor->user->email ?? '' }}">
+                                                <input type="hidden" name="license_number" value="{{ $doctor->license_number ?? '' }}">
+                                                <input type="hidden" name="specialization_id" value="{{ $doctor->category_id ?? '' }}">
+                                                <input type="hidden" name="department_id" value="{{ $doctor->department_id ?? '' }}">
                                             </form>
                                             
                                             <!-- Activate Form -->
-                                            <form id="activate-form-{{ $doctor->id }}" action="{{ route('admin.doctor.update', $doctor->user_id) }}" method="POST" style="display: none;">
+                                            <form id="activate-form-{{ $doctor->user_id }}" action="{{ route('admin.doctor.update', $doctor->user_id) }}" method="POST" style="display: none;">
                                                 @csrf
                                                 @method('PUT')
                                                 <input type="hidden" name="status" value="verified">
+                                                <input type="hidden" name="first_name" value="{{ $doctor->user->name ?? '' }}">
+                                                <input type="hidden" name="last_name" value="">
+                                                <input type="hidden" name="email" value="{{ $doctor->user->email ?? '' }}">
+                                                <input type="hidden" name="license_number" value="{{ $doctor->license_number ?? '' }}">
+                                                <input type="hidden" name="specialization_id" value="{{ $doctor->category_id ?? '' }}">
+                                                <input type="hidden" name="department_id" value="{{ $doctor->department_id ?? '' }}">
+                                            </form>
+                                            
+                                            <!-- Assign HOD Form -->
+                                            <form id="assign-hod-form-{{ $doctor->user_id }}" action="{{ route('admin.doctor.assign-hod', $doctor->user_id) }}" method="POST" style="display: none;">
+                                                @csrf
+                                                @method('PUT')
                                             </form>
                                             
                                             <!-- Delete Form -->
-                                            <form id="delete-form-{{ $doctor->id }}" action="{{ route('admin.doctor.destroy', $doctor->id) }}" method="POST" style="display: none;">
+                                            <form id="delete-form-{{ $doctor->user_id }}" action="{{ route('admin.doctor.destroy', $doctor->user_id) }}" method="POST" style="display: none;">
                                                 @csrf
                                                 @method('DELETE')
                                             </form>

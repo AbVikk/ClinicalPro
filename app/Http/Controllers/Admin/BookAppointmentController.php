@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Doctor;
 use App\Models\Appointment;
+use App\Models\Service;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -30,7 +31,10 @@ class BookAppointmentController extends Controller
             ];
         }
         
-        return view('admin.book-appointment', compact('patientData'));
+        // Fetch all active services for the dropdown
+        $services = Service::all();
+        
+        return view('admin.book-appointment', compact('patientData', 'services'));
     }
 
     /**
@@ -172,66 +176,57 @@ class BookAppointmentController extends Controller
         $request->merge(['appointment_date' => $formattedDate]);
         
         $request->validate([
-            'patient_id' => 'required|exists:users,user_id',
+            'patient_id' => 'required|exists:users,user_id', // Patient ID is required and must exist
             'doctor_id' => 'required|exists:users,id',
             'appointment_date' => 'required|date',
-            'service' => 'required|string',
+            'service_id' => 'required|exists:hospital_services,id',
             'reason' => 'nullable|string',
         ]);
         
         // Get the patient user ID
         $patient = User::where('user_id', $request->input('patient_id'))->first();
         
-        // Get the service fee (hardcoded for now, but should come from a services table)
-        $serviceFees = [
-            'general_checkup' => 50.00,
-            'dental_checkup' => 75.00,
-            'full_body_checkup' => 150.00,
-            'ent_checkup' => 60.00,
-            'heart_checkup' => 120.00,
-            'other' => 0.00
-        ];
+        // Get the service
+        $service = Service::findOrFail($request->input('service_id'));
+        $fee = $service->price_amount;
         
-        $fee = $serviceFees[$request->input('service')] ?? 0.00;
-        
-        // Create Consultation Record
+        // Create Consultation Record (initially scheduled but pending payment)
         $consultation = new \App\Models\Consultation();
         $consultation->patient_id = $patient->id;
         $consultation->doctor_id = $request->input('doctor_id');
         $consultation->location_id = 1; // Default to virtual channel
         $consultation->delivery_channel = 'virtual'; // Default to virtual
-        $consultation->service_type = $request->input('service');
+        $consultation->service_type = $service->service_name;
         $consultation->fee = $fee;
-        $consultation->status = 'scheduled';
+        $consultation->status = 'scheduled'; // Use 'scheduled' as it's a valid enum value
         $consultation->start_time = $request->input('appointment_date');
         $consultation->save();
         
-        // Create Payment Record
+        // Create Payment Record (initially pending)
         $payment = new \App\Models\Payment();
         $payment->user_id = $patient->id;
         $payment->consultation_id = $consultation->id;
         $payment->clinic_id = 1; // Default to virtual channel
         $payment->amount = $fee;
         
-        // Set payment method and status
-        $payment->method = 'card_online';
-        $payment->status = 'paid'; // Changed from 'pending' to 'paid' as it's a valid enum value
+        // Set payment method and status for pending payment
+        $payment->method = 'card_online'; // Will be updated after successful payment
+        $payment->status = 'pending_cash_verification'; // Pending until payment is verified
         
         $payment->reference = 'CONS-' . $consultation->id . '-' . time();
         $payment->transaction_date = now();
         $payment->save();
         
-        // Create legacy appointment record for backward compatibility
-        $appointment = new Appointment();
-        $appointment->patient_id = $patient->id;
-        $appointment->doctor_id = $request->input('doctor_id');
-        $appointment->appointment_time = $request->input('appointment_date');
-        $appointment->notes = $request->input('reason');
-        $appointment->type = 'telehealth'; // Assuming telehealth since we're creating a consultation
-        $appointment->status = 'pending';
-        $appointment->save();
+        // DO NOT create appointment record yet - only create after successful payment
+        // DO NOT create notification yet - only create after successful payment
         
-        return redirect()->route('admin.book-appointment')->with('success', 'Appointment booked successfully! Consultation ID: ' . $consultation->id);
+        // Redirect to payment page
+        return redirect()->route('admin.appointment.payment.initialize', [
+            'service_id' => $service->id,
+            'patient_id' => $patient->id,
+            'consultation_id' => $consultation->id,
+            'payment_id' => $payment->id
+        ])->with('info', 'Please complete payment to confirm your appointment.');
     }
     
     /**
@@ -301,5 +296,50 @@ class BookAppointmentController extends Controller
             'patient_id' => $userId,
             'message' => 'Patient registered successfully!'
         ]);
+    }
+    
+    /**
+     * Show payment page for appointment
+     */
+    public function showAppointmentPayment(Request $request)
+    {
+        $consultationId = $request->input('consultation_id');
+        $paymentId = $request->input('payment_id');
+        $serviceId = $request->input('service_id');
+        $patientId = $request->input('patient_id');
+        
+        // Get consultation and payment details
+        $consultation = \App\Models\Consultation::findOrFail($consultationId);
+        $payment = \App\Models\Payment::findOrFail($paymentId);
+        $patient = \App\Models\User::findOrFail($consultation->patient_id);
+        $service = \App\Models\Service::findOrFail($serviceId ?? $consultation->service_type);
+        
+        // Get Paystack public key
+        $publicKey = config('services.paystack.public_key');
+        
+        return view('admin.appointment-payment', compact('consultation', 'payment', 'patient', 'publicKey', 'service'));
+    }
+    
+    /**
+     * Search patients by name.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function searchPatients(Request $request)
+    {
+        $searchTerm = $request->input('search');
+        
+        if (strlen($searchTerm) < 2) {
+            return response()->json(['patients' => []]);
+        }
+        
+        $patients = User::where('role', 'patient')
+            ->where('name', 'LIKE', '%' . $searchTerm . '%')
+            ->select('id', 'user_id', 'name', 'email')
+            ->limit(10)
+            ->get();
+            
+        return response()->json(['patients' => $patients]);
     }
 }

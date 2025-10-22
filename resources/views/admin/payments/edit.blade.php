@@ -130,7 +130,7 @@
                                         <label for="status">Status</label>
                                         <select name="status" id="status" class="form-control show-tick" required>
                                             <option value="">-- Select Status --</option>
-                                            <option value="pending" {{ (old('status', $payment->status) == 'pending') ? 'selected' : '' }}>Pending</option>
+                                            <option value="pending_cash_verification" {{ (old('status', $payment->status) == 'pending' || old('status', $payment->status) == 'pending_cash_verification') ? 'selected' : '' }}>Pending</option>
                                             <option value="completed" {{ (old('status', $payment->status) == 'completed') ? 'selected' : '' }}>Completed</option>
                                             <option value="failed" {{ (old('status', $payment->status) == 'failed') ? 'selected' : '' }}>Failed</option>
                                             <option value="refunded" {{ (old('status', $payment->status) == 'refunded') ? 'selected' : '' }}>Refunded</option>

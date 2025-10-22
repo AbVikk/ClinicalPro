@@ -16,7 +16,7 @@ class DepartmentController extends Controller
     public function index()
     {
         try {
-            $departments = Department::withCount('doctors')->get();
+            $departments = Department::withCount('doctorsInDepartment')->get();
             return view('admin.doctor.specialization.departments', compact('departments'))
                 ->with('success', 'Departments loaded successfully.');
         } catch (\Exception $e) {

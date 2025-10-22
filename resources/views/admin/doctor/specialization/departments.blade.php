@@ -64,9 +64,9 @@
                         @php
                             $totalStaff = 0;
                             foreach($departments as $department) {
-                                $totalStaff += $department->doctors_count;
-                                // Direct database query to count clinic staff for this department
-                                $totalStaff += \App\Models\User::where('department_id', $department->id)->where('role', 'nurse')->count();
+                                $totalStaff += $department->doctors_in_department_count;
+                                // Use the relationship to count clinic staff for this department
+                                $totalStaff += $department->clinicStaff()->count();
                             }
                             // For demonstration, assuming 5 were added this month
                             // In a real application, you would retrieve last month's count from database history
@@ -171,7 +171,7 @@
                                         <tr>
                                             <td>{{ $department->name }}</td>
                                             <td>{{ $department->description ?? 'N/A' }}</td>
-                                            <td>{{ $department->doctors_count }}</td>
+                                            <td>{{ $department->doctors_in_department_count }}</td>
                                             <td>{{ $department->head ? 'Dr. ' . $department->head->name : 'N/A' }}</td>
                                             <td><span class="badge badge-{{ $department->status === 'active' ? 'success' : 'warning' }}">{{ ucfirst($department->status) }}</span></td>
                                             <td>
@@ -211,12 +211,6 @@
 
 <!-- Jquery DataTable Plugin Js -->
 <script src="{{ asset('assets/bundles/datatablescripts.bundle.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/dataTables.buttons.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.bootstrap4.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.colVis.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.flash.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.html5.min.js') }}"></script>
-<script src="{{ asset('assets/plugins/jquery-datatable/buttons/buttons.print.min.js') }}"></script>
 
 <!-- Custom Js -->
 <script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script>

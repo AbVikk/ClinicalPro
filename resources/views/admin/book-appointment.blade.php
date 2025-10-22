@@ -22,6 +22,53 @@
 <!-- Custom Css -->
 <link rel="stylesheet" href="{{ asset('assets/css/main.css') }}">
 <link rel="stylesheet" href="{{ asset('assets/css/color_skins.css') }}">
+
+<style>
+    #patient-search-results {
+        position: absolute;
+        z-index: 1000;
+        width: 100%;
+        max-height: 300px;
+        overflow-y: auto;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    #patient-results-list {
+        margin-bottom: 0;
+    }
+    
+    #patient-results-list li {
+        cursor: pointer;
+        padding: 10px 15px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    #patient-results-list li:hover, 
+    #patient-results-list li.active {
+        background-color: #e9ecef;
+    }
+    
+    #patient-results-list li:last-child {
+        border-bottom: none;
+    }
+    
+    .searching-indicator {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: none;
+    }
+    
+    .spinner-border {
+        width: 1rem;
+        height: 1rem;
+        border-width: 0.2em;
+    }
+</style>
 </head>
 <body class="theme-cyan">
 <!-- Page Loader -->
@@ -93,10 +140,26 @@
                             <div class="row clearfix">
                                 <div class="col-sm-6">
                                     <div class="form-group">
-                                        <label for="patient_id">Patient ID *</label>
-                                        <input type="text" id="patient_id" name="patient_id" class="form-control" placeholder="Enter Patient ID" value="{{ $patientData['user_id'] ?? '' }}" required>
+                                        <label for="patient_id">Patient ID</label>
+                                        <input type="text" id="patient_id" name="patient_id" class="form-control" placeholder="Enter Patient ID" value="{{ $patientData['user_id'] ?? '' }}">
                                     </div>
                                 </div>
+                                <div class="col-sm-6">
+                                    <div class="form-group">
+                                        <label for="patient_search">Search Patient by Name</label>
+                                        <div class="input-group">
+                                            <input type="text" id="patient_search" class="form-control" placeholder="Search patient by name">
+                                            <div class="searching-indicator" id="searching-indicator">
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            </div>
+                                        </div>
+                                        <div id="patient-search-results" class="mt-2" style="display: none;">
+                                            <ul class="list-group" id="patient-results-list"></ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row clearfix">
                                 <div class="col-sm-6">
                                     <div class="form-group">
                                         <label>&nbsp;</label><br>
@@ -147,15 +210,14 @@
                                 <div class="row clearfix">
                                     <div class="col-sm-6">
                                         <div class="form-group">
-                                            <label for="service">Service *</label>
-                                            <select id="service" name="service" class="form-control show-tick" required>
+                                            <label for="service_id">Service *</label>
+                                            <select id="service_id" name="service_id" class="form-control show-tick" required>
                                                 <option value="">- Select Service -</option>
-                                                <option value="general_checkup">General Checkup</option>
-                                                <option value="dental_checkup">Dental Checkup</option>
-                                                <option value="full_body_checkup">Full Body Checkup</option>
-                                                <option value="ent_checkup">ENT Checkup</option>
-                                                <option value="heart_checkup">Heart Checkup</option>
-                                                <option value="other">Other</option>
+                                                @foreach($services as $service)
+                                                    <option value="{{ $service->id }}" data-price="{{ $service->price_amount }}">
+                                                        {{ $service->service_name }} ({{ $service->formatted_price }})
+                                                    </option>
+                                                @endforeach
                                             </select>
                                         </div>
                                     </div>
@@ -163,6 +225,14 @@
                                         <div class="form-group">
                                             <label for="reason">Reason for Appointment</label>
                                             <input type="text" id="reason" name="reason" class="form-control" placeholder="Reason for appointment">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row clearfix">
+                                    <div class="col-sm-12">
+                                        <div class="form-group">
+                                            <label>Total Amount: <span id="service_price_display">₦0.00</span></label>
                                         </div>
                                     </div>
                                 </div>
@@ -228,6 +298,9 @@
 <!-- Bootstrap Material Datetimepicker Js -->
 <script src="{{ asset('assets/plugins/bootstrap-material-datetimepicker/js/bootstrap-material-datetimepicker.js') }}"></script>
 
+<!-- Service Management Js -->
+<script src="{{ asset('js/services.js') }}"></script>
+
 <!-- Custom Js -->
 <script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script>
 <script>
@@ -239,6 +312,139 @@
         weekStart: 1
     });
 });
+
+    // Patient search functionality
+    let searchTimeout;
+    $('#patient_search').on('input', function() {
+        const searchTerm = $(this).val();
+        
+        // Clear previous timeout
+        clearTimeout(searchTimeout);
+        
+        // Hide results if search term is too short
+        if (searchTerm.length < 2) {
+            $('#patient-search-results').hide();
+            $('#searching-indicator').hide();
+            return;
+        }
+        
+        // Show loading indicator
+        $('#searching-indicator').show();
+        
+        // Set a new timeout to debounce the search
+        searchTimeout = setTimeout(function() {
+            $.ajax({
+                url: '{{ route('admin.book-appointment.search-patients') }}',
+                method: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    search: searchTerm
+                },
+                success: function(response) {
+                    // Hide loading indicator
+                    $('#searching-indicator').hide();
+                    
+                    if (response.patients && response.patients.length > 0) {
+                        let resultsHtml = '';
+                        response.patients.forEach(function(patient) {
+                            resultsHtml += `
+                                <li class="list-group-item list-group-item-action" 
+                                    data-patient-id="${patient.user_id}" 
+                                    data-patient-name="${patient.name}" 
+                                    data-patient-email="${patient.email}">
+                                    ${patient.name} (${patient.user_id}) - ${patient.email}
+                                </li>
+                            `;
+                        });
+                        
+                        $('#patient-results-list').html(resultsHtml);
+                        $('#patient-search-results').show();
+                    } else {
+                        $('#patient-results-list').html('<li class="list-group-item">No patients found</li>');
+                        $('#patient-search-results').show();
+                    }
+                },
+                error: function() {
+                    // Hide loading indicator
+                    $('#searching-indicator').hide();
+                    $('#patient-results-list').html('<li class="list-group-item">Error searching patients</li>');
+                    $('#patient-search-results').show();
+                }
+            });
+        }, 300); // 300ms debounce
+    });
+    
+    // Handle Enter key press in search field
+    $('#patient_search').on('keypress', function(e) {
+        if (e.which === 13) { // Enter key
+            e.preventDefault();
+            // If there are search results, select the first one
+            const firstResult = $('#patient-results-list li').first();
+            if (firstResult.length > 0 && !firstResult.hasClass('list-group-item')) {
+                firstResult.click();
+            }
+        }
+    });
+    
+    // Handle patient selection from search results
+    $(document).on('click', '#patient-results-list li', function() {
+        const patientId = $(this).data('patient-id');
+        const patientName = $(this).data('patient-name');
+        const patientEmail = $(this).data('patient-email');
+        
+        // Fill the form fields
+        $('#patient_id').val(patientId);
+        $('#patient_name').val(patientName);
+        $('#patient_email').val(patientEmail);
+        
+        // Hide search results
+        $('#patient-search-results').hide();
+        
+        // Clear search field
+        $('#patient_search').val('');
+        
+        // Show patient details section
+        $('#patient-details').show();
+        
+        // Trigger the date field to become active
+        $('#appointment_date').focus();
+    });
+    
+    // Highlight first result on arrow down
+    $('#patient_search').on('keydown', function(e) {
+        if (e.which === 40) { // Down arrow
+            e.preventDefault();
+            const firstResult = $('#patient-results-list li').first();
+            if (firstResult.length > 0) {
+                $('#patient-results-list li').removeClass('active');
+                firstResult.addClass('active');
+            }
+        }
+    });
+    
+    // Handle selection with arrow keys and Enter
+    $('#patient_search').on('keydown', function(e) {
+        if (e.which === 40) { // Down arrow
+            e.preventDefault();
+            const firstResult = $('#patient-results-list li').first();
+            if (firstResult.length > 0) {
+                $('#patient-results-list li').removeClass('active');
+                firstResult.addClass('active');
+            }
+        } else if (e.which === 13) { // Enter key
+            e.preventDefault();
+            const activeResult = $('#patient-results-list li.active');
+            if (activeResult.length > 0) {
+                activeResult.click();
+            } else {
+                // If no active result, select first one
+                const firstResult = $('#patient-results-list li').first();
+                if (firstResult.length > 0 && !firstResult.hasClass('list-group-item')) {
+                    firstResult.click();
+                }
+            }
+        }
+    });
 
     // Check patient ID and fetch patient details
     $('#check-patient').on('click', function() {

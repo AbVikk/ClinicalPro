@@ -1,6 +1,6 @@
 <div class="page-loader-wrapper">
     <div class="loader">
-        <div class="m-t-30"><img class="zmdi-hc-spin" src="{{ asset('assets/images/logo.svg') }}" width="48" height="48" alt="Oreo"></div>
+        <div class="m-t-30"><img class="zmdi-hc-spin" src="{{ asset('assets/images/logo.svg') }}" width="48" height="48" alt="ClinicalPro"></div>
         <p>Please wait...</p>        
     </div>
 </div>
@@ -12,7 +12,7 @@
         <li>
             <div class="navbar-header">
                 <a href="javascript:void(0);" class="bars"></a>
-                <a class="navbar-brand" href="index.blade.php"><img src="{{ asset('assets/images/logo.svg') }}" width="30" alt="Oreo"><span class="m-l-10">Oreo</span></a>
+                <a class="navbar-brand" href="index.blade.php"><img src="{{ asset('assets/images/logo.svg') }}" width="30" alt="ClinicalPro"><span class="m-l-10">ClinicalPro</span></a>
             </div>
         </li>
         <li><a href="javascript:void(0);" class="ls-toggle-btn" data-close="true"><i class="zmdi zmdi-swap"></i></a></li>
@@ -20,66 +20,46 @@
         <li class="d-none d-lg-inline-block"><a href="mail-inbox.blade.php" title="Inbox"><i class="zmdi zmdi-email"></i></a></li>
         <li><a href="contact.blade.php" title="Contact List"><i class="zmdi zmdi-account-box-phone"></i></a></li>
         <li class="dropdown"> <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown" role="button"><i class="zmdi zmdi-notifications"></i>
-            <div class="notify"><span class="heartbit"></span><span class="point"></span></div>
+            <div class="notify" style="display: {{ (isset($notificationCount) && $notificationCount > 0) ? 'block' : 'none' }};"><span class="heartbit"></span><span class="point"></span></div>
             </a>
-            <ul class="dropdown-menu pullDown">
+            <ul class="dropdown-menu pullDown">Clini
                 <li class="body">
                     <ul class="menu list-unstyled">
-                        <li>
-                            <a href="javascript:void(0);">
-                                <div class="media">
-                                    <img class="media-object" src="{{ asset('assets/images/xs/avatar2.jpg') }}" alt="">
-                                    <div class="media-body">
-                                        <span class="name">Sophia <span class="time">30min ago</span></span>
-                                        <span class="message">There are many variations of passages</span>                                        
+                        @if(isset($notifications) && $notifications->count() > 0)
+                            @foreach($notifications as $notification)
+                            <li>
+                                <a href="javascript:void(0);">
+                                    <div class="media notification-item" data-notification-id="{{ $notification->id }}">
+                                        <div class="media-object" style="width: 40px; height: 40px; background-color: #1976d2; color: white; display: flex; align-items: center; justify-content: center; border-radius: 50%; position: relative;">
+                                            @if($notification->type == 'appointment')
+                                            <i class="zmdi zmdi-calendar"></i>
+                                            @else
+                                            <i class="zmdi zmdi-notifications"></i>
+                                            @endif
+                                            <!-- Dot badge for unread notifications -->
+                                            @if(!$notification->is_read)
+                                            <span class="badge badge-danger" style="position: absolute; top: -5px; right: -5px; width: 10px; height: 10px; border-radius: 50%; padding: 0;"></span>
+                                            @endif
+                                        </div>
+                                        <div class="media-body">
+                                            <span class="name">{{ ucfirst($notification->type) }} <span class="time">{{ $notification->created_at->diffForHumans() }}</span></span>
+                                            <span class="message">{{ $notification->message }}</span>                                        
+                                        </div>
                                     </div>
-                                </div>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="javascript:void(0);">
-                                <div class="media">
-                                    <img class="media-object" src="{{ asset('assets/images/xs/avatar3.jpg') }}" alt="">
-                                    <div class="media-body">
-                                        <span class="name">Sophia <span class="time">31min ago</span></span>
-                                        <span class="message">There are many variations of passages of Lorem Ipsum</span>                                        
+                                </a>
+                            </li>
+                            @endforeach
+                        @else
+                            <li>
+                                <a href="javascript:void(0);">
+                                    <div class="media">
+                                        <div class="media-body">
+                                            <span class="message">No new notifications</span>                                        
+                                        </div>
                                     </div>
-                                </div>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="javascript:void(0);">
-                                <div class="media">
-                                    <img class="media-object" src="{{ asset('assets/images/xs/avatar4.jpg') }}" alt="">
-                                    <div class="media-body">
-                                        <span class="name">Isabella <span class="time">35min ago</span></span>
-                                        <span class="message">There are many variations of passages</span>                                        
-                                    </div>
-                                </div>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="javascript:void(0);">
-                                <div class="media">
-                                    <img class="media-object" src="{{ asset('assets/images/xs/avatar5.jpg') }}" alt="">
-                                    <div class="media-body">
-                                        <span class="name">Alexander <span class="time">35min ago</span></span>
-                                        <span class="message">Contrary to popular belief, Lorem Ipsum random</span>                                        
-                                    </div>
-                                </div>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="javascript:void(0);">
-                                <div class="media">
-                                    <img class="media-object" src="{{ asset('assets/images/xs/avatar6.jpg') }}" alt="">
-                                    <div class="media-body">
-                                        <span class="name">Grayson <span class="time">1hr ago</span></span>
-                                        <span class="message">There are many variations of passages</span>                                        
-                                    </div>
-                                </div>
-                            </a>
-                        </li>                        
+                                </a>
+                            </li>
+                        @endif
                     </ul>
                 </li>
                 <li class="footer"> <a href="javascript:void(0);">View All</a> </li>
@@ -195,7 +175,7 @@
 <!-- Left Sidebar -->
 <aside id="leftsidebar" class="sidebar">
     <ul class="nav nav-tabs">
-        <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#dashboard"><i class="zmdi zmdi-home m-r-5"></i>Oreo</a></li>
+        <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#dashboard"><i class="zmdi zmdi-home m-r-5"></i>Clinical</a></li>
         <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#user">Doctor</a></li>
     </ul>
     <div class="tab-content">
@@ -204,30 +184,27 @@
                 <ul class="list">
                     <li>
                         <div class="user-info">
-                            <div class="image"><a href="{{ url('/admin/profile') }}"><img src="{{ asset('assets/images/profile_av.jpg') }}" alt="User"></a></div>
+                            @if(Auth::user()->photo)
+                                <div class="image"><a href="{{ route('doctor.dashboard') }}"><img src="{{ asset('storage/' . Auth::user()->photo) }}" alt="User"></a></div>
+                            @else
+                                <div class="image"><a href="{{ route('doctor.dashboard') }}"><img src="{{ asset('assets/images/profile_av.jpg') }}" alt="User"></a></div>
+                            @endif
                             <div class="detail">
-                                <h4>Dr. Charlotte</h4>
-                                <small>Neurologist</small>                        
+                                <h4>{{ Auth::user()->name ?? 'Dr. Charlotte' }}</h4>
+                                <small>{{ Auth::user()->doctor->category->name ?? 'Neurologist' }}</small>                        
                             </div>
                         </div>
                     </li>
                     <li class="header">MAIN</li>
-                    <li><a href="{{ url('/admin') }}"><i class="zmdi zmdi-home"></i><span>Dashboard</span></a></li>            
-                    <li><a href="{{ url('/admin/book-appointment') }}"><i class="zmdi zmdi-calendar-check"></i><span>Appointment</span> </a></li>
+                    <li><a href="{{ route('doctor.dashboard') }}"><i class="zmdi zmdi-home"></i><span>Dashboard</span></a></li>            
+                    <li><a href="{{ route('doctor.appointments') }}"><i class="zmdi zmdi-calendar-check"></i><span>Appointment</span> </a></li>
+                    <li><a href="{{ route('doctor.requests') }}"><i class="zmdi zmdi-notifications"></i><span>Requests</span> <span class="badge badge-info" id="request-count">{{ $requestCount ?? 0 }}</span></a></li>
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-account-add"></i><span>Doctors</span> </a>
                         <ul class="ml-menu">
                             <li><a href="{{ url('/admin/doctors') }}">All Doctors</a></li>
                             <li><a href="{{ url('/admin/doctors/add') }}">Add Doctor</a></li>                       
                             <li><a href="{{ url('/admin/profile') }}">Doctor Profile</a></li>
                             <li><a href="{{ url('/admin/events') }}">Doctor Schedule</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-account-o"></i><span>Patients</span> </a>
-                        <ul class="ml-menu">
-                            <li><a href="{{ url('/admin/patients') }}">All Patients</a></li>
-                            <li><a href="{{ url('/admin/patients/add') }}">Add Patient</a></li>                       
-                            <li><a href="{{ url('/admin/patient-profile') }}">Patient Profile</a></li>
-                            <li><a href="{{ url('/admin/patient-invoice') }}">Invoice</a></li>
                         </ul>
                     </li>
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-balance-wallet"></i><span>Payments</span> </a>
@@ -350,10 +327,14 @@
                 <ul class="list">
                     <li>
                         <div class="user-info m-b-20 p-b-15">
-                            <div class="image"><a href="{{ url('/admin/profile') }}"><img src="{{ asset('assets/images/profile_av.jpg') }}" alt="User"></a></div>
+                            @if(Auth::user()->photo)
+                                <div class="image"><a href="{{ route('doctor.dashboard') }}"><img src="{{ asset('storage/' . Auth::user()->photo) }}" alt="User"></a></div>
+                            @else
+                                <div class="image"><a href="{{ route('doctor.dashboard') }}"><img src="{{ asset('assets/images/profile_av.jpg') }}" alt="User"></a></div>
+                            @endif
                             <div class="detail">
-                                <h4>Dr. Charlotte</h4>
-                                <small>Neurologist</small>                        
+                                <h4>{{ Auth::user()->name ?? 'Dr. Charlotte' }}</h4>
+                                <small>{{ Auth::user()->doctor->category->name ?? 'Neurologist' }}</small>                        
                             </div>
                             <div class="row">
                                 <div class="col-12">
@@ -378,13 +359,13 @@
                     </li>
                     <li>
                         <small class="text-muted">Location: </small>
-                        <p>795 Folsom Ave, Suite 600 San Francisco, CADGE 94107</p>
+                        <p>{{ Auth::user()->address }}</p>
                         <hr>
                         <small class="text-muted">Email address: </small>
-                        <p>Charlotte@example.com</p>
+                        <p>{{ Auth::user()->email }}</p>
                         <hr>
                         <small class="text-muted">Phone: </small>
-                        <p>+ 202-555-0191</p>
+                        <p>{{ Auth::user()->phone }}</p>
                         <hr>
                         <small class="text-muted">Website: </small>
                         <p>http://dr.charlotte.com/ </p>
@@ -894,3 +875,76 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Function to update request count
+    function updateRequestCount() {
+        // In a real implementation, you would make an AJAX call to get the count
+        // For now, we'll just use the server-side rendered count
+        /*
+        $.ajax({
+            url: '{{ route('doctor.requests.count') }}',
+            method: 'GET',
+            success: function(response) {
+                $('#request-count').text(response.count);
+                if(response.count > 0) {
+                    $('#request-count').show();
+                } else {
+                    $('#request-count').hide();
+                }
+            }
+        });
+        */
+    }
+
+    // Mark notifications as read when dropdown is opened
+    $(document).ready(function() {
+        updateRequestCount();
+        
+        // When notification dropdown is shown, mark notifications as read
+        $('.dropdown-toggle[data-toggle="dropdown"]').on('click', function() {
+            var dropdown = $(this).next('.dropdown-menu');
+            if (dropdown.find('.zmdi-notifications').length > 0) {
+                // This is the notification dropdown
+                $.ajax({
+                    url: '{{ route('doctor.notifications.mark-as-read') }}',
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}'
+                    },
+                    success: function(response) {
+                        // Hide the notification badge
+                        $('.notify').hide();
+                        // Update the request count to 0
+                        $('#request-count').text('0');
+                    }
+                });
+            }
+        });
+        
+        // Mark individual notification as read when clicked
+        $(document).on('click', '.notification-item', function() {
+            var notificationId = $(this).data('notification-id');
+            var $notificationItem = $(this);
+            
+            // Remove the dot badge immediately
+            $notificationItem.find('.badge').remove();
+            
+            // Mark as read via AJAX
+            $.ajax({
+                url: '{{ route('doctor.notifications.mark-as-read-single', ['notification' => '_ID_']) }}'.replace('_ID_', notificationId),
+                method: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}'
+                },
+                success: function(response) {
+                    // Notification marked as read successfully
+                },
+                error: function(xhr, status, error) {
+                    // Re-add the dot badge if the request failed
+                    $notificationItem.find('.media-object').append('<span class="badge badge-danger" style="position: absolute; top: -5px; right: -5px; width: 10px; height: 10px; border-radius: 50%; padding: 0;"></span>');
+                }
+            });
+        });
+    });
+</script>

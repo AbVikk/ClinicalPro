@@ -71,124 +71,58 @@
                     </div>
                     
                     <div class="body">
-                        <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
-                            
+                        <!-- Nav tabs -->
+                        <ul class="nav nav-tabs padding-0">
                             <li class="nav-item">
                                 <a class="nav-link {{ is_null($roleFilter) ? 'active' : '' }}" 
                                    href="{{ route('admin.pharmacists.index') }}" 
-                                   role="tab">
-                                    All Pharmacists
+                                   role="tab" data-role="all">
+                                    All
                                 </a>
                             </li>
-
                             <li class="nav-item">
                                 <a class="nav-link {{ $roleFilter === 'primary_pharmacist' ? 'active' : '' }}" 
                                    href="{{ route('admin.pharmacists.index', ['role' => 'primary_pharmacist']) }}" 
-                                   role="tab">
-                                    Primary Pharmacists
+                                   role="tab" data-role="primary_pharmacist">
+                                    Primary
                                 </a>
                             </li>
-
                             <li class="nav-item">
                                 <a class="nav-link {{ $roleFilter === 'senior_pharmacist' ? 'active' : '' }}" 
                                    href="{{ route('admin.pharmacists.index', ['role' => 'senior_pharmacist']) }}" 
-                                   role="tab">
-                                    Senior Pharmacists
+                                   role="tab" data-role="senior_pharmacist">
+                                    Senior
                                 </a>
                             </li>
-
                             <li class="nav-item">
                                 <a class="nav-link {{ $roleFilter === 'clinic_pharmacist' ? 'active' : '' }}" 
                                    href="{{ route('admin.pharmacists.index', ['role' => 'clinic_pharmacist']) }}" 
-                                   role="tab">
-                                    Clinic Pharmacists
+                                   role="tab" data-role="clinic_pharmacist">
+                                    Clinic
                                 </a>
                             </li>
                         </ul>
                         
-                        <div class="tab-content">
-                            <div class="table-responsive">
-                                <table class="table table-hover table-bordered">
-                                    <thead>
-                                        <tr>
-                                            <th>#</th>
-                                            <th>Name</th>
-                                            <th>Email</th>
-                                            <th>Role</th>
-                                            <th>Status</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="pharmacistTableBody">
-                                        @forelse($pharmacists as $pharmacist)
-                                            <tr class="pharmacist-row" data-name="{{ strtolower($pharmacist->name) }}" data-email="{{ strtolower($pharmacist->email) }}">
-                                                <td>{{ $loop->iteration + ($pharmacists->currentPage() - 1) * $pharmacists->perPage() }}</td>
-                                                <td><a href="{{ route('admin.pharmacists.show', $pharmacist) }}">{{ $pharmacist->name }}</a></td>
-                                                <td>{{ $pharmacist->email }}</td>
-                                                <td>
-                                                    <span class="badge badge-info">{{ ucwords(str_replace('_', ' ', $pharmacist->role)) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-{{ $pharmacist->status === 'active' ? 'success' : ($pharmacist->status === 'pending' ? 'warning' : 'danger') }}">
-                                                         {{ ucwords($pharmacist->status) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <div class="btn-group">
-                                                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                                            Actions
-                                                        </button>
-                                                        <div class="dropdown-menu">
-                                                            <a class="dropdown-item" href="{{ route('admin.pharmacists.show', $pharmacist) }}">
-                                                                <i class="zmdi zmdi-eye"></i> View Profile
-                                                            </a>
-                                                            <a class="dropdown-item" href="#">
-                                                                <i class="zmdi zmdi-edit"></i> Edit
-                                                            </a>
-                                                            @if($pharmacist->status !== 'active')
-                                                                <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to activate this pharmacist?')) { document.getElementById('activate-form-{{ $pharmacist->id }}').submit(); }">
-                                                                    <i class="zmdi zmdi-check"></i> Activate
-                                                                </a>
-                                                            @else
-                                                                <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to suspend this pharmacist?')) { document.getElementById('suspend-form-{{ $pharmacist->id }}').submit(); }">
-                                                                    <i class="zmdi zmdi-block"></i> Suspend
-                                                                </a>
-                                                            @endif
-                                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); if(confirm('Are you sure you want to delete this pharmacist? This action cannot be undone.')) { document.getElementById('delete-form-{{ $pharmacist->id }}').submit(); }">
-                                                                <i class="zmdi zmdi-delete"></i> Delete
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Activate Form -->
-                                                    <form id="activate-form-{{ $pharmacist->id }}" action="{{ route('admin.pharmacists.update', $pharmacist) }}" method="POST" style="display: none;">
-                                                        @csrf
-                                                        @method('PUT')
-                                                        <input type="hidden" name="status" value="active">
-                                                    </form>
-                                                    
-                                                    <!-- Suspend Form -->
-                                                    <form id="suspend-form-{{ $pharmacist->id }}" action="{{ route('admin.pharmacists.update', $pharmacist) }}" method="POST" style="display: none;">
-                                                        @csrf
-                                                        @method('PUT')
-                                                        <input type="hidden" name="status" value="suspended">
-                                                    </form>
-                                                    
-                                                    <!-- Delete Form -->
-                                                    <form id="delete-form-{{ $pharmacist->id }}" action="{{ route('admin.pharmacists.destroy', $pharmacist) }}" method="POST" style="display: none;">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                    </form>
-                                                </td>
-                                            </tr>
-                                        @empty
+                        <!-- Tab panes -->
+                        <div class="tab-content m-t-10">
+                            <div class="tab-pane table-responsive active" id="All">
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-bordered">
+                                        <thead>
                                             <tr>
-                                                <td colspan="6" class="text-center">No pharmacists found for this role.</td>
+                                                <th>#</th>
+                                                <th>Name</th>
+                                                <th>Email</th>
+                                                <th>Role</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
                                             </tr>
-                                        @endforelse
-                                    </tbody>
-                                </table>
-                                {{ $pharmacists->appends(request()->query())->links() }}
+                                        </thead>
+                                        <tbody id="pharmacistTableBody">
+                                            @include('admin.pharmacists.partials.table')
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -207,12 +141,63 @@
 <!-- Live Search Script -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Tab switching without page reload
+    const tabLinks = document.querySelectorAll('.nav-link[data-role]');
+    
+    tabLinks.forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all tabs
+            tabLinks.forEach(tab => tab.classList.remove('active'));
+            
+            // Add active class to clicked tab
+            this.classList.add('active');
+            
+            // Get the role filter
+            const role = this.getAttribute('data-role');
+            
+            // Build URL with role parameter
+            let url = "{{ route('admin.pharmacists.index') }}";
+            if (role !== 'all') {
+                url += '?role=' + role;
+            }
+            
+            // Get search term if exists
+            const searchInput = document.getElementById('pharmacistSearch');
+            const searchTerm = searchInput ? searchInput.value : '';
+            if (searchTerm) {
+                url += (role !== 'all' ? '&' : '?') + 'search=' + encodeURIComponent(searchTerm);
+            }
+            
+            // Fetch content via AJAX
+            fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : ''
+                }
+            })
+            .then(response => response.text())
+            .then(html => {
+                // Update the table body directly with the returned HTML
+                const currentTableBody = document.querySelector('#pharmacistTableBody');
+                if (currentTableBody) {
+                    currentTableBody.innerHTML = html;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+    });
+    
+    // Live search functionality
     const searchInput = document.getElementById('pharmacistSearch');
-    const pharmacistRows = document.querySelectorAll('.pharmacist-row');
     
     // Function to filter pharmacists
     function filterPharmacists() {
         const searchTerm = searchInput.value.toLowerCase().trim();
+        const pharmacistRows = document.querySelectorAll('.pharmacist-row');
         
         pharmacistRows.forEach(function(row) {
             const name = row.getAttribute('data-name');

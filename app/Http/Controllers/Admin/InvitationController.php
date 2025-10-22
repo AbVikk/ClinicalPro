@@ -24,7 +24,7 @@ class InvitationController extends Controller
     {
         $roles = [
             'doctor' => 'Doctor',
-            'nurse' => 'Nurse',
+            'clinic_staff' => 'Nurse',
             'patient' => 'Patient',
             'donor' => 'Donor',
             'primary_pharmacist' => 'Primary Pharmacist',
@@ -45,8 +45,17 @@ class InvitationController extends Controller
     {
         $request->validate([
             'email' => 'required|email|unique:invitations,email,NULL,id,used,false',
-            'role' => 'required|in:doctor,nurse,patient,donor,primary_pharmacist,clinic_pharmacist,senior_pharmacist,billing_staff,hod,matron',
+            'role' => 'required|in:doctor,clinic_staff,patient,donor,primary_pharmacist,clinic_pharmacist,senior_pharmacist,billing_staff,hod,matron',
         ]);
+        
+        // Check if invitation already exists for this email and is not used
+        $existingInvitation = Invitation::where('email', $request->email)
+            ->where('used', false)
+            ->first();
+            
+        if ($existingInvitation) {
+            return redirect()->back()->with('error', 'An invitation already exists for this email address.');
+        }
         
         // Create invitation token
         $token = Str::random(50);
@@ -162,12 +171,18 @@ class InvitationController extends Controller
         }
         
         // Create the user with the role from invitation
-        $user = User::create([
+        // Map invitation role to user role
+        $userRole = $invitation->role;
+        if ($userRole === 'clinic_staff') {
+            $userRole = 'nurse';
+        }
+        
+        $userData = [
             'name' => $request->name,
             'email' => $invitation->email,
             'phone' => $request->phone,
             'password' => Hash::make($request->password),
-            'role' => $invitation->role,
+            'role' => $userRole,
             'date_of_birth' => $request->date_of_birth,
             'gender' => $request->gender,
             'address' => $request->address,
@@ -177,7 +192,12 @@ class InvitationController extends Controller
             'country' => $request->country,
             'photo' => $photoPath,
             'status' => 'pending', // Default status
-        ]);
+        ];
+        
+        // Generate user_id based on role
+        $userData['user_id'] = $this->generateUserId($invitation->role);
+        
+        $user = User::create($userData);
         
         // Create role-specific records if needed
         if ($invitation->role === 'doctor') {
@@ -234,6 +254,41 @@ class InvitationController extends Controller
             default:
                 return redirect()->route('login')->with('error', 'Unknown role. Please contact administrator.');
         }
+    }
+    
+    /**
+     * Generate user ID based on role
+     */
+    private function generateUserId($role)
+    {
+        // Map roles to prefixes
+        $prefixes = [
+            'admin' => 'ADM',
+            'doctor' => 'DOC',
+            'nurse' => 'NUR',
+            'patient' => 'PAT',
+            'donor' => 'DON',
+            'primary_pharmacist' => 'PHA',
+            'senior_pharmacist' => 'PHA',
+            'clinic_pharmacist' => 'PHA',
+            'billing_staff' => 'BIL',
+            'hod' => 'HOD',
+            'matron' => 'MAT'
+        ];
+        
+        $prefix = $prefixes[$role] ?? 'USR'; // Default prefix
+        
+        // Generate a unique user_id
+        $uniqueId = strtoupper(uniqid());
+        $userId = $prefix . substr($uniqueId, -6);
+        
+        // Ensure the user_id is unique
+        while (User::where('user_id', $userId)->exists()) {
+            $uniqueId = strtoupper(uniqid());
+            $userId = $prefix . substr($uniqueId, -6);
+        }
+        
+        return $userId;
     }
     
     /**
