@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<!doctype html>
+﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
 <html class="no-js " lang="en">
 <head>
 <meta charset="utf-8">
@@ -171,7 +171,7 @@
                         <ul class="header-dropdown">
                             <li class="dropdown"> <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"> <i class="zmdi zmdi-more"></i> </a>
                                 <ul class="dropdown-menu dropdown-menu-right slideUp">
-                                    <li><a href="{{ route('appointments.index') }}">View All Appointments</a></li>
+                                    <li><a href="{{ route('admin.appointments.index') }}">View All Appointments</a></li>
                                 </ul>
                             </li>
                             <li class="remove">
@@ -249,7 +249,7 @@
                         <ul class="header-dropdown">
                             <li class="dropdown"> <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"> <i class="zmdi zmdi-more"></i> </a>
                                 <ul class="dropdown-menu dropdown-menu-right slideUp">
-                                    <li><a href="{{ route('patients.index') }}">View All Patients</a></li>
+                                    <li><a href="{{ route('admin.patients.index') }}">View All Patients</a></li>
                                 </ul>
                             </li>
                             <li class="remove">

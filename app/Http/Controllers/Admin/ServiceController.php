@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Service;
+use App\Models\ServiceTimePricing;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +16,7 @@ class ServiceController extends Controller
     public function index()
     {
         // Fetch all services, including inactive ones, ordered by name.
-        $services = Service::withoutGlobalScope('active')->orderBy('service_name')->paginate(10);
+        $services = Service::withoutGlobalScope('active')->with('activeTimePricings')->orderBy('service_name')->paginate(10);
         
         return view('admin.services.index', compact('services'));
     }
@@ -41,9 +42,34 @@ class ServiceController extends Controller
             'price_currency' => ['required', 'string', 'size:3'], // e.g., NGN
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
+            'default_duration' => ['required', 'integer', 'in:30,40,60'],
+            // Time pricing validation
+            'time_pricing.*.duration' => ['required', 'integer', 'in:30,40,60'],
+            'time_pricing.*.price' => ['required', 'numeric', 'min:0.01'],
         ]);
 
-        Service::create($validatedData);
+        // Create the service
+        $service = Service::create([
+            'service_name' => $validatedData['service_name'],
+            'service_type' => $validatedData['service_type'],
+            'price_amount' => $validatedData['price_amount'],
+            'price_currency' => $validatedData['price_currency'],
+            'description' => $validatedData['description'] ?? null,
+            'is_active' => $request->has('is_active') ? true : false,
+            'default_duration' => $validatedData['default_duration'],
+        ]);
+
+        // Create time-based pricing if provided
+        if (isset($validatedData['time_pricing'])) {
+            foreach ($validatedData['time_pricing'] as $pricing) {
+                ServiceTimePricing::create([
+                    'service_id' => $service->id,
+                    'duration_minutes' => $pricing['duration'],
+                    'price' => $pricing['price'],
+                    'is_active' => true,
+                ]);
+            }
+        }
 
         return redirect()->route('admin.services.index')->with('success', 'Service and pricing created successfully.');
     }
@@ -53,6 +79,7 @@ class ServiceController extends Controller
      */
     public function edit(Service $service)
     {
+        $service->load('timePricings');
         return view('admin.services.edit', compact('service'));
     }
 
@@ -69,12 +96,60 @@ class ServiceController extends Controller
             'price_currency' => ['required', 'string', 'size:3'],
             'description' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
+            'default_duration' => ['required', 'integer', 'in:30,40,60'],
+            // Time pricing validation
+            'time_pricing.*.duration' => ['required', 'integer', 'in:30,40,60'],
+            'time_pricing.*.price' => ['required', 'numeric', 'min:0.01'],
+            'time_pricing.*.is_active' => ['sometimes', 'boolean'],
         ]);
 
-        // If is_active is not present in the request (e.g., from a checkbox), default it to false
-        $validatedData['is_active'] = $request->has('is_active') ? true : false;
+        // Update the service
+        $service->update([
+            'service_name' => $validatedData['service_name'],
+            'service_type' => $validatedData['service_type'],
+            'price_amount' => $validatedData['price_amount'],
+            'price_currency' => $validatedData['price_currency'],
+            'description' => $validatedData['description'] ?? null,
+            'is_active' => $request->has('is_active') ? true : false,
+            'default_duration' => $validatedData['default_duration'],
+        ]);
 
-        $service->update($validatedData);
+        // Handle time-based pricing
+        if (isset($validatedData['time_pricing'])) {
+            // Get existing pricing IDs
+            $existingPricingIds = $service->timePricings->pluck('id')->toArray();
+            $updatedPricingIds = [];
+            
+            foreach ($validatedData['time_pricing'] as $pricing) {
+                if (isset($pricing['id'])) {
+                    // Update existing pricing
+                    $serviceTimePricing = ServiceTimePricing::find($pricing['id']);
+                    if ($serviceTimePricing && $serviceTimePricing->service_id == $service->id) {
+                        $serviceTimePricing->update([
+                            'duration_minutes' => $pricing['duration'],
+                            'price' => $pricing['price'],
+                            'is_active' => $pricing['is_active'] ?? true,
+                        ]);
+                        $updatedPricingIds[] = $pricing['id'];
+                    }
+                } else {
+                    // Create new pricing
+                    $newPricing = ServiceTimePricing::create([
+                        'service_id' => $service->id,
+                        'duration_minutes' => $pricing['duration'],
+                        'price' => $pricing['price'],
+                        'is_active' => true,
+                    ]);
+                    $updatedPricingIds[] = $newPricing->id;
+                }
+            }
+            
+            // Delete removed pricing
+            $pricingToDelete = array_diff($existingPricingIds, $updatedPricingIds);
+            if (!empty($pricingToDelete)) {
+                ServiceTimePricing::whereIn('id', $pricingToDelete)->delete();
+            }
+        }
 
         return redirect()->route('admin.services.index')->with('success', 'Service pricing and details updated successfully.');
     }
@@ -94,7 +169,7 @@ class ServiceController extends Controller
      */
     public function showAll()
     {
-        $services = Service::all();
+        $services = Service::with('activeTimePricings')->get();
         return view('admin.services', compact('services'));
     }
     
@@ -103,7 +178,7 @@ class ServiceController extends Controller
      */
     public function apiIndex()
     {
-        $services = Service::all();
+        $services = Service::with('activeTimePricings')->get();
         return response()->json($services);
     }
     
@@ -112,7 +187,7 @@ class ServiceController extends Controller
      */
     public function test()
     {
-        $services = Service::all();
+        $services = Service::with('activeTimePricings')->get();
         return view('admin.services.test', compact('services'));
     }
 }

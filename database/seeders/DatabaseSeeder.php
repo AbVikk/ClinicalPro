@@ -26,10 +26,10 @@ class DatabaseSeeder extends Seeder
         // Run our custom seeders
         $this->call([
             CentralWarehouseSeeder::class,
-            DrugsSeeder::class,
+            DrugCategoriesTableSeeder::class,
+            DrugMgTableSeeder::class,
+            DrugsTableSeeder::class,
             TestPharmacistSeeder::class,
-            DrugCategoriesSeeder::class,
-            DrugMgSeeder::class,
         ]);
     }
 }

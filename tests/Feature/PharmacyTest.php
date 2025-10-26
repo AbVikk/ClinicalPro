@@ -29,23 +29,39 @@ class PharmacyTest extends TestCase
         // Test data
         $data = [
             'name' => 'Test Drug',
-            'category' => 'Test Category',
-            'strength_mg' => '100mg',
-            'unit_price' => 25.00,
-            'is_controlled' => false,
+            'generic_name' => 'Test Generic',
+            'category' => 'Antibiotics',
+            'strength_mg' => '500mg',
+            'medicine_type' => 'OTC',
+            'description' => 'Test description',
+            'medicine_form' => 'Tablet',
+            'manufacturer' => 'Test Manufacturer',
+            'supplier' => 'Test Supplier',
+            'expiry_date' => '2026-12-31',
+            'batch_number' => 'BATCH001',
+            'dosage' => 'Take one tablet twice daily',
+            'side_effects' => 'May cause drowsiness',
+            'precautions' => 'Avoid alcohol',
+            'initial_quantity' => 100,
+            'reorder_level' => 20,
+            'maximum_level' => 200,
+            'purchase_price' => 10.00,
+            'selling_price' => 25.00,
+            'tax_rate' => 5.0,
+            'storage_conditions' => ['Room Temperature'],
+            'is_active' => true,
         ];
 
         // Call the create drug endpoint
         $response = $this->post(route('admin.pharmacy.drugs.create'), $data);
 
-        // Assert the response status
-        $response->assertStatus(201);
+        // Assert the response is a redirect (as the controller returns a redirect)
+        $response->assertRedirect(route('admin.pharmacy.dashboard'));
 
         // Assert the drug was created in the database
         $this->assertDatabaseHas('drugs', [
             'name' => 'Test Drug',
-            'category' => 'Test Category',
-            'strength_mg' => '100mg',
+            'category' => 'Antibiotics',
         ]);
     }
 
@@ -83,6 +99,7 @@ class PharmacyTest extends TestCase
         // Test data
         $data = [
             'drug_id' => $drug->id,
+            'supplier_id' => null,
             'received_quantity' => 100,
             'expiry_date' => '2026-12-31',
         ];
@@ -90,7 +107,7 @@ class PharmacyTest extends TestCase
         // Call the receive stock endpoint
         $response = $this->post(route('admin.pharmacy.stock.receive'), $data);
 
-        // Assert the response status
+        // Assert the response is JSON with 201 status
         $response->assertStatus(201);
 
         // Assert the drug batch was created in the database

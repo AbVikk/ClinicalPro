@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Doctor;
 use App\Models\Appointment;
 use App\Models\Service;
+use App\Models\ServiceTimePricing;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -32,7 +33,7 @@ class BookAppointmentController extends Controller
         }
         
         // Fetch all active services for the dropdown
-        $services = Service::all();
+        $services = Service::with('activeTimePricings')->get();
         
         return view('admin.book-appointment', compact('patientData', 'services'));
     }
@@ -180,6 +181,8 @@ class BookAppointmentController extends Controller
             'doctor_id' => 'required|exists:users,id',
             'appointment_date' => 'required|date',
             'service_id' => 'required|exists:hospital_services,id',
+            'service_duration' => 'required|integer|in:30,40,60', // Validate duration
+            'service_price' => 'required|numeric|min:0', // Validate price
             'reason' => 'nullable|string',
         ]);
         
@@ -188,7 +191,24 @@ class BookAppointmentController extends Controller
         
         // Get the service
         $service = Service::findOrFail($request->input('service_id'));
-        $fee = $service->price_amount;
+        
+        // SECURITY: Do not trust the service_price from the form submission
+        // Recalculate the price based on service and duration for data integrity
+        $basePrice = $service->price_amount;
+        $duration = $request->input('service_duration');
+        
+        // Define the price modifiers based on selected duration (minutes)
+        // 30 mins: 1.0 (Base Price)
+        // 40 mins: 1.25 (Base Price + 25%)
+        // 60 mins: 1.50 (Base Price + 50%)
+        $durationModifiers = [
+            30 => 1.0,
+            40 => 1.25,
+            60 => 1.50
+        ];
+        
+        $modifier = $durationModifiers[$duration] ?? 1.0;
+        $calculatedFee = $basePrice * $modifier;
         
         // Create Consultation Record (initially scheduled but pending payment)
         $consultation = new \App\Models\Consultation();
@@ -197,7 +217,9 @@ class BookAppointmentController extends Controller
         $consultation->location_id = 1; // Default to virtual channel
         $consultation->delivery_channel = 'virtual'; // Default to virtual
         $consultation->service_type = $service->service_name;
-        $consultation->fee = $fee;
+        $consultation->reason = $request->input('reason'); // Store the reason in the consultation
+        $consultation->duration_minutes = $request->input('service_duration'); // Store the duration
+        $consultation->fee = $calculatedFee; // Use our calculated fee, not the submitted one
         $consultation->status = 'scheduled'; // Use 'scheduled' as it's a valid enum value
         $consultation->start_time = $request->input('appointment_date');
         $consultation->save();
@@ -207,8 +229,8 @@ class BookAppointmentController extends Controller
         $payment->user_id = $patient->id;
         $payment->consultation_id = $consultation->id;
         $payment->clinic_id = 1; // Default to virtual channel
-        $payment->amount = $fee;
-        
+        $payment->amount = $calculatedFee; // Use our calculated fee, not the submitted one
+    
         // Set payment method and status for pending payment
         $payment->method = 'card_online'; // Will be updated after successful payment
         $payment->status = 'pending_cash_verification'; // Pending until payment is verified
@@ -341,5 +363,25 @@ class BookAppointmentController extends Controller
             ->get();
             
         return response()->json(['patients' => $patients]);
+    }
+    
+    /**
+     * Get time-based pricing for a service.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function getServiceTimePricing(Request $request)
+    {
+        $serviceId = $request->input('service_id');
+        
+        $service = Service::with('activeTimePricings')->findOrFail($serviceId);
+        
+        // Return the time pricings for this service
+        return response()->json([
+            'time_pricings' => $service->activeTimePricings,
+            'default_price' => $service->price_amount,
+            'default_duration' => $service->default_duration
+        ]);
     }
 }

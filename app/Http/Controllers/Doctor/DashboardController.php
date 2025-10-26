@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Doctor;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
+use Illuminate\Support\Carbon;
 use App\Models\Appointment;
 use App\Models\AppointmentDetail;
 use App\Models\Vitals;
@@ -731,7 +732,7 @@ class DashboardController extends Controller
         ]);
         
         // Load related data through the appointment
-        $appointment->load(['vitals', 'clinicalNote', 'medications', 'doctor', 'patient', 'appointmentReason']);
+        $appointment->load(['vitals', 'clinicalNote', 'medications', 'labTests', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail']);
         
         // Get drug data for medication selection
         $drugs = \App\Models\Drug::orderBy('name')->get();
@@ -761,12 +762,13 @@ class DashboardController extends Controller
         }
         
         // Validate the request
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'blood_group' => 'nullable|string|max:10',
             'advice' => 'nullable|string|max:1000',
             'follow_up_date' => 'nullable|date',
             'follow_up_time' => 'nullable|date_format:H:i',
             // Vitals validation
+            'blood_pressure' => 'nullable|string|max:20',
             'temperature' => 'nullable|string|max:10',
             'pulse' => 'nullable|string|max:10',
             'respiratory_rate' => 'nullable|string|max:10',
@@ -785,17 +787,24 @@ class DashboardController extends Controller
             'medications.*.type' => 'nullable|string|max:50',
             'medications.*.dosage' => 'nullable|string|max:50',
             'medications.*.duration' => 'nullable|string|max:50',
-            'medications.*.instructions' => 'nullable|string|max:200', // Fixed: was 'instruction', should be 'instructions'
+            'medications.*.instructions' => 'nullable|string|max:200',
             // Lab tests validation
             'lab_tests' => 'nullable|array',
             'lab_tests.*.name' => 'nullable|string|max:100',
-            'lab_tests.*.file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:2048',
+            'new_lab_test_file' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048',
             // Complaints and diagnosis validation
             'complaints' => 'nullable|array',
             'complaints.*' => 'nullable|string|max:200',
             'diagnosis' => 'nullable|array',
             'diagnosis.*' => 'nullable|string|max:200',
         ]);
+        
+        if ($validator->fails()) {
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Validation failed: ' . implode(', ', $validator->errors()->all())], 422);
+            }
+            return redirect()->back()->withErrors($validator)->withInput();
+        }
         
         try {
             // Get or create appointment details
@@ -804,25 +813,67 @@ class DashboardController extends Controller
             ]);
             
             // Handle lab tests with files
-            $labTestsData = [];
+            // First, delete existing lab tests for this appointment
+            \App\Models\LabTest::where('appointment_id', $appointment->id)->delete();
+            
+            // Log all request data for debugging
+            Log::info('Full request data for lab tests', [
+                'all_inputs' => $request->all(),
+                'all_files' => $request->allFiles(),
+                'lab_tests' => $request->lab_tests
+            ]);
+            
+            // Then create new lab tests
             if ($request->lab_tests) {
-                foreach ($request->lab_tests as $labTest) {
+                // Get the uploaded file if present
+                $newLabTestFile = $request->file('new_lab_test_file');
+                
+                // Log request data for debugging
+                Log::info('Lab test processing', [
+                    'lab_tests_count' => count($request->lab_tests),
+                    'has_file' => $request->hasFile('new_lab_test_file'),
+                    'file_valid' => $newLabTestFile ? $newLabTestFile->isValid() : false,
+                    'file_object' => $newLabTestFile ? 'File object exists' : 'No file object'
+                ]);
+                
+                // Process all lab tests
+                foreach ($request->lab_tests as $index => $labTest) {
                     if (!empty($labTest['name'])) {
                         $labTestEntry = [
-                            'name' => $labTest['name'],
+                            'appointment_id' => $appointment->id,
+                            'test_name' => $labTest['name'],
                             'file_path' => null
                         ];
                         
                         // Handle file upload if present
-                        if (isset($labTest['file']) && $labTest['file'] instanceof \Illuminate\Http\UploadedFile) {
-                            $filePath = $labTest['file']->store('lab_tests', 'public');
-                            $labTestEntry['file_path'] = $filePath;
+                        // Associate the file with the LAST lab test (more intuitive for users)
+                        if ($newLabTestFile && $newLabTestFile->isValid() && $index === (count($request->lab_tests) - 1)) {
+                            try {
+                                $filePath = $newLabTestFile->store('lab_tests', 'public');
+                                $labTestEntry['file_path'] = $filePath;
+                                
+                                // Log successful file upload
+                                Log::info('Lab test file uploaded successfully', [
+                                    'file_path' => $filePath,
+                                    'test_name' => $labTest['name'],
+                                    'file_name' => $newLabTestFile->getClientOriginalName()
+                                ]);
+                            } catch (\Exception $e) {
+                                Log::error('Lab test file upload failed', [
+                                    'error' => $e->getMessage(),
+                                    'test_name' => $labTest['name']
+                                ]);
+                            }
                         } elseif (isset($labTest['file_path'])) {
                             // Keep existing file path
                             $labTestEntry['file_path'] = $labTest['file_path'];
                         }
                         
-                        $labTestsData[] = $labTestEntry;
+                        // Log the lab test entry being created
+                        Log::info('Creating lab test entry', $labTestEntry);
+                        
+                        // Create the lab test record
+                        \App\Models\LabTest::create($labTestEntry);
                     }
                 }
             }
@@ -850,7 +901,6 @@ class DashboardController extends Controller
             // Update appointment details
             $appointmentDetail->update([
                 'blood_group' => $request->blood_group,
-                'lab_tests' => $labTestsData,
                 'complaints' => $complaintsData,
                 'diagnosis' => $diagnosisData,
                 'advice' => $request->advice,
@@ -862,6 +912,7 @@ class DashboardController extends Controller
             $vitals = Vitals::updateOrCreate(
                 ['appointment_id' => $appointment->id],
                 [
+                    'blood_pressure' => $request->blood_pressure,
                     'temperature' => $request->temperature,
                     'pulse' => $request->pulse,
                     'respiratory_rate' => $request->respiratory_rate,
@@ -887,19 +938,19 @@ class DashboardController extends Controller
             
             // Handle medications
             // First, delete existing medications for this appointment
-            Medication::where('appointment_id', $appointment->id)->delete();
+            \App\Models\Medication::where('appointment_id', $appointment->id)->delete();
             
             // Then create new medications
             if ($request->medications) {
                 foreach ($request->medications as $medicationData) {
                     if (!empty($medicationData['name'])) {
-                        Medication::create([
+                        \App\Models\Medication::create([
                             'appointment_id' => $appointment->id,
                             'medication_name' => $medicationData['name'],
                             'type' => $medicationData['type'] ?? null,
                             'dosage' => $medicationData['dosage'] ?? null,
                             'duration' => $medicationData['duration'] ?? null,
-                            'instructions' => $medicationData['instructions'] ?? null, // Fixed: was 'instruction', should be 'instructions'
+                            'instructions' => $medicationData['instructions'] ?? null,
                         ]);
                     }
                 }
@@ -966,7 +1017,7 @@ class DashboardController extends Controller
         $completedAppointments = Appointment::where('patient_id', $patient->id)
             ->where('doctor_id', $doctorId)
             ->where('status', 'completed')
-            ->with(['doctor', 'patient', 'appointmentReason', 'vitals', 'clinicalNote', 'medications', 'appointmentDetail'])
+            ->with(['doctor', 'patient', 'appointmentReason', 'vitals', 'clinicalNote', 'medications', 'labTests', 'appointmentDetail'])
             ->orderBy('appointment_time', 'desc')
             ->get();
             
@@ -990,7 +1041,7 @@ class DashboardController extends Controller
         ]);
         
         // Load related data
-        $currentAppointment->load(['vitals', 'clinicalNote', 'medications', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail']);
+        $currentAppointment->load(['vitals', 'clinicalNote', 'medications', 'labTests', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail']);
         
         // Prepare appointments data for JavaScript
         $appointmentsData = [];
@@ -1000,8 +1051,19 @@ class DashboardController extends Controller
                 'appointment_id' => $appointment->id
             ]);
             
-            // Load all related data
-            $appointment->load(['vitals', 'clinicalNote', 'medications', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail']);
+            // Load all related data including labTests
+            $appointment->load(['vitals', 'clinicalNote', 'medications', 'labTests', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail']);
+            
+            // Prepare lab tests data
+            $labTestsData = [];
+            if ($appointment->labTests) {
+                foreach ($appointment->labTests as $labTest) {
+                    $labTestsData[] = [
+                        'name' => $labTest->test_name,
+                        'file_path' => $labTest->file_path
+                    ];
+                }
+            }
             
             $appointmentsData[] = [
                 'id' => $appointment->id,
@@ -1033,7 +1095,7 @@ class DashboardController extends Controller
                 'bmi' => $appointment->vitals->bmi ?? '',
                 'complaints' => $appointmentDetail->complaints ?? [],
                 'diagnosis' => $appointmentDetail->diagnosis ?? [],
-                'lab_tests' => $appointmentDetail->lab_tests ?? [],
+                'lab_tests' => $labTestsData,
                 'medications' => $appointment->medications->map(function($med) {
                     return [
                         'medication_name' => $med->medication_name,
@@ -1057,5 +1119,41 @@ class DashboardController extends Controller
             'requestCount',
             'appointmentsData'
         ));
+    }
+    
+    /**
+     * Upload lab test result file
+     */
+    public function uploadLabTestResult(Request $request, \App\Models\LabTest $labTest)
+    {
+        // Verify the lab test belongs to an appointment with this doctor
+        $doctorId = Auth::user()->id;
+        if ($labTest->appointment->doctor_id !== $doctorId) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized access'], 403);
+        }
+        
+        // Validate the file upload
+        $request->validate([
+            'test_file' => 'required|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048',
+        ]);
+        
+        try {
+            // Store the file
+            $filePath = $request->file('test_file')->store('lab_tests', 'public');
+            
+            // Update the lab test with the file path
+            $labTest->update(['file_path' => $filePath]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Lab test result uploaded successfully',
+                'file_path' => $filePath
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error uploading lab test result: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

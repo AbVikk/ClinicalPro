@@ -22,7 +22,7 @@
         <li class="dropdown"> <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown" role="button"><i class="zmdi zmdi-notifications"></i>
             <div class="notify" style="display: {{ (isset($notificationCount) && $notificationCount > 0) ? 'block' : 'none' }};"><span class="heartbit"></span><span class="point"></span></div>
             </a>
-            <ul class="dropdown-menu pullDown">Clini
+            <ul class="dropdown-menu pullDown">
                 <li class="body">
                     <ul class="menu list-unstyled">
                         @if(isset($notifications) && $notifications->count() > 0)
@@ -239,86 +239,7 @@
                             <li><a href="{{ url('/admin/locked') }}">Locked Screen</a> </li>
                         </ul>
                     </li>
-                    <li class="header">EXTRA COMPONENTS</li>
-                    <li class="active open"><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-blogger"></i><span>Blog</span></a>
-                        <ul class="ml-menu">
-                            <li><a href="{{ url('/admin/blog-dashboard') }}">Blog Dashboard</a></li>
-                            <li><a href="{{ url('/admin/blog-post') }}">New Post</a></li>
-                            <li><a href="{{ url('/admin/blog-list') }}">Blog List</a></li>
-                            <li><a href="{{ url('/admin/blog-grid') }}">Blog Grid</a></li>
-                            <li class="active"><a href="{{ url('/admin/blog-details') }}">Blog Single</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-folder"></i><span>File Manager</span> </a>
-                        <ul class="ml-menu">
-                            <li><a href="{{ url('/admin/file-dashboard') }}">All File</a></li>
-                            <li><a href="{{ url('/admin/file-documents') }}">Documents</a></li>
-                            <li><a href="{{ url('/admin/file-media') }}">Media</a></li>
-                            <li><a href="{{ url('/admin/file-images') }}">Images</a></li>
-                        </ul>
-                    </li>
-                    <li> <a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-apps"></i><span>App</span> </a>
-                        <ul class="ml-menu">
-                            <li><a href="{{ url('/admin/mail-inbox') }}">Inbox</a></li>
-                            <li><a href="{{ url('/admin/chat') }}">Chat</a></li>                                                        
-                            <li><a href="{{ url('/admin/contact') }}">Contact list</a></li>                            
-                        </ul>
-                    </li>                    
-                    <li> <a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-delicious"></i><span>Widgets</span> </a>
-                        <ul class="ml-menu">
-                            <li><a href="{{ url('/admin/widgets-app') }}">Apps Widgetse</a></li>
-                            <li><a href="{{ url('/admin/widgets-data') }}">Data Widgetse</a></li>
-                        </ul>
-                    </li>                    
-                    <li> <a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-copy"></i><span>Sample Pages</span> </a>
-                        <ul class="ml-menu">
-                            <li><a href="{{ url('/admin/blank') }}">Blank Page</a> </li>
-                            <li><a href="../rtl/index.blade.php">RTL Support</a></li>
-                            <li><a href="{{ url('/admin/image-gallery') }}">Image Gallery</a> </li>
-                            <li><a href="{{ url('/admin/profile') }}">Profile</a></li>
-                            <li><a href="{{ url('/admin/timeline') }}">Timeline</a></li>                            
-                            <li><a href="{{ url('/admin/invoice') }}">Invoices</a></li>
-                            <li><a href="{{ url('/admin/search-results') }}">Search Results</a></li>
-                        </ul>
-                    </li>
-                    <li> <a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-swap-alt"></i><span>User Interface (UI)</span> </a>
-                        <ul class="ml-menu">
-                            <li><a href="{{ url('/admin/ui-kit') }}">UI KIT</a></li>
-                            <li><a href="{{ url('/admin/alerts') }}">Alerts</a></li>
-                            <li><a href="{{ url('/admin/collapse') }}">Collapse</a></li>
-                            <li><a href="{{ url('/admin/colors') }}">Colors</a></li>
-                            <li><a href="{{ url('/admin/dialogs') }}">Dialogs</a></li>
-                            <li><a href="{{ url('/admin/icons') }}">Icons</a></li>
-                            <li><a href="{{ url('/admin/list-group') }}">List Group</a></li>
-                            <li><a href="{{ url('/admin/media-object') }}">Media Object</a></li>
-                            <li><a href="{{ url('/admin/modals') }}">Modals</a></li>
-                            <li><a href="{{ url('/admin/notifications') }}">Notifications</a></li>                    
-                            <li><a href="{{ url('/admin/progressbars') }}">Progress Bars</a></li>
-                            <li><a href="{{ url('/admin/range-sliders') }}">Range Sliders</a></li>
-                            <li><a href="{{ url('/admin/sortable-nestable') }}">Sortable & Nestable</a></li>
-                            <li><a href="{{ url('/admin/tabs') }}">Tabs</a></li>
-                            <li><a href="{{ url('/admin/waves') }}">Waves</a></li>
-                        </ul>
-                    </li>
-                    <li class="header">Extra</li>
-                    <li>
-                        <div class="progress-container progress-primary m-t-10">
-                            <span class="progress-badge">Traffic this Month</span>
-                            <div class="progress">
-                                <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="67" aria-valuemin="0" aria-valuemax="100" style="width: 67%;">
-                                    <span class="progress-value">67%</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="progress-container progress-info">
-                            <span class="progress-badge">Server Load</span>
-                            <div class="progress">
-                                <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="86" aria-valuemin="0" aria-valuemax="100" style="width: 86%;">
-                                    <span class="progress-value">86%</span>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
+                    
                 </ul>
             </div>
         </div>
@@ -536,7 +457,7 @@
                             <input type="text" class="form-control" placeholder="Search...">
                             <span class="input-group-addon">
                                 <i class="zmdi zmdi-search"></i>
-                            </span>
+                                </span>
                         </div>
                     </div>
                 </div>
@@ -875,76 +796,3 @@
         </div>
     </div>
 </div>
-
-<script>
-    // Function to update request count
-    function updateRequestCount() {
-        // In a real implementation, you would make an AJAX call to get the count
-        // For now, we'll just use the server-side rendered count
-        /*
-        $.ajax({
-            url: '{{ route('doctor.requests.count') }}',
-            method: 'GET',
-            success: function(response) {
-                $('#request-count').text(response.count);
-                if(response.count > 0) {
-                    $('#request-count').show();
-                } else {
-                    $('#request-count').hide();
-                }
-            }
-        });
-        */
-    }
-
-    // Mark notifications as read when dropdown is opened
-    $(document).ready(function() {
-        updateRequestCount();
-        
-        // When notification dropdown is shown, mark notifications as read
-        $('.dropdown-toggle[data-toggle="dropdown"]').on('click', function() {
-            var dropdown = $(this).next('.dropdown-menu');
-            if (dropdown.find('.zmdi-notifications').length > 0) {
-                // This is the notification dropdown
-                $.ajax({
-                    url: '{{ route('doctor.notifications.mark-as-read') }}',
-                    method: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}'
-                    },
-                    success: function(response) {
-                        // Hide the notification badge
-                        $('.notify').hide();
-                        // Update the request count to 0
-                        $('#request-count').text('0');
-                    }
-                });
-            }
-        });
-        
-        // Mark individual notification as read when clicked
-        $(document).on('click', '.notification-item', function() {
-            var notificationId = $(this).data('notification-id');
-            var $notificationItem = $(this);
-            
-            // Remove the dot badge immediately
-            $notificationItem.find('.badge').remove();
-            
-            // Mark as read via AJAX
-            $.ajax({
-                url: '{{ route('doctor.notifications.mark-as-read-single', ['notification' => '_ID_']) }}'.replace('_ID_', notificationId),
-                method: 'POST',
-                data: {
-                    _token: '{{ csrf_token() }}'
-                },
-                success: function(response) {
-                    // Notification marked as read successfully
-                },
-                error: function(xhr, status, error) {
-                    // Re-add the dot badge if the request failed
-                    $notificationItem.find('.media-object').append('<span class="badge badge-danger" style="position: absolute; top: -5px; right: -5px; width: 10px; height: 10px; border-radius: 50%; padding: 0;"></span>');
-                }
-            });
-        });
-    });
-</script>

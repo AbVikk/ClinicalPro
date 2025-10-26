@@ -281,6 +281,81 @@
         font-weight: 600;
         color: #1976d2;
     }
+    
+    .lab-tests-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .lab-test-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        border: 1px solid #e9ecef;
+    }
+    
+    .lab-test-name {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .btn-sm {
+        padding: 5px 10px;
+        font-size: 0.875rem;
+        border-radius: 3px;
+    }
+    
+    .btn-info {
+        background-color: #17a2b8;
+        border-color: #17a2b8;
+        color: white;
+    }
+    
+    .btn-info:hover {
+        background-color: #138496;
+        border-color: #117a8b;
+    }
+    
+    .btn-secondary.disabled {
+        background-color: #6c757d;
+        border-color: #6c757d;
+        color: white;
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .btn-primary {
+        background-color: #007bff;
+        border-color: #007bff;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0069d9;
+        border-color: #0062cc;
+    }
+    
+    .upload-form {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .file-input {
+        padding: 2px 5px;
+        font-size: 0.8rem;
+        border: 1px solid #ced4da;
+        border-radius: 3px;
+    }
+    
+    .upload-button {
+        padding: 3px 8px;
+        font-size: 0.8rem;
+    }
 </style>
 </head>
 <body class="theme-cyan">
@@ -439,11 +514,15 @@
                         <h3 class="section-title">Vitals</h3>
                         <div class="vitals-grid">
                             <div class="vital-item">
+                                <label>Blood Pressure (mmHg)</label>
+                                <input type="text" name="blood_pressure" placeholder="120/80" value="{{ $currentAppointment->vitals->blood_pressure ?? '' }}">
+                            </div>
+                            <div class="vital-item">
                                 <label>Temperature (F)</label>
                                 <input type="text" name="temperature" placeholder="98.6" value="{{ $currentAppointment->vitals->temperature ?? '' }}">
                             </div>
                             <div class="vital-item">
-                                <label>Pulse (mmHg)</label>
+                                <label>Pulse (bpm)</label>
                                 <input type="text" name="pulse" placeholder="72" value="{{ $currentAppointment->vitals->pulse ?? '' }}">
                             </div>
                             <div class="vital-item">
@@ -491,16 +570,34 @@
                     
                     <div class="form-section">
                         <h3 class="section-title">Laboratory Tests</h3>
-                        <div class="complaints-list">
-                            @if(!empty($currentAppointmentDetail->lab_tests) && is_array($currentAppointmentDetail->lab_tests))
-                                @foreach($currentAppointmentDetail->lab_tests as $labTest)
-                                <div class="complaint-tag">
-                                    {{ $labTest }}
+                        <div class="lab-tests-list space-y-3">
+                            @if($currentAppointment->labTests && $currentAppointment->labTests->count() > 0)
+                                @foreach($currentAppointment->labTests as $labTest)
+                                
+                                <!-- Enhanced structure to ensure Test Name and Action are on one line -->
+                                <div class="lab-test-item flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                    
+                                    <span class="lab-test-name font-medium text-gray-700">{{ $labTest->test_name }}</span>
+                                    
+                                    @if(!empty($labTest->file_path))
+                                        <!-- File Exists: Show the VIEW FILE button -->
+                                        <a 
+                                            href="{{ asset('storage/' . $labTest->file_path) }}" 
+                                            target="_blank" 
+                                            class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm transition duration-150"
+                                        >
+                                            View File
+                                        </a>
+                                    @else
+                                        <!-- File Missing: Show a simple message -->
+                                        <span class="text-xs text-red-500 mr-2">No File Uploaded</span>
+                                    @endif
                                 </div>
+                                
                                 @endforeach
                             @else
-                                <div class="complaint-tag">
-                                    No lab tests recorded
+                                <div class="lab-test-item p-3 border border-gray-200 rounded-lg text-center text-gray-500 bg-gray-50">
+                                    <span class="lab-test-name">No lab tests recorded for this appointment</span>
                                 </div>
                             @endif
                         </div>
@@ -512,7 +609,7 @@
                             @if(!empty($currentAppointmentDetail->complaints) && is_array($currentAppointmentDetail->complaints))
                                 @foreach($currentAppointmentDetail->complaints as $complaint)
                                 <div class="complaint-tag">
-                                    {{ $complaint }}
+                                    {{ is_array($complaint) ? $complaint['name'] : $complaint }}
                                 </div>
                                 @endforeach
                             @else
@@ -529,7 +626,7 @@
                             @if(!empty($currentAppointmentDetail->diagnosis) && is_array($currentAppointmentDetail->diagnosis))
                                 @foreach($currentAppointmentDetail->diagnosis as $diagnosis)
                                 <div class="diagnosis-tag">
-                                    {{ $diagnosis }}
+                                    {{ is_array($diagnosis) ? $diagnosis['name'] : $diagnosis }}
                                 </div>
                                 @endforeach
                             @else
@@ -698,6 +795,7 @@
         if (followUpTime) followUpTime.value = appointment.follow_up_time || '';
         
         // Update vitals
+        const bloodPressure = document.querySelector('input[name="blood_pressure"]');
         const temperature = document.querySelector('input[name="temperature"]');
         const pulse = document.querySelector('input[name="pulse"]');
         const respiratoryRate = document.querySelector('input[name="respiratory_rate"]');
@@ -708,6 +806,7 @@
         const bsa = document.querySelector('input[name="bsa"]');
         const bmi = document.querySelector('input[name="bmi"]');
         
+        if (bloodPressure) bloodPressure.value = appointment.blood_pressure || '';
         if (temperature) temperature.value = appointment.temperature || '';
         if (pulse) pulse.value = appointment.pulse || '';
         if (respiratoryRate) respiratoryRate.value = appointment.respiratory_rate || '';
@@ -721,7 +820,9 @@
         // Update tags
         updateTags('.complaints-list:nth-child(2)', appointment.complaints || []); // Complaints section
         updateTags('.diagnosis-list', appointment.diagnosis || []); // Diagnosis section
-        updateTags('.complaints-list:first-child', appointment.lab_tests || []); // Lab tests section
+        
+        // Update lab tests with file information
+        updateLabTests('.lab-tests-list.space-y-3', appointment.lab_tests || []); // Lab tests section
         
         // Update medications table
         console.log('About to update medications table with:', appointment.medications);
@@ -743,7 +844,12 @@
             items.forEach(item => {
                 const tag = document.createElement('div');
                 tag.className = 'complaint-tag';
-                tag.textContent = item;
+                // Check if item is an object (for lab tests) or string (for complaints/diagnosis)
+                if (typeof item === 'object' && item.name) {
+                    tag.textContent = item.name;
+                } else {
+                    tag.textContent = item;
+                }
                 container.appendChild(tag);
             });
         } else {
@@ -751,6 +857,58 @@
             tag.className = 'complaint-tag';
             tag.textContent = 'No items recorded';
             container.appendChild(tag);
+        }
+    }
+    
+    // Update lab tests display with file information
+    function updateLabTests(containerSelector, labTests) {
+        const container = document.querySelector(containerSelector);
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (Array.isArray(labTests) && labTests.length > 0) {
+            labTests.forEach(labTest => {
+                // Create the lab test item div
+                const labTestItem = document.createElement('div');
+                labTestItem.className = 'lab-test-item flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm';
+                
+                // Create the test name span
+                const testNameSpan = document.createElement('span');
+                testNameSpan.className = 'lab-test-name font-medium text-gray-700';
+                testNameSpan.textContent = labTest.name || 'Unknown Test';
+                
+                // Create the action element (either View File button or No File message)
+                let actionElement;
+                if (labTest.file_path) {
+                    // File exists: create View File button
+                    const viewButton = document.createElement('a');
+                    viewButton.href = '/storage/' + labTest.file_path;
+                    viewButton.target = '_blank';
+                    viewButton.className = 'btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm transition duration-150';
+                    viewButton.textContent = 'View File';
+                    actionElement = viewButton;
+                } else {
+                    // No file: create simple message
+                    const noFileSpan = document.createElement('span');
+                    noFileSpan.className = 'text-xs text-red-500 mr-2';
+                    noFileSpan.textContent = 'No File Uploaded';
+                    actionElement = noFileSpan;
+                }
+                
+                // Append elements to the lab test item
+                labTestItem.appendChild(testNameSpan);
+                labTestItem.appendChild(actionElement);
+                
+                // Append the lab test item to the container
+                container.appendChild(labTestItem);
+            });
+        } else {
+            // No lab tests: show message
+            const noTestsItem = document.createElement('div');
+            noTestsItem.className = 'lab-test-item p-3 border border-gray-200 rounded-lg text-center text-gray-500 bg-gray-50';
+            noTestsItem.innerHTML = '<span class="lab-test-name">No lab tests recorded for this appointment</span>';
+            container.appendChild(noTestsItem);
         }
     }
     

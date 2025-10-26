@@ -159,7 +159,7 @@
                                                                             <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="profile-image" width="40">
                                                                         @endif
                                                                         <div class="ml-3">
-                                                                            <h6 class="mb-0"><a href="{{ route('doctor.patient.show', $appointment->patient->id) }}">{{ $appointment->patient->name }}</a></h6>
+                                                                            <h6 class="mb-0"><a href="{{ route('doctor.patients.appointment-history', $appointment->patient->id) }}">{{ $appointment->patient->name }}</a></h6>
                                                                         </div>
                                                                     </div>
                                                                 </td>
@@ -172,7 +172,7 @@
                                                                             Actions
                                                                         </button>
                                                                         <div class="dropdown-menu">
-                                                                            <a class="dropdown-item" href="{{ route('doctor.patient.show', $appointment->patient->id) }}">
+                                                                            <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $appointment->patient->id) }}">
                                                                                 <i class="zmdi zmdi-account"></i> View Profile
                                                                             </a>
                                                                             <a class="dropdown-item" href="#">
@@ -222,7 +222,7 @@
                                                             @forelse($upcomingAppointments ?? [] as $appointment)
                                                             <tr>
                                                                 <td>
-                                                                    <a href="{{ route('doctor.patient.show', $appointment->patient->id) }}"><h6 class="mb-0">{{ $appointment->patient->name }}</h6></a>
+                                                                    <a href="{{ route('doctor.patients.appointment-history', $appointment->patient->id) }}"><h6 class="mb-0">{{ $appointment->patient->name }}</h6></a>
                                                                 </td>
                                                                 <td>{{ \Carbon\Carbon::parse($appointment->appointment_time)->format('l, F j \a\t g:i A') }}</td>
                                                                 <td>
@@ -245,7 +245,7 @@
                                                                         </button>
                                                                         <div class="dropdown-menu">
                                                                             @if($patientId)
-                                                                                <a class="dropdown-item" href="{{ route('doctor.patient.show', $appointment->patient->id) }}">
+                                                                                <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $appointment->patient->id) }}">
                                                                                     <i class="zmdi zmdi-account"></i> View Profile
                                                                                 </a>
                                                                             @else
@@ -291,7 +291,7 @@
                                                     <div class="task-item pending-task">
                                                         <div class="d-flex justify-content-between align-items-center">
                                                             <div>
-                                                                <h6 class="mb-1">Review lab results for <a href="{{ route('doctor.patient.show', $task->patient->id) }}">{{ $task->patient->name }}</a></h6>
+                                                                <h6 class="mb-1">Review lab results for <a href="{{ route('doctor.patients.appointment-history', $task->patient->id) }}">{{ $task->patient->name }}</a></h6>
                                                                 <p class="mb-0 text-muted small">{{ \Carbon\Carbon::parse($task->appointment_time)->format('l, g:i A') }}
                                                                     @if($task->status == 'urgent')
                                                                         <span class="badge badge-danger ml-2">High</span>
@@ -342,7 +342,7 @@
                                                 <div class="prescriptions-list">
                                                     @forelse($recentPrescriptions ?? [] as $prescription)
                                                     <div class="prescription-item recent-prescription">
-                                                        <h6 class="mb-1"><a href="{{ route('doctor.patient.show', $prescription->patient->id) }}">{{ $prescription->patient->name }}</a></h6>
+                                                        <h6 class="mb-1"><a href="{{ route('doctor.patients.appointment-history', $prescription->patient->id) }}">{{ $prescription->patient->name }}</a></h6>
                                                         <p class="mb-1 text-muted small">{{ \Carbon\Carbon::parse($prescription->created_at)->format('l, g:i A') }}</p>
                                                         
                                                         @foreach($prescription->items->take(1) as $item)
@@ -365,7 +365,7 @@
                                                             @endphp
                                                             
                                                             @if($patientId && $patientModel)
-                                                                <a href="{{ route('doctor.patient.show', $patientModel->id) }}" class="btn btn-sm btn-primary mr-2">
+                                                                <a href="{{ route('doctor.patients.appointment-history', $patientModel->id) }}" class="btn btn-sm btn-primary mr-2">
                                                                     <i class="zmdi zmdi-account"></i> View Profile
                                                                 </a>
                                                             @else
@@ -533,7 +533,7 @@
                                             <div class="avatar">
                                                 <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" alt="Patient">
                                             </div>
-                                            <span><a href="{{ route('doctor.patient.show', 1) }}">John Smith</a></span>
+                                            <span><a href="{{ route('doctor.patients.appointment-history', 1) }}">John Smith</a></span>
                                         </td>
                                         <td>09:00 AM</td>
                                         <td>Regular Checkup</td>
@@ -547,7 +547,7 @@
                                             <div class="avatar">
                                                 <img src="{{ asset('assets/images/xs/avatar2.jpg') }}" alt="Patient">
                                             </div>
-                                            <span><a href="{{ route('doctor.patient.show', 2) }}">Mary Johnson</a></span>
+                                            <span><a href="{{ route('doctor.patients.appointment-history', 2) }}">Mary Johnson</a></span>
                                         </td>
                                         <td>10:30 AM</td>
                                         <td>Follow-up</td>
@@ -561,7 +561,7 @@
                                             <div class="avatar">
                                                 <img src="{{ asset('assets/images/xs/avatar3.jpg') }}" alt="Patient">
                                             </div>
-                                            <span><a href="{{ route('doctor.patient.show', 3) }}">Robert Brown</a></span>
+                                            <span><a href="{{ route('doctor.patients.appointment-history', 3) }}">Robert Brown</a></span>
                                         </td>
                                         <td>02:00 PM</td>
                                         <td>Consultation</td>
@@ -595,7 +595,7 @@
                                         </div>
                                     </div>
                                     <div class="media-body">
-                                        <h6 class="m-t-0"><a href="{{ route('doctor.patient.show', 4) }}">Jennifer Davis</a></h6>
+                                        <h6 class="m-t-0"><a href="{{ route('doctor.patients.appointment-history', 4) }}">Jennifer Davis</a></h6>
                                         <p>Last visit: 2 days ago</p>
                                         <small class="text-muted">Cardiology</small>
                                     </div>
@@ -609,7 +609,7 @@
                                         </div>
                                     </div>
                                     <div class="media-body">
-                                        <h6 class="m-t-0"><a href="{{ route('doctor.patient.show', 5) }}">Michael Wilson</a></h6>
+                                        <h6 class="m-t-0"><a href="{{ route('doctor.patients.appointment-history', 5) }}">Michael Wilson</a></h6>
                                         <p>Last visit: 1 week ago</p>
                                         <small class="text-muted">Orthopedics</small>
                                     </div>
@@ -623,7 +623,7 @@
                                         </div>
                                     </div>
                                     <div class="media-body">
-                                        <h6 class="m-t-0"><a href="{{ route('doctor.patient.show', 6) }}">Sarah Thompson</a></h6>
+                                        <h6 class="m-t-0"><a href="{{ route('doctor.patients.appointment-history', 6) }}">Sarah Thompson</a></h6>
                                         <p>Last visit: 2 weeks ago</p>
                                         <small class="text-muted">Pediatrics</small>
                                     </div>

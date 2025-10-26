@@ -144,7 +144,7 @@
                                                         Actions
                                                     </button>
                                                     <div class="dropdown-menu">
-                                                        <a class="dropdown-item" href="{{ route('patient.show', $patient->id) }}"><i class="zmdi zmdi-eye"></i> View Profile</a>
+                                                        <a class="dropdown-item" href="{{ route('admin.patient.show', $patient->id) }}"><i class="zmdi zmdi-eye"></i> View Profile</a>
                                                         <a class="dropdown-item" href="#"><i class="zmdi zmdi-edit"></i> Edit Details</a>
                                                         <a class="dropdown-item" href="#"><i class="zmdi zmdi-file-text"></i> Medical History</a>
                                                         <a class="dropdown-item" href="#"><i class="zmdi zmdi-prescription"></i> Prescriptions</a>

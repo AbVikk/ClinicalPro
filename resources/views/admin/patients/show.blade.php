@@ -102,7 +102,7 @@
             <div class="col-lg-5 col-md-7 col-sm-12">
                 <ul class="breadcrumb float-md-right">
                     <li class="breadcrumb-item"><a href="{{ route('admin.index') }}"><i class="zmdi zmdi-home"></i> Oreo</a></li>
-                    <li class="breadcrumb-item"><a href="{{ route('patients.index') }}">Patients</a></li>
+                    <li class="breadcrumb-item"><a href="{{ route('admin.patients.index') }}">Patients</a></li>
                     <li class="breadcrumb-item active">Patient Profile</li>
                 </ul>
             </div>
@@ -587,7 +587,7 @@
                         </div>
                         
                         <div class="text-right m-t-20">
-                            <a href="{{ route('patients.index') }}" class="btn btn-default">Back to List</a>
+                            <a href="{{ route('admin.patients.index') }}" class="btn btn-default">Back to List</a>
                             <button class="btn btn-primary">Edit Patient</button>
                         </div>
                     </div>

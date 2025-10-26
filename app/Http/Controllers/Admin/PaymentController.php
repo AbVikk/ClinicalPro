@@ -229,7 +229,7 @@ class PaymentController extends Controller
         $amountInKobo = $request->amount * 100;
 
         // Initialize Paystack transaction
-        $paystack = new \Yabacon\Paystack(env('PAYSTACK_SECRET_KEY'));
+        $paystack = new \Yabacon\Paystack(config('services.paystack.secret_key'));
         
         try {
             $tranx = $paystack->transaction->initialize([
@@ -250,7 +250,7 @@ class PaymentController extends Controller
      */
     public function handlePaystackCallback(Request $request)
     {
-        $paystack = new \Yabacon\Paystack(env('PAYSTACK_SECRET_KEY'));
+        $paystack = new \Yabacon\Paystack(config('services.paystack.secret_key'));
         
         try {
             // Verify transaction
@@ -326,7 +326,7 @@ class PaymentController extends Controller
 
         try {
             // Retrieve Secret Key securely from environment configuration
-            $secretKey = env('PAYSTACK_SECRET_KEY');
+            $secretKey = config('services.paystack.secret_key');
 
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $secretKey,
@@ -364,7 +364,7 @@ class PaymentController extends Controller
         }
 
         try {
-            $secretKey = env('PAYSTACK_SECRET_KEY'); 
+            $secretKey = config('services.paystack.secret_key'); 
             
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $secretKey,
@@ -428,9 +428,13 @@ class PaymentController extends Controller
                     $appointment->patient_id = $consultation->patient_id;
                     $appointment->doctor_id = $consultation->doctor_id;
                     $appointment->appointment_time = $consultation->start_time;
-                    $appointment->notes = $consultation->notes ?? '';
+                    $appointment->notes = $consultation->reason ?? '';
                     $appointment->type = 'telehealth'; // Assuming telehealth since we're creating a consultation
                     $appointment->status = 'pending'; // Appointment is pending doctor approval after payment
+                    // Set the reason from the consultation
+                    $appointment->reason = $consultation->reason ?? '';
+                    // Link the appointment to the consultation
+                    $appointment->consultation_id = $consultation->id;
                     
                     // Save the appointment and check if it was successful
                     if ($appointment->save()) {
@@ -457,17 +461,12 @@ class PaymentController extends Controller
                         // Return custom success page for appointment payment
                         return view('admin.payments.success', compact('payment'));
                     } else {
-                        // Log error if appointment couldn't be saved
-                        Log::error('Failed to save appointment after successful payment', [
-                            'consultation_id' => $consultation->id,
-                            'patient_id' => $consultation->patient_id,
-                            'doctor_id' => $consultation->doctor_id,
-                            'reference' => $reference
-                        ]);
-                        
-                        // Return failed page with error message
-                        return view('admin.payments.failed', [
-                            'errorMessage' => 'Failed to create appointment record after successful payment. Please contact support.'
+                        // Log error if appointment creation failed
+                        Log::error('Appointment creation failed for payment verification', [
+                            'reference' => $reference,
+                            'payment_id' => $payment->id ?? null,
+                            'patient_id' => $transactionData['metadata']['patient_id'] ?? null,
+                            'metadata' => $transactionData['metadata'] ?? null
                         ]);
                     }
                 } else {
@@ -577,7 +576,7 @@ class PaymentController extends Controller
 
         try {
             // Retrieve Secret Key securely from environment configuration
-            $secretKey = env('PAYSTACK_SECRET_KEY');
+            $secretKey = config('services.paystack.secret_key');
 
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $secretKey,

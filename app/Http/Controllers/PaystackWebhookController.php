@@ -16,18 +16,19 @@ class PaystackWebhookController extends Controller
      */
     public function handleWebhook(Request $request)
     {
-        // Get the signature from the header
-        $signature = $request->header('x-paystack-signature');
-        
-        // Verify the signature
-        $computedSignature = hash_hmac('sha512', $request->getContent(), env('PAYSTACK_SECRET_KEY'));
-        
-        // Check if the signature matches
-        if ($signature !== $computedSignature) {
-            // Invalid signature, reject the request
-            return response()->json(['error' => 'Invalid signature'], 400);
+        // ✅ Step 1: Get signature header from Paystack
+        $signature = $request->header('X-Paystack-Signature');
+
+        // ✅ Step 2: Compare with your secret key
+        $secret = config('services.paystack.secret_key');
+        $computedSignature = hash_hmac('sha512', $request->getContent(), $secret);
+
+        // Use hash_equals to prevent timing attacks
+        if (!$signature || !hash_equals($computedSignature, $signature)) {
+            Log::warning('⚠️ Invalid Paystack webhook signature.');
+            return response()->json(['error' => 'Invalid signature'], 401);
         }
-        
+
         // Get the event data
         $payload = $request->all();
         $event = $payload['event'] ?? null;
@@ -86,6 +87,7 @@ class PaystackWebhookController extends Controller
             ]);
         }
         
+        Log::info("✅ Payment confirmed via webhook: {$reference}");
         return response()->json(['message' => 'Charge success handled'], 200);
     }
     

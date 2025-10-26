@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
 <html class="no-js " lang="en">
 <head>
 <meta charset="utf-8">
@@ -67,6 +67,22 @@
         width: 1rem;
         height: 1rem;
         border-width: 0.2em;
+    }
+    
+    .time-duration-option {
+        display: inline-block;
+        padding: 8px 15px;
+        margin: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+        background-color: #f8f9fa;
+    }
+
+    .time-duration-option.active {
+        background-color: #007bff;
+        color: white;
+        border-color: #007bff;
     }
 </style>
 </head>
@@ -214,7 +230,9 @@
                                             <select id="service_id" name="service_id" class="form-control show-tick" required>
                                                 <option value="">- Select Service -</option>
                                                 @foreach($services as $service)
-                                                    <option value="{{ $service->id }}" data-price="{{ $service->price_amount }}">
+                                                    <option value="{{ $service->id }}" 
+                                                            data-price="{{ $service->price_amount }}" 
+                                                            data-duration="{{ $service->default_duration }}">
                                                         {{ $service->service_name }} ({{ $service->formatted_price }})
                                                     </option>
                                                 @endforeach
@@ -223,16 +241,30 @@
                                     </div>
                                     <div class="col-sm-6">
                                         <div class="form-group">
+                                            <label for="service_duration">Duration *</label>
+                                            <div class="duration-options" id="duration-options">
+                                                <div class="time-duration-option active" data-duration="30">30 mins</div>
+                                                <div class="time-duration-option" data-duration="40">40 mins</div>
+                                                <div class="time-duration-option" data-duration="60">60 mins</div>
+                                            </div>
+                                            <input type="hidden" id="service_duration" name="service_duration" value="30">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row clearfix">
+                                    <div class="col-sm-6">
+                                        <div class="form-group">
                                             <label for="reason">Reason for Appointment</label>
                                             <input type="text" id="reason" name="reason" class="form-control" placeholder="Reason for appointment">
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <div class="row clearfix">
-                                    <div class="col-sm-12">
+                                    <div class="col-sm-6">
                                         <div class="form-group">
                                             <label>Total Amount: <span id="service_price_display">₦0.00</span></label>
+                                            
+                                            <input type="hidden" id="service_price" name="service_price" value="0">
+                                            <small class="text-info">Price updates based on service and duration.</small>
                                         </div>
                                     </div>
                                 </div>
@@ -560,9 +592,37 @@
 
     // Reset form
     function resetForm() {
-        $('#book-appointment-form')[0].reset();
-        $('#patient-details').hide();
-        $('#doctor_id').empty().append('<option value="">- Select Doctor -</option>').selectpicker('refresh');
+        document.getElementById('book-appointment-form').reset();
+        // Manually reset price display and duration buttons
+        $('.time-duration-option').removeClass('active');
+        $('.time-duration-option[data-duration="30"]').addClass('active');
+        $('#service_duration').val('30');
+        updatePrice();
+    }
+    
+    // Function to update price based on selected service and duration
+    function updatePrice() {
+        var selectedService = $('#service_id option:selected');
+        if (selectedService.length === 0 || !selectedService.val()) {
+            $('#service_price_display').text('₦0.00');
+            $('#service_price').val('0');
+            return;
+        }
+        
+        var basePrice = parseFloat(selectedService.data('price'));
+        var selectedDuration = parseInt($('#service_duration').val());
+        var baseDuration = parseInt(selectedService.data('duration'));
+        
+        if (isNaN(basePrice) || isNaN(selectedDuration) || isNaN(baseDuration)) {
+            $('#service_price_display').text('₦0.00');
+            $('#service_price').val('0');
+            return;
+        }
+        
+        // Calculate price based on duration ratio
+        var calculatedPrice = basePrice * (selectedDuration / baseDuration);
+        $('#service_price_display').text('₦' + calculatedPrice.toFixed(2));
+        $('#service_price').val(calculatedPrice.toFixed(2));
     }
     
     // Auto-check patient if pre-populated data is present
@@ -579,6 +639,37 @@
             // Show the patient details section
             $('#patient-details').show();
         @endif
+        
+        // Set default duration option as active
+        $('.time-duration-option[data-duration="30"]').addClass('active');
+        
+        // If a service is already selected, calculate the initial price
+        if ($('#service_id').val()) {
+            $('#service_id').trigger('change');
+        }
+    });
+    
+    // Handle service selection
+    $('#service_id').on('change', function() {
+        updatePrice();
+    });
+    
+    // Handle duration selection
+    $(document).on('click', '.time-duration-option', function(e) {
+        e.preventDefault();
+        
+        // Remove active class from all options
+        $('.time-duration-option').removeClass('active');
+        
+        // Add active class to clicked option
+        $(this).addClass('active');
+        
+        // Set the hidden input value
+        var duration = $(this).data('duration');
+        $('#service_duration').val(duration);
+        
+        // Update the price
+        updatePrice();
     });
     
     // We'll let the form submit normally to handle redirects and session messages properly

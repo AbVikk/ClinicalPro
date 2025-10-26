@@ -1,4 +1,4 @@
-﻿﻿<!doctype html>
+﻿﻿﻿﻿<!doctype html>
 <html class="no-js " lang="en">
 <head>
 <meta charset="utf-8">
@@ -103,7 +103,7 @@
                                                         Actions
                                                     </button>
                                                     <div class="dropdown-menu">
-                                                        <a class="dropdown-item" href="{{ route('doctor.patient.show', $patient->id) }}">
+                                                        <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $patient->id) }}">
                                                             <i class="zmdi zmdi-account"></i> View Profile
                                                         </a>
                                                         <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $patient->id) }}">

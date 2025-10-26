@@ -94,7 +94,7 @@
                                                         <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="User" width="35" height="35">
                                                     @endif
                                                     <div class="ml-2">
-                                                        <a href="{{ route('doctor.patient.show', $request->patient->id) }}"><h6 class="mb-0">{{ $request->patient->name }}</h6></a>
+                                                        <a href="{{ route('doctor.patients.appointment-history', $request->patient->id) }}"><h6 class="mb-0">{{ $request->patient->name }}</h6></a>
                                                     </div>
                                                 </div>
                                             </td>
@@ -108,7 +108,7 @@
                                                         Actions
                                                     </button>
                                                     <div class="dropdown-menu">
-                                                        <a class="dropdown-item" href="{{ route('doctor.patient.show', $request->patient->id) }}">
+                                                        <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $request->patient->id) }}">
                                                             <i class="zmdi zmdi-account"></i> View Profile
                                                         </a>
                                                         <a class="dropdown-item accept-btn" href="#" 

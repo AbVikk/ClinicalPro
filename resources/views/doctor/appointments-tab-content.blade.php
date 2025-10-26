@@ -52,7 +52,7 @@
                                 Actions
                             </button>
                             <div class="dropdown-menu">
-                                <a class="dropdown-item" href="{{ route('doctor.patient.show', $appointment->patient->id) }}">
+                                <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $appointment->patient->id) }}">
                                     <i class="zmdi zmdi-account"></i> View Profile
                                 </a>
                                 

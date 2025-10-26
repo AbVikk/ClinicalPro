@@ -12,6 +12,7 @@ class Vitals extends Model
     protected $fillable = [
         'appointment_id',
         'recorded_at',
+        'blood_pressure',
         'temperature',
         'pulse',
         'respiratory_rate',

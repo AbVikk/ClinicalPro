@@ -319,6 +319,12 @@
                             <li><a href="{{ route('admin.clinic-staff.attendance') }}">Attendance</a></li>
                         </ul>
                     </li>
+                    <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-hospital"></i><span>Services</span> </a>
+                        <ul class="ml-menu">
+                            <li><a href="{{ route('admin.services.index') }}">All Services</a></li>
+                            <li><a href="{{ route('admin.services.create') }}">Add Service</a></li>
+                        </ul>
+                    </li>
                     <li> <a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-lock"></i><span>Authentication</span> </a>
                         <ul class="ml-menu">
                             <li><a href="{{ route('login') }}">Sign In</a> </li>

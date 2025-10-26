@@ -26,11 +26,6 @@ class Department extends Model
     {
         return $this->hasMany(Doctor::class);
     }
-    
-    public function categories()
-    {
-        return $this->hasMany(Category::class);
-    }
 
     /**
      * Get the HOD (Head of Department) for this department.

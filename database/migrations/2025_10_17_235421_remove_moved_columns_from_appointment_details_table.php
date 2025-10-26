@@ -12,8 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('appointment_details', function (Blueprint $table) {
-            // Remove columns that have been moved to separate tables
-            $table->dropColumn([
+            // Get the list of columns in the table
+            $columns = Schema::getColumnListing('appointment_details');
+            
+            // Columns to remove if they exist
+            $columnsToRemove = [
                 'clinical_notes',
                 'skin_allergy',
                 'temperature',
@@ -26,7 +29,15 @@ return new class extends Migration
                 'bsa',
                 'bmi',
                 'medications'
-            ]);
+            ];
+            
+            // Filter to only include columns that actually exist
+            $existingColumns = array_intersect($columnsToRemove, $columns);
+            
+            // Remove columns that exist
+            if (!empty($existingColumns)) {
+                $table->dropColumn($existingColumns);
+            }
         });
     }
 
@@ -36,19 +47,45 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('appointment_details', function (Blueprint $table) {
-            // Add back the columns that were removed
-            $table->text('clinical_notes')->nullable();
-            $table->text('skin_allergy')->nullable();
-            $table->string('temperature')->nullable();
-            $table->string('pulse')->nullable();
-            $table->string('respiratory_rate')->nullable();
-            $table->string('spo2')->nullable();
-            $table->string('height')->nullable();
-            $table->string('weight')->nullable();
-            $table->string('waist')->nullable();
-            $table->string('bsa')->nullable();
-            $table->string('bmi')->nullable();
-            $table->text('medications')->nullable(); // JSON format
+            // Check if columns exist before adding them back
+            $columns = Schema::getColumnListing('appointment_details');
+            
+            if (!in_array('clinical_notes', $columns)) {
+                $table->text('clinical_notes')->nullable();
+            }
+            if (!in_array('skin_allergy', $columns)) {
+                $table->text('skin_allergy')->nullable();
+            }
+            if (!in_array('temperature', $columns)) {
+                $table->string('temperature')->nullable();
+            }
+            if (!in_array('pulse', $columns)) {
+                $table->string('pulse')->nullable();
+            }
+            if (!in_array('respiratory_rate', $columns)) {
+                $table->string('respiratory_rate')->nullable();
+            }
+            if (!in_array('spo2', $columns)) {
+                $table->string('spo2')->nullable();
+            }
+            if (!in_array('height', $columns)) {
+                $table->string('height')->nullable();
+            }
+            if (!in_array('weight', $columns)) {
+                $table->string('weight')->nullable();
+            }
+            if (!in_array('waist', $columns)) {
+                $table->string('waist')->nullable();
+            }
+            if (!in_array('bsa', $columns)) {
+                $table->string('bsa')->nullable();
+            }
+            if (!in_array('bmi', $columns)) {
+                $table->string('bmi')->nullable();
+            }
+            if (!in_array('medications', $columns)) {
+                $table->text('medications')->nullable(); // JSON format
+            }
         });
     }
 };

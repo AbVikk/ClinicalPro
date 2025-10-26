@@ -20,6 +20,8 @@ class Consultation extends Model
         'location_id',
         'delivery_channel',
         'service_type',
+        'reason',
+        'duration_minutes',
         'fee',
         'status',
         'start_time',
@@ -33,6 +35,7 @@ class Consultation extends Model
      */
     protected $casts = [
         'fee' => 'decimal:2',
+        'duration_minutes' => 'integer',
         'start_time' => 'datetime',
         'end_time' => 'datetime',
     ];

@@ -34,6 +34,8 @@ class Service extends Model
         'price_amount',
         'price_currency',
         'is_active',
+        'default_duration',
+        'time_pricing',
     ];
 
     /**
@@ -44,6 +46,8 @@ class Service extends Model
     protected $casts = [
         'price_amount' => 'decimal:2',
         'is_active' => 'boolean',
+        'time_pricing' => 'array',
+        'default_duration' => 'integer',
     ];
 
     /**
@@ -66,5 +70,21 @@ class Service extends Model
     {
         // Assuming NGN is the main currency. Adjust formatting as needed.
         return $this->price_currency . ' ' . number_format($this->price_amount, 2);
+    }
+    
+    /**
+     * Get the time-based pricing for this service.
+     */
+    public function timePricings()
+    {
+        return $this->hasMany(ServiceTimePricing::class, 'service_id');
+    }
+    
+    /**
+     * Get active time-based pricing for this service.
+     */
+    public function activeTimePricings()
+    {
+        return $this->hasMany(ServiceTimePricing::class, 'service_id')->where('is_active', true);
     }
 }

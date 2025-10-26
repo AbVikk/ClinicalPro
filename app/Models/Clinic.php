@@ -18,6 +18,7 @@ class Clinic extends Model
         'name',
         'address',
         'is_physical',
+        'is_warehouse',
     ];
 
     /**
@@ -27,6 +28,7 @@ class Clinic extends Model
      */
     protected $casts = [
         'is_physical' => 'boolean',
+        'is_warehouse' => 'boolean',
     ];
 
     /**

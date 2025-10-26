@@ -139,6 +139,9 @@ class DoctorController extends Controller
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
+        // Log the request data
+        \Log::info('Doctor store request data:', $request->all());
+
         // Create user
         $user = User::create([
             'name' => $request->first_name . ' ' . $request->last_name,
@@ -155,6 +158,9 @@ class DoctorController extends Controller
             'country' => $request->country,
         ]);
 
+        // Log the created user
+        \Log::info('Created user:', $user->toArray());
+
         // Handle profile image upload
         if ($request->hasFile('profile_image')) {
             $profileImage = $request->file('profile_image');
@@ -167,12 +173,16 @@ class DoctorController extends Controller
         // Create doctor record
         $doctor = Doctor::create([
             'user_id' => $user->id,
+            'doctor_id' => 'DOC' . str_pad($user->id, 6, '0', STR_PAD_LEFT),
             'license_number' => $request->license_number,
             'category_id' => $request->specialization_id,
             'department_id' => $request->department_id,
             'status' => $request->status ?? 'verified',
             'availability' => json_encode([]), // Empty availability by default
         ]);
+
+        // Log the created doctor
+        \Log::info('Created doctor:', $doctor->toArray());
 
         return redirect()->route('admin.doctor.index')->with('success', 'Doctor added successfully.');
     }
@@ -312,45 +322,14 @@ class DoctorController extends Controller
             'category_id' => $request->specialization_id,
             'department_id' => $request->department_id,
             'status' => $request->status,
+            'medical_school' => $request->medical_school,
+            'residency' => $request->residency,
+            'fellowship' => $request->fellowship,
+            'years_of_experience' => $request->years_of_experience,
+            'bio' => $request->bio,
         ]);
 
         return redirect()->route('admin.doctor.index')->with('success', 'Doctor updated successfully.');
-    }
-
-    /**
-     * Assign a doctor as Head of Department (HOD)
-     */
-    public function assignHOD(User $user)
-    {
-        // Check if the user is a doctor
-        if ($user->role !== 'doctor') {
-            return redirect()->back()->with('error', 'Only doctors can be assigned as HOD.');
-        }
-
-        // Get the doctor's department
-        $doctor = $user->doctor;
-        if (!$doctor || !$doctor->department_id) {
-            return redirect()->back()->with('error', 'Doctor must be assigned to a department before becoming HOD.');
-        }
-
-        try {
-            // Update the user's role to HOD
-            $user->update([
-                'role' => 'hod'
-            ]);
-
-            // Assign the user as the department head
-            $department = Department::find($doctor->department_id);
-            if ($department) {
-                $department->update([
-                    'department_head_id' => $user->id
-                ]);
-            }
-
-            return redirect()->back()->with('success', $user->name . ' has been successfully assigned as HOD.');
-        } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Failed to assign HOD: ' . $e->getMessage());
-        }
     }
 
     /**
@@ -359,16 +338,50 @@ class DoctorController extends Controller
     public function destroy(Doctor $doctor)
     {
         try {
-            // Delete the doctor record
-            $doctor->delete();
-            
-            // Optionally delete the associated user (be careful with this)
-            // $doctor->user->delete();
+            // Delete the user (this will cascade to the doctor record)
+            $doctor->user->delete();
             
             return redirect()->route('admin.doctor.index')->with('success', 'Doctor deleted successfully.');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Failed to delete doctor: ' . $e->getMessage());
+            return redirect()->route('admin.doctor.index')->with('error', 'Failed to delete doctor: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Show the doctor specialization management page.
+     */
+    public function specializations()
+    {
+        // Get all categories and departments separately since they're no longer related
+        $categories = Category::all();
+        $departments = Department::all();
+        
+        // Combine them into a single collection for the view
+        $specializations = collect();
+        
+        // Add categories
+        foreach ($categories as $category) {
+            $specializations->push([
+                'id' => $category->id,
+                'name' => $category->name,
+                'description' => $category->description,
+                'doctors_count' => $category->doctors()->count(),
+                'type' => 'Category'
+            ]);
+        }
+        
+        // Add departments
+        foreach ($departments as $department) {
+            $specializations->push([
+                'id' => $department->id,
+                'name' => $department->name,
+                'description' => $department->description,
+                'doctors_count' => $department->doctors()->count(),
+                'type' => 'Department'
+            ]);
+        }
+        
+        return view('admin.doctor.specialization.specializations', compact('specializations'));
     }
 
     /**
@@ -378,21 +391,21 @@ class DoctorController extends Controller
     {
         $doctor = Auth::user()->doctor;
         if (!$doctor) {
-            return redirect()->back()->with('error', 'Doctor profile not found.');
+            return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
         }
         
-        $schedules = DoctorSchedule::where('doctor_id', $doctor->id)->get();
-        return view('admin.doctor.schedule', compact('schedules', 'doctor'));
+        $schedules = $doctor->schedules;
+        return view('admin.doctor.schedule', compact('doctor', 'schedules'));
     }
 
     /**
-     * Store a newly created schedule in storage.
+     * Store a new doctor schedule.
      */
     public function storeSchedule(Request $request)
     {
         $doctor = Auth::user()->doctor;
         if (!$doctor) {
-            return redirect()->back()->with('error', 'Doctor profile not found.');
+            return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
         }
         
         $request->validate([
@@ -400,25 +413,24 @@ class DoctorController extends Controller
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
         ]);
-        
-        DoctorSchedule::create([
-            'doctor_id' => $doctor->id,
+
+        $doctor->schedules()->create([
             'day_of_week' => $request->day_of_week,
             'start_time' => $request->start_time,
             'end_time' => $request->end_time,
         ]);
-        
-        return redirect()->back()->with('success', 'Schedule added successfully.');
+
+        return redirect()->route('admin.doctor.schedule')->with('success', 'Schedule added successfully.');
     }
 
     /**
-     * Update the specified schedule in storage.
+     * Update an existing doctor schedule.
      */
     public function updateSchedule(Request $request)
     {
         $doctor = Auth::user()->doctor;
         if (!$doctor) {
-            return redirect()->back()->with('error', 'Doctor profile not found.');
+            return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
         }
         
         $request->validate([
@@ -427,26 +439,36 @@ class DoctorController extends Controller
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
         ]);
-        
-        $schedule = DoctorSchedule::where('id', $request->schedule_id)
-                                  ->where('doctor_id', $doctor->id)
-                                  ->firstOrFail();
-        
+
+        $schedule = $doctor->schedules()->findOrFail($request->schedule_id);
         $schedule->update([
             'day_of_week' => $request->day_of_week,
             'start_time' => $request->start_time,
             'end_time' => $request->end_time,
         ]);
-        
-        return redirect()->back()->with('success', 'Schedule updated successfully.');
+
+        return redirect()->route('admin.doctor.schedule')->with('success', 'Schedule updated successfully.');
     }
 
     /**
-     * Show all specializations.
+     * Assign a user as Head of Department (HOD).
      */
-    public function specializations()
+    public function assignHOD(User $user)
     {
-        $departments = Department::with('categories')->get();
-        return view('admin.doctor.specialization.specializations', compact('departments'));
+        // Check if the user is a doctor
+        if ($user->role !== 'doctor') {
+            return redirect()->back()->with('error', 'User is not a doctor.');
+        }
+
+        try {
+            // Update the user's role to HOD
+            $user->update([
+                'role' => 'hod'
+            ]);
+
+            return redirect()->back()->with('success', $user->name . ' has been successfully assigned as HOD.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Failed to assign HOD: ' . $e->getMessage());
+        }
     }
 }
