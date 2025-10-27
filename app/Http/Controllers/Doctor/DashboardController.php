@@ -825,15 +825,9 @@ class DashboardController extends Controller
             
             // Then create new lab tests
             if ($request->lab_tests) {
-                // Get the uploaded file if present
-                $newLabTestFile = $request->file('new_lab_test_file');
-                
                 // Log request data for debugging
                 Log::info('Lab test processing', [
-                    'lab_tests_count' => count($request->lab_tests),
-                    'has_file' => $request->hasFile('new_lab_test_file'),
-                    'file_valid' => $newLabTestFile ? $newLabTestFile->isValid() : false,
-                    'file_object' => $newLabTestFile ? 'File object exists' : 'No file object'
+                    'lab_tests_count' => count($request->lab_tests)
                 ]);
                 
                 // Process all lab tests
@@ -845,24 +839,27 @@ class DashboardController extends Controller
                             'file_path' => null
                         ];
                         
-                        // Handle file upload if present
-                        // Associate the file with the LAST lab test (more intuitive for users)
-                        if ($newLabTestFile && $newLabTestFile->isValid() && $index === (count($request->lab_tests) - 1)) {
-                            try {
-                                $filePath = $newLabTestFile->store('lab_tests', 'public');
-                                $labTestEntry['file_path'] = $filePath;
-                                
-                                // Log successful file upload
-                                Log::info('Lab test file uploaded successfully', [
-                                    'file_path' => $filePath,
-                                    'test_name' => $labTest['name'],
-                                    'file_name' => $newLabTestFile->getClientOriginalName()
-                                ]);
-                            } catch (\Exception $e) {
-                                Log::error('Lab test file upload failed', [
-                                    'error' => $e->getMessage(),
-                                    'test_name' => $labTest['name']
-                                ]);
+                        // Check for a file associated with this specific lab test
+                        $fileKey = "lab_tests.{$index}.file";
+                        if ($request->hasFile($fileKey)) {
+                            $labTestFile = $request->file($fileKey);
+                            if ($labTestFile && $labTestFile->isValid()) {
+                                try {
+                                    $filePath = $labTestFile->store('lab_tests', 'public');
+                                    $labTestEntry['file_path'] = $filePath;
+                                    
+                                    // Log successful file upload
+                                    Log::info('Lab test file uploaded successfully', [
+                                        'file_path' => $filePath,
+                                        'test_name' => $labTest['name'],
+                                        'file_name' => $labTestFile->getClientOriginalName()
+                                    ]);
+                                } catch (\Exception $e) {
+                                    Log::error('Lab test file upload failed', [
+                                        'error' => $e->getMessage(),
+                                        'test_name' => $labTest['name']
+                                    ]);
+                                }
                             }
                         } elseif (isset($labTest['file_path'])) {
                             // Keep existing file path

@@ -492,6 +492,8 @@
                                     @if(!empty($labTest->file_path))
                                         <input type="hidden" name="lab_tests[{{ $index }}][file_path]" value="{{ $labTest->file_path }}">
                                     @endif
+                                    <!-- Add file input for existing lab tests -->
+                                    <input type="file" name="lab_tests[{{ $index }}][file]" class="form-control-file lab-test-file-input" style="display: none;">
                                 </div>
                                 @endforeach
                             @endif
@@ -500,8 +502,9 @@
                             <div class="form-group">
                                 <input type="text" id="new-lab-test-name" placeholder="Lab test name">
                             </div>
+                            <!-- Remove the global file input and add a placeholder for new tests -->
                             <div class="form-group">
-                                <input type="file" id="new-lab-test-file" class="form-control-file" name="new_lab_test_file">
+                                <div id="new-lab-test-file-placeholder"></div>
                             </div>
                         </div>
                         <button type="button" class="add-new-btn" id="add-lab-test">
@@ -1024,7 +1027,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add lab test functionality
     document.getElementById('add-lab-test')?.addEventListener('click', function() {
         const labTestName = document.getElementById('new-lab-test-name').value.trim();
-        const labTestFile = document.getElementById('new-lab-test-file');
         
         if (labTestName) {
             const labTestsContainer = document.getElementById('lab-tests-container');
@@ -1034,25 +1036,32 @@ document.addEventListener('DOMContentLoaded', function() {
             labTestTag.className = 'complaint-tag lab-test-item';
             labTestTag.setAttribute('data-index', currentIndex);
             
-            let fileText = '';
-            if (labTestFile.files.length > 0) {
-                fileText = ' (File attached: ' + labTestFile.files[0].name + ')';
-            }
-            
+            // Create the tag structure with a file input for this specific lab test
             labTestTag.innerHTML = `
                 <span class="lab-test-name">${labTestName}</span>
-                <span class="lab-test-file">${fileText}</span>
+                <span class="lab-test-file"></span>
                 <span class="tag-remove">×</span>
                 <input type="hidden" name="lab_tests[${currentIndex}][name]" value="${labTestName}">
+                <input type="file" name="lab_tests[${currentIndex}][file]" class="form-control-file lab-test-file-input" style="display: inline-block; width: auto; margin-left: 10px;">
             `;
             
             labTestsContainer.appendChild(labTestTag);
             document.getElementById('new-lab-test-name').value = '';
-            labTestFile.value = '';
             
             // Add remove functionality
             labTestTag.querySelector('.tag-remove').addEventListener('click', function() {
                 labTestTag.remove();
+            });
+            
+            // Add event listener to show file name when selected
+            const fileInput = labTestTag.querySelector('.lab-test-file-input');
+            fileInput.addEventListener('change', function() {
+                const fileNameSpan = labTestTag.querySelector('.lab-test-file');
+                if (this.files.length > 0) {
+                    fileNameSpan.textContent = ' (File: ' + this.files[0].name + ')';
+                } else {
+                    fileNameSpan.textContent = '';
+                }
             });
         }
     });

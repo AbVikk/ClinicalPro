@@ -574,24 +574,29 @@
                             @if($currentAppointment->labTests && $currentAppointment->labTests->count() > 0)
                                 @foreach($currentAppointment->labTests as $labTest)
                                 
-                                <!-- Enhanced structure to ensure Test Name and Action are on one line -->
-                                <div class="lab-test-item flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                <div class="lab-test-item flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm" data-lab-test-id="{{ $labTest->id }}">
                                     
                                     <span class="lab-test-name font-medium text-gray-700">{{ $labTest->test_name }}</span>
                                     
-                                    @if(!empty($labTest->file_path))
-                                        <!-- File Exists: Show the VIEW FILE button -->
-                                        <a 
-                                            href="{{ asset('storage/' . $labTest->file_path) }}" 
-                                            target="_blank" 
-                                            class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm transition duration-150"
-                                        >
-                                            View File
-                                        </a>
-                                    @else
-                                        <!-- File Missing: Show a simple message -->
-                                        <span class="text-xs text-red-500 mr-2">No File Uploaded</span>
-                                    @endif
+                                    <div class="flex items-center space-x-2">
+                                        @if(!empty($labTest->file_path))
+                                            <a 
+                                                href="{{ asset('storage/' . $labTest->file_path) }}" 
+                                                target="_blank" 
+                                                class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm transition duration-150"
+                                            >
+                                                View File
+                                            </a>
+                                        @endif
+                                        
+                                        <form action="{{ route('doctor.lab-tests.upload-result', $labTest->id) }}" method="POST" enctype="multipart/form-data" class="flex items-center space-x-2">
+                                            @csrf
+                                            <input type="file" name="test_file" required class="text-xs p-1 border rounded-md">
+                                            <button type="submit" class="btn btn-sm bg-green-500 hover:bg-green-600 text-white p-2 rounded text-xs">
+                                                {{ !empty($labTest->file_path) ? 'Replace' : 'Upload' }}
+                                            </button>
+                                        </form>
+                                    </div>
                                 </div>
                                 
                                 @endforeach
@@ -711,6 +716,8 @@
 <script>
     // Appointment navigation data
     const appointments = @json($appointmentsData ?? $completedAppointments);
+    const uploadRouteTemplate = '{{ route("doctor.lab-tests.upload-result", ["labTest" => "PLACEHOLDER"]) }}';
+    const csrfToken = '{{ csrf_token() }}';
     let currentIndex = 0;
     
     // Debug: Log the appointments data
@@ -871,34 +878,66 @@
             labTests.forEach(labTest => {
                 // Create the lab test item div
                 const labTestItem = document.createElement('div');
-                labTestItem.className = 'lab-test-item flex justify-between items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm';
+                labTestItem.className = 'lab-test-item'; // Use the style from the file
                 
                 // Create the test name span
                 const testNameSpan = document.createElement('span');
-                testNameSpan.className = 'lab-test-name font-medium text-gray-700';
+                testNameSpan.className = 'lab-test-name'; // Use the style from the file
                 testNameSpan.textContent = labTest.name || 'Unknown Test';
                 
-                // Create the action element (either View File button or No File message)
-                let actionElement;
+                // Container for buttons
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'flex items-center';
+                buttonContainer.style.gap = '8px';
+
+                // --- Add/Replace File Form ---
+                const uploadForm = document.createElement('form');
+                // Use the template and replace placeholder with the real ID
+                uploadForm.action = uploadRouteTemplate.replace('PLACEHOLDER', labTest.id);
+                uploadForm.method = 'POST';
+                uploadForm.enctype = 'multipart/form-data';
+                uploadForm.className = 'upload-form';
+                
+                // CSRF Token
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = '_token';
+                csrfInput.value = csrfToken; // Use the constant we defined
+                
+                // File Input
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.name = 'test_file';
+                fileInput.className = 'file-input';
+                fileInput.required = true;
+                
+                // Submit Button
+                const submitButton = document.createElement('button');
+                submitButton.type = 'submit';
+                submitButton.className = 'btn btn-sm btn-primary upload-button';
+                // Change text based on if file exists
+                submitButton.textContent = labTest.file_path ? 'Replace' : 'Upload';
+                
+                uploadForm.appendChild(csrfInput);
+                uploadForm.appendChild(fileInput);
+                uploadForm.appendChild(submitButton);
+                
+                buttonContainer.appendChild(uploadForm);
+                // --- END NEW FORM ---
+
+                // --- View File Button ---
                 if (labTest.file_path) {
-                    // File exists: create View File button
                     const viewButton = document.createElement('a');
-                    viewButton.href = '/storage/' + labTest.file_path;
+                    viewButton.href = '/storage/' + labTest.file_path; // Standard storage path
                     viewButton.target = '_blank';
-                    viewButton.className = 'btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm transition duration-150';
+                    viewButton.className = 'btn btn-sm btn-info';
                     viewButton.textContent = 'View File';
-                    actionElement = viewButton;
-                } else {
-                    // No file: create simple message
-                    const noFileSpan = document.createElement('span');
-                    noFileSpan.className = 'text-xs text-red-500 mr-2';
-                    noFileSpan.textContent = 'No File Uploaded';
-                    actionElement = noFileSpan;
+                    buttonContainer.appendChild(viewButton);
                 }
                 
                 // Append elements to the lab test item
                 labTestItem.appendChild(testNameSpan);
-                labTestItem.appendChild(actionElement);
+                labTestItem.appendChild(buttonContainer);
                 
                 // Append the lab test item to the container
                 container.appendChild(labTestItem);
