@@ -15,6 +15,11 @@ use App\Models\ClinicalNote;
 use App\Models\Medication;
 use App\Models\Prescription;
 use App\Models\User;
+use App\Models\Clinic; 
+use App\Models\LabTest;
+use App\Models\Consultation;       // Tells PHP where to find the Consultation model
+use App\Models\DoctorSchedule;     // Tells PHP where to find the DoctorSchedule model
+use Illuminate\Support\Facades\DB; // Tells PHP where to find the DB facade
 
 class DashboardController extends Controller
 {
@@ -188,7 +193,7 @@ class DashboardController extends Controller
         $yearlyTrend = $lastYearTotal > 0 ? round((($totalYearlyVisits - $lastYearTotal) / $lastYearTotal) * 100, 1) : 0;
         
         // For patient satisfaction, we'll simulate data since there's no rating system
-        // In a real implementation, this would come from a ratings table
+        // In In a real implementation, this would come from a ratings table
         $satisfactionData = [];
         $totalRating = 0;
         for ($month = 1; $month <= 12; $month++) {
@@ -732,7 +737,7 @@ class DashboardController extends Controller
         ]);
         
         // Load related data through the appointment
-        $appointment->load(['vitals', 'clinicalNote', 'medications', 'labTests', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail']);
+        $appointment->load(['vitals', 'clinicalNote', 'medications', 'labTests', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail', 'consultation.clinic']);
         
         // Get drug data for medication selection
         $drugs = \App\Models\Drug::orderBy('name')->get();
@@ -761,49 +766,58 @@ class DashboardController extends Controller
             return redirect()->route('doctor.appointments')->with('error', 'Unauthorized access');
         }
         
-        // Validate the request
-        $validator = Validator::make($request->all(), [
-            'blood_group' => 'nullable|string|max:10',
-            'advice' => 'nullable|string|max:1000',
-            'follow_up_date' => 'nullable|date',
-            'follow_up_time' => 'nullable|date_format:H:i',
-            // Vitals validation
-            'blood_pressure' => 'nullable|string|max:20',
-            'temperature' => 'nullable|string|max:10',
-            'pulse' => 'nullable|string|max:10',
-            'respiratory_rate' => 'nullable|string|max:10',
-            'spo2' => 'nullable|string|max:10',
-            'height' => 'nullable|string|max:10',
-            'weight' => 'nullable|string|max:10',
-            'waist' => 'nullable|string|max:10',
-            'bsa' => 'nullable|string|max:10',
-            'bmi' => 'nullable|string|max:10',
-            // Clinical notes
-            'clinical_notes' => 'nullable|string|max:1000',
-            'skin_allergy' => 'nullable|string|max:500',
-            // Medications validation
-            'medications' => 'nullable|array',
-            'medications.*.name' => 'nullable|string|max:100',
-            'medications.*.type' => 'nullable|string|max:50',
-            'medications.*.dosage' => 'nullable|string|max:50',
-            'medications.*.duration' => 'nullable|string|max:50',
-            'medications.*.instructions' => 'nullable|string|max:200',
-            // Lab tests validation
-            'lab_tests' => 'nullable|array',
-            'lab_tests.*.name' => 'nullable|string|max:100',
-            'new_lab_test_file' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048',
-            // Complaints and diagnosis validation
-            'complaints' => 'nullable|array',
-            'complaints.*' => 'nullable|string|max:200',
-            'diagnosis' => 'nullable|array',
-            'diagnosis.*' => 'nullable|string|max:200',
-        ]);
+        // Check if this is a partial update (section-specific save)
+        $isPartialUpdate = $request->has('complaints') || 
+                          $request->has('diagnosis') || 
+                          $request->has('medications') || 
+                          $request->has('lab_tests');
         
-        if ($validator->fails()) {
-            if ($request->ajax()) {
-                return response()->json(['success' => false, 'message' => 'Validation failed: ' . implode(', ', $validator->errors()->all())], 422);
+        // If it's a partial update, we don't validate all fields
+        if (!$isPartialUpdate) {
+            // Full validation for complete save
+            $validator = Validator::make($request->all(), [
+                'blood_group' => 'nullable|string|max:10',
+                'advice' => 'nullable|string|max:1000',
+                'follow_up_date' => 'nullable|date',
+                'follow_up_time' => 'nullable|date_format:H:i',
+                // Vitals validation
+                'blood_pressure' => 'nullable|string|max:20',
+                'temperature' => 'nullable|string|max:10',
+                'pulse' => 'nullable|string|max:10',
+                'respiratory_rate' => 'nullable|string|max:10',
+                'spo2' => 'nullable|string|max:10',
+                'height' => 'nullable|string|max:10',
+                'weight' => 'nullable|string|max:10',
+                'waist' => 'nullable|string|max:10',
+                'bsa' => 'nullable|string|max:10',
+                'bmi' => 'nullable|string|max:10',
+                // Clinical notes
+                'clinical_notes' => 'nullable|string|max:1000',
+                'skin_allergy' => 'nullable|string|max:500',
+                // Medications validation
+                'medications' => 'nullable|array',
+                'medications.*.name' => 'nullable|string|max:100',
+                'medications.*.type' => 'nullable|string|max:50',
+                'medications.*.dosage' => 'nullable|string|max:50',
+                'medications.*.duration' => 'nullable|string|max:50',
+                'medications.*.instructions' => 'nullable|string|max:200',
+                // Lab tests validation
+                'lab_tests' => 'nullable|array',
+                'lab_tests.*.name' => 'nullable|string|max:100',
+                'new_lab_test_file' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048',
+                // Complaints and diagnosis validation
+                'complaints' => 'nullable|array',
+                'complaints.*' => 'nullable|string|max:200',
+                'diagnosis' => 'nullable|array',
+                'diagnosis.*' => 'nullable|string|max:200',
+            ]);
+            
+            if ($validator->fails()) {
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'message' => 'Validation failed: ' . implode(', ', $validator->errors()->all())], 422);
+                }
+                return redirect()->back()->withErrors($validator)->withInput();
             }
-            return redirect()->back()->withErrors($validator)->withInput();
         }
         
         try {
@@ -812,9 +826,154 @@ class DashboardController extends Controller
                 'appointment_id' => $appointment->id
             ]);
             
+            // Handle partial updates
+            if ($isPartialUpdate) {
+                // Handle complaints update
+                if ($request->has('complaints')) {
+                    $complaintsData = [];
+                    if ($request->complaints && is_array($request->complaints)) {
+                        foreach ($request->complaints as $complaint) {
+                            if (!empty($complaint)) {
+                                $complaintsData[] = $complaint;
+                            }
+                        }
+                    }
+                    $appointmentDetail->update(['complaints' => $complaintsData]);
+                }
+                
+                // Handle diagnosis update
+                if ($request->has('diagnosis')) {
+                    $diagnosisData = [];
+                    if ($request->diagnosis && is_array($request->diagnosis)) {
+                        foreach ($request->diagnosis as $diagnosis) {
+                            if (!empty($diagnosis)) {
+                                $diagnosisData[] = $diagnosis;
+                            }
+                        }
+                    }
+                    $appointmentDetail->update(['diagnosis' => $diagnosisData]);
+                }
+                
+                // Handle patient info update (blood group)
+                if ($request->has('blood_group')) {
+                    $appointmentDetail->update(['blood_group' => $request->blood_group]);
+                }
+                
+                // Handle advice update
+                if ($request->has('advice')) {
+                    $appointmentDetail->update(['advice' => $request->advice]);
+                }
+                
+                // Handle medications update
+                if ($request->has('medications')) {
+                    // First, delete existing medications for this appointment
+                    Medication::where('appointment_id', $appointment->id)->delete();
+                    
+                    // Then create new medications
+                    if ($request->medications) {
+                        foreach ($request->medications as $medicationData) {
+                            if (!empty($medicationData['name'])) {
+                                Medication::create([
+                                    'appointment_id' => $appointment->id,
+                                    'medication_name' => $medicationData['name'],
+                                    'type' => $medicationData['type'] ?? null,
+                                    'dosage' => $medicationData['dosage'] ?? null,
+                                    'duration' => $medicationData['duration'] ?? null,
+                                    'instructions' => $medicationData['instructions'] ?? null,
+                                ]);
+                            }
+                        }
+                    }
+                }
+                
+                // Handle lab tests update
+                if ($request->has('lab_tests')) {
+                    // First, delete existing lab tests for this appointment
+                    LabTest::where('appointment_id', $appointment->id)->delete();
+                    
+                    // Then create new lab tests
+                    if ($request->lab_tests) {
+                        foreach ($request->lab_tests as $index => $labTest) {
+                            if (!empty($labTest['name'])) {
+                                $labTestEntry = [
+                                    'appointment_id' => $appointment->id,
+                                    'test_name' => $labTest['name'],
+                                    'file_path' => null
+                                ];
+                                
+                                // Check for a file associated with this specific lab test
+                                $fileKey = "lab_tests.{$index}.file";
+                                if ($request->hasFile($fileKey)) {
+                                    $labTestFile = $request->file($fileKey);
+                                    if ($labTestFile && $labTestFile->isValid()) {
+                                        try {
+                                            $filePath = $labTestFile->store('lab_tests', 'public');
+                                            $labTestEntry['file_path'] = $filePath;
+                                        } catch (\Exception $e) {
+                                            Log::error('Lab test file upload failed', [
+                                                'error' => $e->getMessage(),
+                                                'test_name' => $labTest['name']
+                                            ]);
+                                        }
+                                    }
+                                } elseif (isset($labTest['file_path'])) {
+                                    // Keep existing file path
+                                    $labTestEntry['file_path'] = $labTest['file_path'];
+                                }
+                                
+                                // Create the lab test record
+                                LabTest::create($labTestEntry);
+                            }
+                        }
+                    }
+                }
+                
+                // Handle vitals update
+                if ($request->hasAny(['blood_pressure', 'temperature', 'pulse', 'respiratory_rate', 'spo2', 'height', 'weight', 'waist', 'bsa', 'bmi'])) {
+                    Vitals::updateOrCreate(
+                        ['appointment_id' => $appointment->id],
+                        [
+                            'blood_pressure' => $request->blood_pressure,
+                            'temperature' => $request->temperature,
+                            'pulse' => $request->pulse,
+                            'respiratory_rate' => $request->respiratory_rate,
+                            'spo2' => $request->spo2,
+                            'height' => $request->height,
+                            'weight' => $request->weight,
+                            'waist' => $request->waist,
+                            'bsa' => $request->bsa,
+                            'bmi' => $request->bmi,
+                            'recorded_at' => now(),
+                        ]
+                    );
+                }
+                
+                // Handle clinical notes update
+                if ($request->hasAny(['clinical_notes', 'skin_allergy'])) {
+                    ClinicalNote::updateOrCreate(
+                        ['appointment_id' => $appointment->id],
+                        [
+                            'doctor_id' => Auth::user()->id,
+                            'note_text' => $request->clinical_notes ?? '',
+                            'skin_allergy' => $request->skin_allergy ?? '',
+                        ]
+                    );
+                }
+                
+                if ($request->ajax()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Section data saved successfully.'
+                    ]);
+                }
+                
+                return redirect()->back()->with('success', 'Section data saved successfully.');
+            }
+            
+            // Handle full update (Save & End)
             // Handle lab tests with files
             // First, delete existing lab tests for this appointment
-            \App\Models\LabTest::where('appointment_id', $appointment->id)->delete();
+            LabTest::where('appointment_id', $appointment->id)->delete();
             
             // Log all request data for debugging
             Log::info('Full request data for lab tests', [
@@ -870,7 +1029,7 @@ class DashboardController extends Controller
                         Log::info('Creating lab test entry', $labTestEntry);
                         
                         // Create the lab test record
-                        \App\Models\LabTest::create($labTestEntry);
+                        LabTest::create($labTestEntry);
                     }
                 }
             }
@@ -935,13 +1094,13 @@ class DashboardController extends Controller
             
             // Handle medications
             // First, delete existing medications for this appointment
-            \App\Models\Medication::where('appointment_id', $appointment->id)->delete();
+            Medication::where('appointment_id', $appointment->id)->delete();
             
             // Then create new medications
             if ($request->medications) {
                 foreach ($request->medications as $medicationData) {
                     if (!empty($medicationData['name'])) {
-                        \App\Models\Medication::create([
+                        Medication::create([
                             'appointment_id' => $appointment->id,
                             'medication_name' => $medicationData['name'],
                             'type' => $medicationData['type'] ?? null,
@@ -997,32 +1156,42 @@ class DashboardController extends Controller
     {
         // Get the authenticated doctor's ID
         $doctorId = Auth::user()->id;
-        
+
         // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-        
-        // Find the patient and verify they have appointments with this doctor
+
+        // Find the patient
         $patient = User::where('role', 'patient')
             ->whereHas('appointmentsAsPatient', function ($query) use ($doctorId) {
                 $query->where('doctor_id', $doctorId);
             })
             ->findOrFail($patientId);
-            
-        // Get all completed appointments for this patient with this doctor, ordered by date
+
+        // --- THIS IS THE EFFICIENT QUERY ---
+        // Get all completed appointments and EAGER LOAD (with)
+        // all relationships we need in one go.
         $completedAppointments = Appointment::where('patient_id', $patient->id)
             ->where('doctor_id', $doctorId)
             ->where('status', 'completed')
-            ->with(['doctor', 'patient', 'appointmentReason', 'vitals', 'clinicalNote', 'medications', 'labTests', 'appointmentDetail'])
+            ->with([
+                'doctor', 
+                'patient', 
+                'appointmentReason', 
+                'vitals', 
+                'clinicalNote', 
+                'medications', 
+                'labTests', 
+                'appointmentDetail', // This will automatically get the related AppointmentDetail
+                'consultation.clinic' // This loads the consultation AND its clinic
+            ])
             ->orderBy('appointment_time', 'desc')
             ->get();
+        // --- END OF EFFICIENT QUERY ---
             
-        // Get total visit count for this patient with this doctor
-        $totalVisits = Appointment::where('patient_id', $patient->id)
-            ->where('doctor_id', $doctorId)
-            ->where('status', 'completed')
-            ->count();
+        // Get total visit count (this is fast)
+        $totalVisits = $completedAppointments->count();
             
         // If no completed appointments, redirect back
         if ($completedAppointments->isEmpty()) {
@@ -1033,65 +1202,93 @@ class DashboardController extends Controller
         $currentAppointment = $completedAppointments->first();
         
         // Get appointment detail for the current appointment
-        $currentAppointmentDetail = AppointmentDetail::firstOrCreate([
-            'appointment_id' => $currentAppointment->id
-        ]);
-        
-        // Load related data
-        $currentAppointment->load(['vitals', 'clinicalNote', 'medications', 'labTests', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail']);
+        // We can just get it from the loaded relationship
+        $currentAppointmentDetail = $currentAppointment->appointmentDetail ?? new AppointmentDetail();
         
         // Prepare appointments data for JavaScript
         $appointmentsData = [];
+        // --- THIS LOOP IS NOW FAST ---
+        // All data is already loaded, we are just organizing it.
         foreach ($completedAppointments as $appointment) {
-            // Ensure appointment detail exists
-            $appointmentDetail = AppointmentDetail::firstOrCreate([
-                'appointment_id' => $appointment->id
-            ]);
             
-            // Load all related data including labTests
-            $appointment->load(['vitals', 'clinicalNote', 'medications', 'labTests', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail']);
-            
+            // We can just use the eager-loaded data
+            $appointmentDetail = $appointment->appointmentDetail ?? new AppointmentDetail();
+
             // Prepare lab tests data
             $labTestsData = [];
             if ($appointment->labTests) {
                 foreach ($appointment->labTests as $labTest) {
                     $labTestsData[] = [
+                        'id' => $labTest->id,
                         'name' => $labTest->test_name,
                         'file_path' => $labTest->file_path
                     ];
                 }
             }
             
+            // --- NEW DISPLAY LOGIC ---
+            $typeDisplay = 'General Visit';
+            $locationDisplay = $appointment->location ?? 'N/A';
+            $clinicDisplay = $appointment->clinic_location ?? 'N/A';
+            $serviceDisplay = $appointment->appointmentReason?->name ?? $appointment->type ?? 'General Visit';
+            $durationDisplay = 30; // Default
+
+            if ($appointment->consultation) {
+                $typeDisplay = $appointment->consultation->delivery_channel == 'virtual' ? 'Virtual' : 'Physical';
+                if ($appointment->consultation->delivery_channel == 'virtual') {
+                    $locationDisplay = 'N/A';
+                    $clinicDisplay = 'Virtual Session';
+                } else {
+                    $locationDisplay = $appointment->consultation->clinic?->address ?? 'N/A';
+                    $clinicDisplay = $appointment->consultation->clinic?->name ?? 'N/A';
+                }
+                $serviceDisplay = $appointment->consultation->service_type;
+                $durationDisplay = $appointment->consultation->duration_minutes;
+            }
+            // --- END NEW DISPLAY LOGIC ---
+
             $appointmentsData[] = [
                 'id' => $appointment->id,
-                'patient_name' => $appointment->patient->name ?? 'Unknown Patient',
-                'patient_email' => $appointment->patient->email ?? '',
-                'patient_phone' => $appointment->patient->phone ?? '',
-                'doctor_name' => $appointment->doctor->name ?? 'Unknown Doctor',
-                'appointment_reason' => $appointment->appointmentReason->name ?? $appointment->type ?? 'General Visit',
+                'patient_name' => $appointment->patient?->name ?? 'Unknown Patient',
+                'patient_email' => $appointment->patient?->email ?? '',
+                'patient_phone' => $appointment->patient?->phone ?? '',
+                'doctor_name' => $appointment->doctor?->name ?? 'Unknown Doctor',
+                
+                // Updated fields:
+                'type_display' => $typeDisplay,
+                'clinic_display' => $clinicDisplay,
+                'location_display' => $locationDisplay,
+                'service_display' => $serviceDisplay,
+                'duration_display' => $durationDisplay,
+                
+                // Original fields:
                 'status' => $appointment->status,
-                'consultation_fee' => $appointment->consultation_fee,
-                'appointment_time' => $appointment->appointment_time,
-                'clinic_location' => $appointment->clinic_location,
-                'location' => $appointment->location,
-                'visit_type' => $appointment->visit_type,
+                'consultation_fee' => $appointment->consultation?->fee ?? $appointment->consultation_fee ?? 'N/A',
+                'appointment_time' => $appointment->appointment_time->toIso8601String(), // Send as ISO string for JS
                 'blood_group' => $appointmentDetail->blood_group,
-                'clinical_notes' => $appointment->clinicalNote->note_text ?? '',
-                'skin_allergy' => $appointment->clinicalNote->skin_allergy ?? '',
+                'clinical_notes' => $appointment->clinicalNote?->note_text ?? '',
+                'skin_allergy' => $appointment->clinicalNote?->skin_allergy ?? '',
                 'advice' => $appointmentDetail->advice,
                 'follow_up_date' => $appointmentDetail->follow_up_date ? $appointmentDetail->follow_up_date->format('Y-m-d') : null,
-                'follow_up_time' => $appointmentDetail->follow_up_time ? $appointmentDetail->follow_up_time->format('H:i') : null,
-                'temperature' => $appointment->vitals->temperature ?? '',
-                'pulse' => $appointment->vitals->pulse ?? '',
-                'respiratory_rate' => $appointment->vitals->respiratory_rate ?? '',
-                'spo2' => $appointment->vitals->spo2 ?? '',
-                'height' => $appointment->vitals->height ?? '',
-                'weight' => $appointment->vitals->weight ?? '',
-                'waist' => $appointment->vitals->waist ?? '',
-                'bsa' => $appointment->vitals->bsa ?? '',
-                'bmi' => $appointment->vitals->bmi ?? '',
+                'follow_up_time' => $appointmentDetail->follow_up_time, // Send raw time
+                
+                // Vitals
+                'blood_pressure' => $appointment->vitals?->blood_pressure ?? '',
+                'temperature' => $appointment->vitals?->temperature ?? '',
+                'pulse' => $appointment->vitals?->pulse ?? '',
+                'respiratory_rate' => $appointment->vitals?->respiratory_rate ?? '',
+                'spo2' => $appointment->vitals?->spo2 ?? '',
+                'height' => $appointment->vitals?->height ?? '',
+                'weight' => $appointment->vitals?->weight ?? '',
+                'waist' => $appointment->vitals?->waist ?? '',
+                'bsa' => $appointment->vitals?->bsa ?? '',
+                'bmi' => $appointment->vitals?->bmi ?? '',
+                
+                // Tags
                 'complaints' => $appointmentDetail->complaints ?? [],
                 'diagnosis' => $appointmentDetail->diagnosis ?? [],
+                
+                // Lab Tests & Medications
                 'lab_tests' => $labTestsData,
                 'medications' => $appointment->medications->map(function($med) {
                     return [
@@ -1104,6 +1301,7 @@ class DashboardController extends Controller
                 })->toArray()
             ];
         }
+        // --- END OF FAST LOOP ---
         
         return view('doctor.appointment-history', compact(
             'patient', 
@@ -1116,6 +1314,196 @@ class DashboardController extends Controller
             'requestCount',
             'appointmentsData'
         ));
+    }
+
+    /**
+     * Check doctor's availability for a follow-up appointment time via AJAX.
+     */
+    public function checkFollowUpAvailability(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'follow_up_date' => 'required|date_format:Y-m-d',
+            'follow_up_time' => 'required|date_format:H:i',
+            // We might need patient_id if rules depend on patient type, but not for basic check
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['available' => false, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $doctorId = Auth::id();
+        $followUpDate = $request->input('follow_up_date');
+        $followUpTime = $request->input('follow_up_time') . ':00'; // Add seconds for comparison
+
+        try {
+            $selectedDateTime = Carbon::createFromFormat('Y-m-d H:i:s', $followUpDate . ' ' . $followUpTime);
+        } catch (\Exception $e) {
+            return response()->json(['available' => false, 'message' => 'Invalid date/time format.'], 400);
+        }
+
+        $dayOfWeek = strtolower($selectedDateTime->format('l'));
+        $time = $selectedDateTime->format('H:i:s');
+        $date = $selectedDateTime->format('Y-m-d');
+
+        // 1. Check Doctor's Schedule
+        $isScheduled = DoctorSchedule::where('doctor_id', $doctorId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('start_date', '<=', $date)
+            ->where('end_date', '>=', $date)
+            ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $time)
+            ->where(DB::raw('CAST(end_time AS TIME)'), '>', $time) // Check if START time is within schedule
+            ->exists();
+
+        if (!$isScheduled) {
+            return response()->json(['available' => false, 'message' => 'Doctor is not scheduled to work at this time.']);
+        }
+
+        // 2. Check for Conflicting Consultations (assuming ~30 min duration for follow-up)
+        // You might want to pass the expected duration from the frontend if it varies
+        $assumedDuration = 30;
+        $followUpEnd = $selectedDateTime->copy()->addMinutes($assumedDuration);
+
+        $hasConflict = Consultation::where('doctor_id', $doctorId)
+            ->whereNotIn('status', ['completed', 'missed', 'cancelled'])
+            ->where(function ($query) use ($selectedDateTime, $followUpEnd) {
+                $query->where('start_time', '<', $followUpEnd) // Existing starts before follow-up ends
+                      ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $selectedDateTime); // Existing ends after follow-up starts
+            })
+            ->exists();
+
+        if ($hasConflict) {
+            return response()->json(['available' => false, 'message' => 'Doctor has a conflicting appointment at this time.']);
+        }
+
+        // If no schedule conflict and no appointment conflict
+        return response()->json(['available' => true, 'message' => 'Time slot appears available.']);
+    }
+    
+    /**
+ * Display the doctor's schedule management page
+ */
+public function schedule()
+{
+    // Get the authenticated doctor's ID
+    $doctorId = Auth::user()->id;
+
+    // Get unread notifications
+    $notifications = $this->getUnreadNotifications();
+    $notificationCount = $this->getNotificationCount();
+    $requestCount = $this->getAppointmentRequestCount();
+
+    // Get all physical clinics (still needed for the HTML dropdown)
+    $clinics = \App\Models\Clinic::where('is_physical', 1)->get();
+
+    // --- NEW: Prepare the list SPECIFICALLY for JavaScript ---
+    $clinicsForJs = [];
+    // Add the 'virtual' option first
+    $clinicsForJs[] = ['id' => 'virtual', 'name' => 'Virtual Session'];
+    // Loop through DB clinics and add them in the correct format
+    foreach ($clinics as $clinic) {
+        $clinicsForJs[] = ['id' => $clinic->id, 'name' => $clinic->name];
+    }
+    // --- END OF NEW PART ---
+
+    // Get existing schedule data to populate the form
+    $schedules = \App\Models\DoctorSchedule::where('doctor_id', $doctorId)->get();
+
+    // Group the schedules by day for the JavaScript
+    $scheduleData = [];
+    $mainSettings = [
+        'start_date' => '',
+        'end_date' => '',
+        'recurrence' => '',
+    ];
+
+    if ($schedules->isNotEmpty()) {
+        $firstSchedule = $schedules->first();
+        $mainSettings['start_date'] = $firstSchedule->start_date ? $firstSchedule->start_date->format('Y-m-d') : '';
+        $mainSettings['end_date'] = $firstSchedule->end_date ? $firstSchedule->end_date->format('Y-m-d') : '';
+        $mainSettings['recurrence'] = $firstSchedule->recurrence;
+    }
+
+    foreach ($schedules as $index => $schedule) {
+        $day = $schedule->day_of_week;
+        if (!isset($scheduleData[$day])) {
+            $scheduleData[$day] = [];
+        }
+
+        $scheduleData[$day][] = [
+            'id' => 'session-' . $index,
+            'sessionId' => $index,
+            'type' => $schedule->session_type,
+            'start' => $schedule->start_time,
+            'end' => $schedule->end_time,
+            'location' => $schedule->location,
+        ];
+    }
+
+    // Pass BOTH the original $clinics (for HTML) AND $clinicsForJs (for JS)
+    return view('doctor.schedule', compact(
+        'notifications',
+        'notificationCount',
+        'requestCount',
+        'scheduleData',
+        'mainSettings',
+        'clinics', // For the HTML dropdowns created by PHP
+        'clinicsForJs' // The clean array specifically for JavaScript
+    ));
+}
+    /**
+     * Save the doctor's schedule
+     */
+    public function saveSchedule(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'recurrence' => 'required|string',
+            'sessions' => 'required|array', // This is the 'daySessions' object from JS
+            'sessions.*.*.location' => 'required|string', // <-- Validate the new per-session location
+            'sessions.*.*.type' => 'required|string',
+            'sessions.*.*.start' => 'required',
+            'sessions.*.*.end' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $doctor = Auth::user();
+        $data = $request->all();
+
+        try {
+            // Step 1: Delete all old schedules for this doctor
+            \App\Models\DoctorSchedule::where('doctor_id', $doctor->id)->delete();
+
+            // Step 2: Loop through the new schedule data and create entries
+            foreach ($data['sessions'] as $day => $sessions) {
+                if (!empty($sessions)) {
+                    foreach ($sessions as $session) {
+                        // Check if session has all required fields
+                        if (isset($session['type']) && isset($session['start']) && isset($session['end']) && isset($session['location'])) {
+                            \App\Models\DoctorSchedule::create([
+                                'doctor_id' => $doctor->id,
+                                'location' => $session['location'], // <-- GET LOCATION FROM THE SESSION
+                                'start_date' => $data['start_date'],
+                                'end_date' => $data['end_date'],
+                                'recurrence' => $data['recurrence'],
+                                'day_of_week' => $day, // 'monday', 'tuesday', etc.
+                                'session_type' => $session['type'],
+                                'start_time' => $session['start'],
+                                'end_time' => $session['end'],
+                            ]);
+                        }
+                    }
+                }
+            }
+            return response()->json(['success' => true, 'message' => 'Schedule saved successfully!']);
+
+        } catch (\Exception $e) {
+            Log::error('Error saving schedule: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'An error occurred while saving.'], 500);
+        }
     }
     
     /**

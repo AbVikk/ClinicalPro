@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Http; // Added for Paystack API calls
 use Illuminate\Support\Facades\Log; // Added for logging
+use Carbon\Carbon;
 
 class PaymentController extends Controller
 {
@@ -353,172 +354,187 @@ class PaymentController extends Controller
 
     /**
      * Step 2: Verify the payment after the user completes the transaction via the browser callback.
-     * This uses the Secret Key for a final, secure verification check.
+     * This handles BOTH wallet top-ups AND appointment payments.
      */
     public function verifyPayment(Request $request)
     {
         $reference = $request->query('reference');
+        Log::info("Paystack Callback/Verify received for reference: " . $reference); // Log entry
 
         if (!$reference) {
+            Log::error("Paystack callback missing reference.");
             return redirect()->route('admin.dashboard')->with('error', 'Payment reference not found.');
         }
 
         try {
-            $secretKey = config('services.paystack.secret_key'); 
-            
+            $secretKey = config('services.paystack.secret_key');
+
+            Log::info("Verifying Paystack transaction with reference: " . $reference);
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $secretKey,
+                'Authorization' => 'Bearer ' . $secretKey, 
             ])->get($this->paystackBaseUrl . '/transaction/verify/' . $reference);
 
+            // Log the full Paystack response for debugging
+            Log::debug("Paystack verification response: ", $response->json() ?? ['raw' => $response->body()]);
+
             if ($response->successful() && $response->json('data.status') === 'success') {
+                // --- PAYMENT WAS SUCCESSFUL ---
+                Log::info("Paystack verification successful for reference: " . $reference);
                 $transactionData = $response->json('data');
-                
-                // Determine payment method from transaction data
-                $paymentMethod = 'card_online'; // Default to card online
+                $metadata = $transactionData['metadata'] ?? []; // Get metadata
+
+                // Determine payment method
+                $paymentMethod = 'card_online'; // Default
                 if (isset($transactionData['channel'])) {
-                    // Map Paystack channel to our payment methods
-                    $channelMapping = [
-                        'card' => 'card_online',
-                        'bank' => 'bank_transfer',
-                        'ussd' => 'bank_transfer',
-                        'qr' => 'card_online',
-                        'mobile_money' => 'card_online'
-                    ];
+                    $channelMapping = [ /* your mapping here */ ]; // Keep your existing mapping
                     $paymentMethod = $channelMapping[$transactionData['channel']] ?? 'card_online';
                 }
-                
-                // --- CRITICAL: Create/Update Payment Record ---
+
+                // Find or create the Payment record
+                // Use metadata patient_id if available, fallback to Auth::id() only for top-ups maybe?
+                 $userId = $metadata['patient_id'] ?? Auth::id(); // Prioritize patient_id from metadata
+
                 $payment = Payment::updateOrCreate(
                     ['reference' => $reference],
                     [
-                        'user_id' => $transactionData['metadata']['patient_id'] ?? (Auth::id() ?? $transactionData['customer']['id']),
-                        'amount' => $transactionData['amount'] / 100, // Convert back to NGN
-                        'method' => $paymentMethod, // Use actual payment method from transaction
-                        'status' => 'paid',
-                        'transaction_date' => now(),
-                        'clinic_id' => Auth::user()->clinic_id ?? 1,
+                        'user_id' => $userId, // Use determined user ID
+                        'amount' => $transactionData['amount'] / 100, // Convert Kobo to NGN
+                        'method' => $paymentMethod,
+                        'status' => 'paid', // Mark as paid
+                        'transaction_date' => Carbon::parse($transactionData['paid_at'] ?? now())->toDateTimeString(), // Use Paystack's paid time
+                        // clinic_id might need to come from metadata if not admin top-up
+                        'clinic_id' => $metadata['clinic_id'] ?? (Auth::user() ? Auth::user()->clinic_id : 1), // Get clinic from metadata or default
+                         // Store consultation_id if present in metadata
+                        'consultation_id' => $metadata['consultation_id'] ?? null,
                     ]
                 );
+                Log::info("Payment record updated/created (ID: {$payment->id}) for reference: " . $reference);
 
-                // Try to find the consultation associated with this payment
-                $consultation = null;
-                if (isset($transactionData['metadata']['consultation_id'])) {
-                    // Use the consultation_id from metadata if available
-                    $consultation = \App\Models\Consultation::find($transactionData['metadata']['consultation_id']);
-                } else if ($payment && $payment->consultation_id) {
-                    // Fallback to payment's consultation_id
-                    $consultation = \App\Models\Consultation::find($payment->consultation_id);
-                } else {
-                    // Final fallback: Find consultation by patient_id and associated payment
-                    $consultation = \App\Models\Consultation::where('patient_id', $transactionData['metadata']['patient_id'] ?? null)
-                        ->whereHas('payments', function($query) use ($reference) {
-                            $query->where('reference', $reference);
-                        })->first();
-                }
-                
-                // If we found a consultation, create the appointment
-                if ($consultation) {
-                    // Update consultation status to scheduled (if it wasn't already)
-                    $consultation->status = 'scheduled'; // Keep as scheduled since payment is confirmed
-                    $consultation->save();
-                    
-                    // ONLY CREATE APPOINTMENT AFTER SUCCESSFUL PAYMENT
-                    // Create legacy appointment record for backward compatibility (confirmed after payment)
-                    $appointment = new \App\Models\Appointment();
-                    $appointment->patient_id = $consultation->patient_id;
-                    $appointment->doctor_id = $consultation->doctor_id;
-                    $appointment->appointment_time = $consultation->start_time;
-                    $appointment->notes = $consultation->reason ?? '';
-                    $appointment->type = 'telehealth'; // Assuming telehealth since we're creating a consultation
-                    $appointment->status = 'pending'; // Appointment is pending doctor approval after payment
-                    // Set the reason from the consultation
-                    $appointment->reason = $consultation->reason ?? '';
-                    // Link the appointment to the consultation
-                    $appointment->consultation_id = $consultation->id;
-                    
-                    // Save the appointment and check if it was successful
-                    if ($appointment->save()) {
-                        // Update the payment with the appointment ID for future reference
-                        if (isset($payment)) {
+
+                // --- Check if this was an Appointment Payment ---
+                if (isset($metadata['purpose']) && str_contains($metadata['purpose'], 'Appointment Payment') && isset($metadata['consultation_id'])) {
+                    Log::info("Processing successful APPOINTMENT payment for Consultation ID: " . $metadata['consultation_id']);
+                    $consultation = Consultation::find($metadata['consultation_id']);
+
+                    if ($consultation) {
+                        // Update Consultation status
+                        $consultation->status = 'scheduled'; // Or 'confirmed' if no doctor approval needed
+                        $consultation->save();
+                        Log::info("Consultation ID {$consultation->id} status updated to '{$consultation->status}'.");
+
+                        // --- !!! CREATE THE APPOINTMENT RECORD !!! ---
+                        $appointment = new Appointment();
+                        $appointment->patient_id = $consultation->patient_id;
+                        $appointment->doctor_id = $consultation->doctor_id;
+                        $appointment->appointment_time = $consultation->start_time;
+                        // Determine appointment type based on consultation delivery channel or service
+                        $appointment->type = ($consultation->delivery_channel == 'virtual') ? 'telehealth' : 'clinic'; // Example logic
+                        $appointment->status = 'pending'; // Requires doctor confirmation
+                        $appointment->reason = $consultation->reason ?? 'Consultation Booked'; // Get reason
+                         // Add duration if you added the column
+                         // $appointment->duration = $consultation->duration_minutes;
+
+                         // Link to consultation and payment
+                        $appointment->consultation_id = $consultation->id;
+                        // $appointment->payment_id = $payment->id; // If you have a payment_id column on appointments
+
+                        if ($appointment->save()) {
+                            Log::info("Appointment record (ID: {$appointment->id}) created successfully.");
+                            // Update the Payment record with the appointment_id
                             $payment->appointment_id = $appointment->id;
                             $payment->save();
+
+                            // --- Send Notifications ---
+                            $doctor = User::find($consultation->doctor_id);
+                            $patient = User::find($consultation->patient_id);
+
+                            // Notify Doctor (New Request)
+                            if ($doctor && $patient) {
+                                $message = "New appointment request: {$patient->name} scheduled for " . Carbon::parse($appointment->appointment_time)->format('M d, Y g:i A') . ". Please review.";
+                                \App\Models\Notification::create([ /* ... notification details ... */ 
+                                    'user_id' => $doctor->id, // Ensure this is present
+                                    'type' => 'appointment',
+                                    'message' => $message,
+                                    'is_read' => false,
+                                    'channel' => 'database',
+                                ]); // Your notification code here
+                                Log::info("Notification sent to Doctor ID: " . $doctor->id);
+                            }
+
+                            // Notify Patient (Payment Success, Pending Confirmation)
+                             if ($patient) {
+                                $drName = $doctor ? "Dr. " . $doctor->name : "the doctor";
+                                $message = "Payment successful! Your appointment request with {$drName} for " . Carbon::parse($appointment->appointment_time)->format('M d, Y g:i A') . " is pending confirmation.";
+                                \App\Models\Notification::create([ /* ... notification details ... */
+                                    'user_id' => $patient->id, // Ensure this is present
+                                    'type' => 'appointment',
+                                    'message' => $message,
+                                    'is_read' => false,
+                                    'channel' => 'database',
+                                ]); // Your notification code here
+                                Log::info("Notification sent to Patient ID: " . $patient->id);
+                            }
+
+                            // Redirect to a specific Appointment Success page
+                            // return redirect()->route('admin.appointment.success', ['appointment_id' => $appointment->id]);
+                             return view('admin.payments.success', compact('payment', 'appointment', 'consultation'));
+
+
+                        } else {
+                            Log::error("!!! Failed to save Appointment record for Consultation ID: {$consultation->id}");
+                             // Maybe redirect to a specific error page?
+                             return view('admin.payments.failed', ['errorMessage' => 'Payment successful, but failed to create appointment record.']);
                         }
-                        
-                        // Create notification for the doctor
-                        $doctor = \App\Models\User::find($consultation->doctor_id);
-                        $patient = \App\Models\User::find($consultation->patient_id);
-                        if ($doctor && $patient) {
-                            $message = "New appointment request: {$patient->name} scheduled for " . $appointment->appointment_time->format('M d, Y g:i A');
-                            $notification = \App\Models\Notification::create([
-                                'user_id' => $doctor->id,
-                                'type' => 'appointment',
-                                'message' => $message,
-                                'is_read' => false,
-                                'channel' => 'database', // Default channel for in-app notifications
-                            ]);
-                        }
-                        
-                        // Return custom success page for appointment payment
-                        return view('admin.payments.success', compact('payment'));
                     } else {
-                        // Log error if appointment creation failed
-                        Log::error('Appointment creation failed for payment verification', [
-                            'reference' => $reference,
-                            'payment_id' => $payment->id ?? null,
-                            'patient_id' => $transactionData['metadata']['patient_id'] ?? null,
-                            'metadata' => $transactionData['metadata'] ?? null
-                        ]);
+                        Log::error("!!! Consultation not found (ID: {$metadata['consultation_id']}) for successful payment reference: " . $reference);
+                         // Redirect to general success page, but log the error
+                         return view('admin.payments.success', compact('payment'));
                     }
-                } else {
-                    // Log error if consultation couldn't be found
-                    Log::error('Consultation not found for payment verification', [
-                        'reference' => $reference,
-                        'payment_id' => $payment->id ?? null,
-                        'patient_id' => $transactionData['metadata']['patient_id'] ?? null,
-                        'metadata' => $transactionData['metadata'] ?? null
-                    ]);
+                }
+                 // --- END APPOINTMENT HANDLING ---
+
+                else {
+                     // --- Handle other successful payment types (like Wallet Top-Up) ---
+                     Log::info("Processing successful OTHER payment (e.g., Wallet Top-Up) for reference: " . $reference);
+                     // Add your wallet top-up logic here if needed
+                     // Redirect to general success page
+                     return view('admin.payments.success', compact('payment'));
                 }
 
-                // Return custom success page for general payment
-                return view('admin.payments.success', compact('payment'));
             } else {
-                // Update payment status to failed
+                // --- PAYMENT FAILED or Verification Failed ---
+                $errorMessage = $response->json('message') ?? 'Payment verification failed or status not successful.';
+                Log::error("Paystack verification failed for reference: {$reference}. Reason: {$errorMessage}");
+
+                // Find the existing Payment record (if any)
                 $payment = Payment::where('reference', $reference)->first();
                 if ($payment) {
-                    $payment->status = 'failed';
+                    $payment->status = 'failed'; // Mark as failed
                     $payment->save();
-                    
-                    // Update consultation status to cancelled if it was for an appointment
-                    $consultation = \App\Models\Consultation::whereHas('payments', function($query) use ($reference) {
-                        $query->where('reference', $reference);
-                    })->first();
-                    
-                    if ($consultation) {
-                        $consultation->status = 'cancelled'; // Cancel consultation if payment fails
+                    Log::info("Payment record (ID: {$payment->id}) status updated to 'failed'.");
+
+                    // Find and cancel the associated consultation (if it exists)
+                    $consultation = Consultation::find($payment->consultation_id);
+                    if ($consultation && $consultation->status !== 'completed' && $consultation->status !== 'cancelled') {
+                        $consultation->status = 'cancelled';
                         $consultation->save();
-                        
-                        // DO NOT create appointment record for failed payments
+                        Log::info("Consultation ID {$consultation->id} status updated to 'cancelled' due to failed payment.");
+                         // Notify Patient (Payment Failed)
+                         $patient = User::find($consultation->patient_id);
+                         if ($patient) {
+                             $message = "Your payment for the appointment scheduled for " . Carbon::parse($consultation->start_time)->format('M d, Y g:i A') . " failed. The appointment has been cancelled.";
+                            \App\Models\Notification::create([ /* ... notification details ... */ ]); // Your notification code here
+                             Log::info("Failure Notification sent to Patient ID: " . $patient->id);
+                         }
                     }
                 }
-                
-                // Return custom failed page
-                return view('admin.payments.failed', [
-                    'payment' => $payment,
-                    'errorMessage' => 'Payment verification failed or status is not successful.'
-                ]);
+
+                return view('admin.payments.failed', compact('payment', 'errorMessage'));
             }
 
         } catch (\Exception $e) {
-            // Log the exception
-            Log::error('Payment verification error: ' . $e->getMessage(), [
-                'reference' => $reference,
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            // Return custom failed page with error message
-            return view('admin.payments.failed', [
-                'errorMessage' => 'Verification server error: ' . $e->getMessage()
-            ]);
+            Log::error("!!! Exception during Paystack verification for reference {$reference}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return view('admin.payments.failed', ['errorMessage' => 'Verification server error: ' . $e->getMessage()]);
         }
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Models\DoctorSchedule;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
@@ -12,6 +13,7 @@ use App\Models\ServiceTimePricing;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use App\Models\Clinic; 
 
 class BookAppointmentController extends Controller
 {
@@ -34,8 +36,9 @@ class BookAppointmentController extends Controller
         
         // Fetch all active services for the dropdown
         $services = Service::with('activeTimePricings')->get();
+        $clinics = Clinic::where('is_physical', 1)->get(); 
         
-        return view('admin.book-appointment', compact('patientData', 'services'));
+        return view('admin.book-appointment', compact('patientData', 'services', 'clinics'));
     }
 
     /**
@@ -60,96 +63,242 @@ class BookAppointmentController extends Controller
     }
 
     /**
-     * Get available doctors for a specific date.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * Get available doctors based on date, time, location, AND check for conflicts.
      */
     public function getAvailableDoctors(Request $request)
     {
-        $date = $request->input('date');
-        
-        // Log the incoming request
-        Log::info('Fetching available doctors for date: ' . $date);
-        
-        try {
-            // Parse the date to get the day of week
-            // The datetimepicker format is 'dddd DD MMMM YYYY - HH:mm'
-            // Handle potential variations in the date format
-            if (strpos($date, ' - ') !== false) {
-                $appointmentDate = Carbon::createFromFormat('l d F Y - H:i', $date);
-            } else {
-                // Try alternative format if the above fails
-                $appointmentDate = Carbon::parse($date);
-            }
-            $dayOfWeek = $appointmentDate->format('l'); // e.g., 'Monday', 'Tuesday', etc.
-            
-            // Log the day of week
-            Log::info('Day of week: ' . $dayOfWeek);
-        } catch (\Exception $e) {
-            Log::error('Date parsing error: ' . $e->getMessage());
-            Log::error('Date string received: ' . $date);
+        Log::info("=== GetAvailableDoctors Start (with conflict check) ===");
+        // 1. Get data from the form
+        $dateTimeString = $request->input('date');
+        $clinicId = $request->input('clinic_id');
+        $duration = (int)$request->input('duration', 30); // Default to 30 mins if not sent
+
+        Log::info("Received: date='{$dateTimeString}', clinic='{$clinicId}', duration='{$duration}'");
+
+        if (!$dateTimeString || !$clinicId) {
+            Log::warning("Missing date/time string or clinic ID.");
             return response()->json(['doctors' => []]);
         }
-        
-        // Get doctors with their availability
-        $doctors = Doctor::with('user')
-            ->where('status', 'Verified')
-            ->get();
-            
-        // Log the number of doctors found
-        Log::info('Total verified doctors found: ' . $doctors->count());
-        
-        $filteredDoctors = $doctors->filter(function ($doctor) use ($dayOfWeek, $appointmentDate) {
-            // Log doctor info
-            Log::info('Checking doctor: ' . ($doctor->user ? $doctor->user->name : 'Unknown') . ' (ID: ' . $doctor->id . ')');
-            
-            // Check if doctor has availability data
-            if (!$doctor->availability) {
-                Log::info('Doctor has no availability data, assuming available');
-                return true; // If no availability set, assume available
+
+        try {
+            // 2. Convert start time to Carbon object
+            $appointmentStart = Carbon::createFromFormat('l d F Y - H:i', $dateTimeString);
+            // Calculate potential appointment end time
+            $appointmentEnd = $appointmentStart->copy()->addMinutes($duration);
+             Log::info("Calculated Appointment Slot: Start={$appointmentStart->toDateTimeString()}, End={$appointmentEnd->toDateTimeString()}");
+
+        } catch (\Exception $e) {
+            Log::error("!!! Date parsing error: " . $e->getMessage() . " | Input: " . $dateTimeString);
+            return response()->json(['doctors' => [], 'error' => 'Invalid date format.']);
+        }
+
+        // 3. Get pieces needed for schedule check
+        $dayOfWeek = strtolower($appointmentStart->format('l'));
+        $startTime = $appointmentStart->format('H:i:s');
+        $date = $appointmentStart->format('Y-m-d');
+        Log::info("Checking Schedule Rulebook for: Day={$dayOfWeek}, Date={$date}, Time={$startTime}, Location={$clinicId}");
+
+        // 4. Find doctor IDs matching the schedule rules
+        $scheduledDoctorIds = DoctorSchedule::where('location', $clinicId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('start_date', '<=', $date)
+            ->where('end_date', '>=', $date)
+            ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $startTime)
+            ->where(DB::raw('CAST(end_time AS TIME)'), '>', $startTime) // Check start time fits schedule
+             // --- ALSO CHECK END TIME FITS SCHEDULE ---
+             // Ensures the *entire* duration fits within the doctor's scheduled block
+            ->where(DB::raw('CAST(end_time AS TIME)'), '>=', $appointmentEnd->format('H:i:s'))
+             // --- END END TIME CHECK ---
+            ->pluck('doctor_id')
+            ->unique();
+        Log::info("Found " . $scheduledDoctorIds->count() . " doctor IDs matching schedule rules.");
+
+        if ($scheduledDoctorIds->isEmpty()) {
+             Log::info("No doctors scheduled at this time/location. Returning empty list.");
+             Log::info("=== GetAvailableDoctors End ===");
+             return response()->json(['doctors' => []]);
+        }
+
+        // 5. Filter those doctors by verified status (User and Profile)
+        $verifiedDoctorIds = User::whereIn('id', $scheduledDoctorIds)
+                   ->where('role', 'doctor')
+                   ->where('status', 'active') // Check User status
+                   ->whereHas('doctorProfile', function ($query) { // Check doctors_new status
+                        $query->where('status', 'verified'); // Use lowercase 'verified'
+                   })
+                   ->pluck('id'); // Get just the IDs
+        Log::info("Found " . $verifiedDoctorIds->count() . " verified doctors matching schedule.");
+
+         if ($verifiedDoctorIds->isEmpty()) {
+             Log::info("No *verified* doctors match the schedule. Returning empty list.");
+             Log::info("=== GetAvailableDoctors End ===");
+             return response()->json(['doctors' => []]);
+        }
+
+
+        // --- 6. CORRECTED AGAIN: Check for Conflicting Consultations ---
+            Log::info("Checking for conflicts for doctor IDs: " . json_encode($verifiedDoctorIds->toArray())); // Log the IDs going into the check
+            $conflictingDoctorIds = \App\Models\Consultation::whereIn('doctor_id', $verifiedDoctorIds) // *** Use Consultation model ***
+                // Look for consultations that are NOT completed, missed, or cancelled
+                ->whereNotIn('status', ['completed', 'missed', 'cancelled'])
+                // Check for overlap:
+                // (ExistingStart < ProposedEnd) AND (ExistingEnd > ProposedStart)
+                ->where(function ($query) use ($appointmentStart, $appointmentEnd) {
+                    $query->where('start_time', '<', $appointmentEnd) // *** Use Consultation's start_time ***
+                          ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $appointmentStart); // *** Use Consultation's start_time AND duration_minutes ***
+                })
+                ->pluck('doctor_id') // Get IDs of doctors WITH conflicts
+                ->unique();
+            Log::info("Found " . $conflictingDoctorIds->count() . " doctors with conflicting consultations: " . json_encode($conflictingDoctorIds->toArray()));
+            // --- END CONFLICT CHECK ---
+
+            // 7. Get the IDs of doctors who are verified AND have NO conflicts
+            // Use collect() helper to make diff() easier
+            $trulyAvailableDoctorIds = collect($verifiedDoctorIds)->diff($conflictingDoctorIds);
+            Log::info("Final available (verified, no conflict) doctor IDs: " . json_encode($trulyAvailableDoctorIds->toArray())); // Use toArray() for logging
+
+            // 8. Get the details for the final list (Users table)
+            $doctors = User::whereIn('id', $trulyAvailableDoctorIds)
+                           ->select('id', 'name')
+                           ->get();
+            Log::info("Returning " . $doctors->count() . " final available doctors.");
+
+            // 9. Send the list back
+            Log::info("=== GetAvailableDoctors End ===");
+            return response()->json(['doctors' => $doctors]);
+        } // Make sure this closing brace matches the function definition
+
+    /**
+     * Find available LOCATIONS based on a selected date and time.
+     * (With added logging and CORRECTED status checks)
+     */
+    public function getAvailableLocations(Request $request)
+    {
+        // 1. Get the date/time string
+        $dateTimeString = $request->input('date');
+        Log::info("=== GetAvailableLocations Start ==="); // LOG START
+        Log::info("Received date/time string: " . $dateTimeString); // LOG 1
+        if (!$dateTimeString) {
+            Log::warning("No date/time string received.");
+            return response()->json(['locations' => []]);
+        }
+
+        try {
+            // 2. Convert to Carbon object
+            $selectedDateTime = Carbon::createFromFormat('l d F Y - H:i', $dateTimeString);
+        } catch (\Exception $e) {
+            Log::error("!!! Date parsing error: " . $e->getMessage() . " | Input: " . $dateTimeString);
+            return response()->json(['locations' => [], 'error' => 'Invalid date format.']);
+        }
+
+        // 3. Get the pieces needed
+        $dayOfWeek = strtolower($selectedDateTime->format('l'));
+        $time = $selectedDateTime->format('H:i:s');
+        $date = $selectedDateTime->format('Y-m-d');
+        Log::info("Checking Rulebook for: Day={$dayOfWeek}, Date={$date}, Time={$time}"); // LOG 2
+
+        // 4. Find matching schedules WITHOUT doctor check first
+        $schedulesQuery = DoctorSchedule::where('day_of_week', $dayOfWeek)
+            ->where('start_date', '<=', $date)
+            ->where('end_date', '>=', $date)
+            ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $time)
+            ->where(DB::raw('CAST(end_time AS TIME)'), '>', $time);
+
+        Log::debug("SQL for matching schedules (Time/Date only): " . $schedulesQuery->toSql(), $schedulesQuery->getBindings()); // LOG 3
+        $schedulesFound = $schedulesQuery->get();
+        Log::info("Found " . $schedulesFound->count() . " schedules matching time/date criteria."); // LOG 4
+
+        if ($schedulesFound->isEmpty()) {
+            Log::info("No schedules match time/date. Returning empty locations.");
+            Log::info("=== GetAvailableLocations End ==="); // LOG END
+            return response()->json(['locations' => []]);
+        }
+
+        // 5. NOW check the doctors for those schedules
+        $verifiedDoctorIds = [];
+        foreach ($schedulesFound as $schedule) {
+            $doctorUser = $schedule->doctor; // Use the relationship
+
+            // --- START DETAILED DOCTOR CHECK ---
+            if (!$doctorUser) {
+                Log::warning("Schedule ID {$schedule->id} has no linked user (doctor_id: {$schedule->doctor_id}). Skipping.");
+                continue;
             }
-            
-            $availability = $doctor->availability; // This is already an array due to casting
-            
-            // Log availability data
-            Log::info('Doctor availability: ' . json_encode($availability));
-            
-            // Check if doctor is available on this day
-            if (isset($availability[$dayOfWeek])) {
-                $dayAvailability = $availability[$dayOfWeek];
-                
-                // Log day availability
-                Log::info('Day availability for ' . $dayOfWeek . ': ' . json_encode($dayAvailability));
-                
-                // Check if time slots are available
-                if (isset($dayAvailability['slots']) && !empty($dayAvailability['slots'])) {
-                    Log::info('Doctor has available slots');
-                    return true;
-                }
-                
-                // If it's a full day availability
-                if (isset($dayAvailability['available']) && $dayAvailability['available']) {
-                    Log::info('Doctor is available for full day');
-                    return true;
-                }
+
+            Log::info("Checking Doctor User ID: {$doctorUser->id}, Name: {$doctorUser->name}, Role: {$doctorUser->role}, User Status: '{$doctorUser->status}'");
+
+            if ($doctorUser->role !== 'doctor') {
+                 Log::info("--> User ID {$doctorUser->id} is not a doctor. Skipping.");
+                 continue;
             }
-            
-            Log::info('Doctor is not available on ' . $dayOfWeek);
-            return false;
-        })
-        ->map(function ($doctor) {
-            return [
-                'id' => $doctor->user->id,
-                'name' => $doctor->user->name
-            ];
+            // *** CORRECTED STATUS CHECK FOR USER ***
+            if ($doctorUser->status !== 'active') { // Use 'active' from users table
+                 Log::info("--> User ID {$doctorUser->id} status is not 'active'. Skipping.");
+                 continue;
+            }
+
+            // --- Check the Doctor Profile (doctors_new table) ---
+            // !!! Using 'doctorProfile' based on your User model !!!
+            $doctorProfile = $doctorUser->doctorProfile;
+
+            if (!$doctorProfile) {
+                Log::warning("--> User ID {$doctorUser->id} has no Doctor Profile (doctors_new record). Skipping.");
+                continue;
+            }
+
+            Log::info("--> Checking Doctor Profile Status: '{$doctorProfile->status}'");
+            // *** CORRECTED STATUS CHECK FOR DOCTOR PROFILE ***
+            if ($doctorProfile->status !== 'verified') { // Use 'Verified' from doctors_new table
+                Log::info("--> Doctor Profile status for User ID {$doctorUser->id} is not 'Verified'. Skipping.");
+                continue;
+            }
+            // --- END DETAILED DOCTOR CHECK ---
+
+            Log::info("===> Doctor User ID {$doctorUser->id} PASSED all checks. Adding to list.");
+            $verifiedDoctorIds[] = $doctorUser->id; // Add the USER ID
+        }
+        // Make sure the list has unique IDs
+        $uniqueVerifiedDoctorIds = array_unique($verifiedDoctorIds);
+        Log::info("Unique Verified Doctor User IDs found: " . json_encode($uniqueVerifiedDoctorIds)); // LOG 5
+
+        // 6. Filter the original schedules to only include those linked to verified doctors
+        $finalSchedules = $schedulesFound->whereIn('doctor_id', $uniqueVerifiedDoctorIds);
+        Log::info("Found " . $finalSchedules->count() . " schedules linked to verified doctors."); // LOG 6
+
+
+        // 7. Get unique locations from the FINAL schedules
+        $availableLocationIds = $finalSchedules->pluck('location')->unique()->values();
+        Log::info("Unique location IDs from final schedules: " . json_encode($availableLocationIds)); // LOG 7
+
+        // 8. Build the final list
+        $locations = [];
+        $clinicIds = [];
+        foreach ($availableLocationIds as $locationId) {
+            if ($locationId === 'virtual') {
+                $locations[] = ['id' => 'virtual', 'name' => 'Virtual Session'];
+            } else if (is_numeric($locationId)) {
+                $clinicIds[] = (int)$locationId;
+            }
+        }
+
+        if (!empty($clinicIds)) {
+             Log::info("Fetching names for clinic IDs: " . json_encode($clinicIds)); // LOG 8
+            $clinics = \App\Models\Clinic::whereIn('id', $clinicIds)->select('id', 'name')->get();
+            foreach ($clinics as $clinic) {
+                $locations[] = ['id' => $clinic->id, 'name' => $clinic->name];
+            }
+        }
+
+        // Optional Sort
+        usort($locations, function($a, $b) {
+            return strcmp($a['name'], $b['name']);
         });
-        
-        // Log the number of filtered doctors
-        Log::info('Filtered doctors count: ' . $filteredDoctors->count());
-        
-        return response()->json(['doctors' => array_values($filteredDoctors->toArray())]);
+
+        Log::info("Returning final locations list: " . json_encode($locations)); // LOG 9
+        Log::info("=== GetAvailableLocations End ==="); // LOG END
+        return response()->json(['locations' => $locations]);
     }
+        
 
     /**
      * Store a newly created appointment.

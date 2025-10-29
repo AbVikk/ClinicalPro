@@ -94,6 +94,7 @@ Route::delete('/doctor/specialization/categories/{category}', [Admin\CategoryCon
 Route::get('/book-appointment', [Admin\BookAppointmentController::class, 'index'])->name('book-appointment');
 Route::post('/book-appointment/patient-info', [Admin\BookAppointmentController::class, 'getPatientInfo'])->name('book-appointment.patient-info');
 Route::post('/book-appointment/available-doctors', [Admin\BookAppointmentController::class, 'getAvailableDoctors'])->name('book-appointment.available-doctors');
+Route::post('/book-appointment/available-locations', [Admin\BookAppointmentController::class, 'getAvailableLocations'])->name('book-appointment.available-locations');
 Route::post('/book-appointment/search-patients', [Admin\BookAppointmentController::class, 'searchPatients'])->name('book-appointment.search-patients');
 Route::post('/book-appointment', [Admin\BookAppointmentController::class, 'store'])->name('book-appointment.store');
 Route::post('/book-appointment/walk-in-patient', [Admin\BookAppointmentController::class, 'storeWalkInPatient'])->name('book-appointment.walk-in-patient');

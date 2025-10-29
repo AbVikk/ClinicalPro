@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Department;
 use Illuminate\Http\Request;
 
 class CategoryController extends Controller
@@ -22,7 +23,8 @@ class CategoryController extends Controller
      */
     public function create()
     {
-        return view('admin.doctor.specialization.add_categories');
+        $departments = Department::all();
+        return view('admin.doctor.specialization.add_categories', compact('departments'));
     }
 
     /**
@@ -57,7 +59,8 @@ class CategoryController extends Controller
      */
     public function edit(Category $category)
     {
-        return view('admin.doctor.specialization.edit_category', compact('category'));
+        $departments = Department::all();
+        return view('admin.doctor.specialization.edit_category', compact('category', 'departments'));
     }
 
     /**

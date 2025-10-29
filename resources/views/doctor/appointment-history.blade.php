@@ -445,7 +445,14 @@
                         
                         <div class="detail-card">
                             <div class="detail-card-title">Type of Appointment</div>
-                            <div class="detail-card-value">{{ $currentAppointment->appointmentReason->name ?? $currentAppointment->type ?? 'General Visit' }}</div>
+                            <div class="detail-card-value">
+                                {{-- Use Consultation data if available --}}
+                                @if($currentAppointment->consultation)
+                                    {{ $currentAppointment->consultation->delivery_channel == 'virtual' ? 'Virtual' : 'Physical' }}
+                                @else
+                                    {{ $currentAppointment->type ?? 'General Visit' }} {{-- Fallback --}}
+                                @endif
+                            </div>
                         </div>
                         
                         <div class="detail-card">
@@ -455,9 +462,14 @@
                         
                         <div class="detail-card">
                             <div class="detail-card-title">Consultation Fees</div>
-                            <div class="detail-card-value">${{ $currentAppointment->consultation_fee ?? '200' }}</div>
+                            <div class="detail-card-value">₦{{ $currentAppointment->consultation->fee ?? $currentAppointment->consultation_fee ?? '200' }}</div>
                         </div>
-                        
+                        <div class="detail-card">
+                            <div class="detail-card-title">Time Spent</div>
+                            <div class="detail-card-value">
+                                {{ $currentAppointment->consultation?->duration_minutes ?? 30 }} minutes {{-- Get from consultation --}}
+                            </div>
+                        </div>
                         <div class="detail-card">
                             <div class="detail-card-title">Appointment Date & Time</div>
                             <div class="detail-card-value">{{ \Carbon\Carbon::parse($currentAppointment->appointment_time)->format('d M Y - g:i A') }}</div>
@@ -465,17 +477,38 @@
                         
                         <div class="detail-card">
                             <div class="detail-card-title">Clinic Location</div>
-                            <div class="detail-card-value">{{ $currentAppointment->clinic_location ?? 'Adrian\'s Dentistry' }}</div>
+                            <div class="detail-card-value">
+                                {{-- Use Consultation data if available --}}
+                                @if($currentAppointment->consultation)
+                                    {{ $currentAppointment->consultation->delivery_channel == 'virtual' ? 'Virtual Session' : ($currentAppointment->consultation->clinic?->name ?? 'N/A') }}
+                                @else
+                                    {{ $currentAppointment->clinic_location ?? 'N/A' }} {{-- Fallback --}}
+                                @endif
+                            </div>
                         </div>
                         
                         <div class="detail-card">
-                            <div class="detail-card-title">Location</div>
-                            <div class="detail-card-value">{{ $currentAppointment->location ?? 'Newyork, United States' }}</div>
+                            <div class="detail-card-title">Location (Address)</div>
+                            <div class="detail-card-value">
+                                {{-- Use Consultation data if available --}}
+                                @if($currentAppointment->consultation)
+                                     {{ $currentAppointment->consultation->delivery_channel == 'virtual' ? 'N/A' : ($currentAppointment->consultation->clinic?->address ?? 'N/A') }}
+                                @else
+                                     {{ $currentAppointment->location ?? 'N/A' }} {{-- Fallback --}}
+                                @endif
+                            </div>
                         </div>
                         
                         <div class="detail-card">
-                            <div class="detail-card-title">Visit Type</div>
-                            <div class="detail-card-value">{{ $currentAppointment->visit_type ?? 'General' }}</div>
+                            <div class="detail-card-title">Visit Type (Service)</div>
+                            <div class="detail-card-value">
+                                 {{-- Use Consultation data if available --}}
+                                @if($currentAppointment->consultation)
+                                    {{ $currentAppointment->consultation->service_type ?? 'N/A' }}
+                                @else
+                                     {{ $currentAppointment->appointmentReason?->name ?? $currentAppointment->type ?? 'General Visit' }} {{-- Fallback --}}
+                                @endif
+                            </div>
                         </div>
                         
                         <div class="detail-card">

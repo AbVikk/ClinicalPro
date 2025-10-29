@@ -214,10 +214,22 @@
                                         </div>
                                     </div>
                                     <div class="col-sm-6">
+                                    <div class="form-group">
+                                        <label for="clinic_id">Select Location *</label>
+                                        <select id="clinic_id" name="clinic_id" class="form-control show-tick" required>
+                                            <option value="">- Select Location -</option>
+                                            <option value="virtual">Virtual Session</option>
+                                            @foreach($clinics as $clinic)
+                                                <option value="{{ $clinic->id }}">{{ $clinic->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                                    <div class="col-sm-6">
                                         <div class="form-group">
                                             <label for="doctor_id">Select Doctor *</label>
                                             <select id="doctor_id" name="doctor_id" class="form-control show-tick" data-live-search="true" required>
-                                                <option value="">- Select Doctor -</option>
+                                                <option value="">- Select Location and Date First -</option>
                                             </select>
                                         </div>
                                     </div>
@@ -336,345 +348,370 @@
 <!-- Custom Js -->
 <script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script>
 <script>
-    $(function () {
-    //Datetimepicker plugin
-    $('.datetimepicker').bootstrapMaterialDatePicker({
-        format: 'dddd DD MMMM YYYY - HH:mm',
-        clearButton: true,
-        weekStart: 1
-    });
-});
+    $(function () { // Use jQuery's ready function ONCE for all code
 
-    // Patient search functionality
-    let searchTimeout;
-    $('#patient_search').on('input', function() {
-        const searchTerm = $(this).val();
-        
-        // Clear previous timeout
-        clearTimeout(searchTimeout);
-        
-        // Hide results if search term is too short
-        if (searchTerm.length < 2) {
-            $('#patient-search-results').hide();
-            $('#searching-indicator').hide();
-            return;
+        // --- Initialize Plugins ---
+        $('.datetimepicker').bootstrapMaterialDatePicker({
+            format: 'dddd DD MMMM YYYY - HH:mm', // Matched PHP format: 'l d F Y - H:i'
+            clearButton: true,
+            weekStart: 1,
+            minDate: new Date() // Prevent selecting past dates
+        });
+
+        // Initialize Bootstrap Select
+        $('.show-tick').selectpicker();
+
+        // --- Helper Function to Update Dropdown ---
+        function updateSelectPicker(selector, options, defaultText, disabled = false) {
+            const select = $(selector);
+            select.empty(); // Clear existing options
+            select.append(`<option value="">- ${defaultText} -</option>`); // Add default
+            if (options && options.length > 0) {
+                $.each(options, function(index, item) {
+                    select.append(`<option value="${item.id}">${item.name}</option>`);
+                });
+            } else if (!disabled) { // Only show 'No options' if it's enabled but empty
+                 select.append(`<option value="" disabled>No options available</option>`);
+            }
+            select.prop('disabled', disabled); // Set disabled state
+            select.selectpicker('refresh'); // Refresh the plugin
         }
-        
-        // Show loading indicator
-        $('#searching-indicator').show();
-        
-        // Set a new timeout to debounce the search
-        searchTimeout = setTimeout(function() {
+
+        // --- Patient Search & Selection ---
+        let searchTimeout;
+        $('#patient_search').on('input', function() {
+            const searchTerm = $(this).val();
+            clearTimeout(searchTimeout);
+
+            if (searchTerm.length < 2) {
+                $('#patient-search-results').hide();
+                $('#searching-indicator').hide();
+                return;
+            }
+            $('#searching-indicator').show();
+
+            searchTimeout = setTimeout(function() {
+                $.ajax({
+                    url: '{{ route('admin.book-appointment.search-patients') }}',
+                    method: 'POST',
+                    data: { _token: '{{ csrf_token() }}', search: searchTerm },
+                    success: function(response) {
+                        $('#searching-indicator').hide();
+                        let resultsHtml = '';
+                        if (response.patients && response.patients.length > 0) {
+                            response.patients.forEach(function(patient) {
+                                resultsHtml += `
+                                    <li class="list-group-item list-group-item-action"
+                                        data-patient-id="${patient.user_id}"
+                                        data-patient-name="${patient.name}"
+                                        data-patient-email="${patient.email || ''}">
+                                        ${patient.name} (${patient.user_id}) - ${patient.email || 'No Email'}
+                                    </li>`;
+                            });
+                        } else {
+                            resultsHtml = '<li class="list-group-item">No patients found</li>';
+                        }
+                        $('#patient-results-list').html(resultsHtml);
+                        $('#patient-search-results').show();
+                    },
+                    error: function() {
+                        $('#searching-indicator').hide();
+                        $('#patient-results-list').html('<li class="list-group-item">Error searching patients</li>');
+                        $('#patient-search-results').show();
+                    }
+                });
+            }, 300);
+        });
+
+        // Handle patient selection from search results
+        $(document).on('click', '#patient-results-list li', function() {
+            if ($(this).data('patient-id')) { // Ensure it's a real patient item
+                const patientId = $(this).data('patient-id');
+                const patientName = $(this).data('patient-name');
+                const patientEmail = $(this).data('patient-email');
+
+                $('#patient_id').val(patientId);
+                $('#patient_name').val(patientName);
+                $('#patient_email').val(patientEmail);
+                $('#patient-search-results').hide();
+                $('#patient_search').val('');
+                $('#patient-details').show();
+                // Hide the Check/New buttons as patient is selected
+                $('#check-patient').hide();
+                $('#newPatientModal').closest('div').find('button[data-target="#newPatientModal"]').hide();
+
+                // Trigger date focus or maybe location/date fetch
+                 $('#appointment_date').focus();
+            }
+        });
+
+        // --- Check Existing Patient Button ---
+        // **** THIS IS THE FIX ****
+        $('#check-patient').on('click', function() {
+            var patientId = $('#patient_id').val();
+            if (!patientId) {
+                alert('Please enter a patient ID');
+                return;
+            }
             $.ajax({
-                url: '{{ route('admin.book-appointment.search-patients') }}',
+                url: '{{ route('admin.book-appointment.patient-info') }}',
+                method: 'POST',
+                data: { _token: '{{ csrf_token() }}', patient_id: patientId },
+                success: function(response) {
+                    if (response.patient) {
+                        $('#patient_name').val(response.patient.name);
+                        $('#patient_email').val(response.patient.email || ''); // Handle null email
+                        $('#patient-details').show();
+                         // Hide the Check/New buttons as patient is found
+                        $('#check-patient').hide();
+                        $('#newPatientModal').closest('div').find('button[data-target="#newPatientModal"]').hide();
+
+                    } else {
+                         // Should ideally not happen if patient exists, but handle just in case
+                         alert('Patient details could not be retrieved.');
+                    }
+                },
+                error: function(xhr) {
+                    if (xhr.status === 404) {
+                        alert('Patient not found. Please check the patient ID or register as a New Walk-In Patient.');
+                         $('#patient_id').focus(); // Focus back on the ID field
+                    } else {
+                        alert('An error occurred checking the patient ID. Please try again.');
+                    }
+                     // Keep Check/New buttons visible
+                     $('#check-patient').show();
+                     $('#newPatientModal').closest('div').find('button[data-target="#newPatientModal"]').show();
+                     $('#patient-details').hide(); // Hide details section
+                     $('#patient_name').val(''); // Clear name/email
+                     $('#patient_email').val('');
+
+                }
+            });
+        });
+
+        // --- Walk-In Patient Modal ---
+        $('#newPatientModal').on('shown.bs.modal', function () {
+           $('#new-patient-name').focus();
+        });
+
+        $('#register-walk-in').on('click', function() {
+            var name = $('#new-patient-name').val();
+            var phone = $('#new-patient-phone').val();
+            var email = $('#new-patient-email').val();
+            var button = $(this); // Reference the button
+
+            if (!name || !phone) {
+                alert('Name and phone are required');
+                return;
+            }
+            button.prop('disabled', true).text('Registering...'); // Disable button
+
+            $.ajax({
+                url: '{{ route('admin.book-appointment.walk-in-patient') }}',
+                method: 'POST',
+                data: { _token: '{{ csrf_token() }}', name: name, phone: phone, email: email },
+                success: function(response) {
+                    if (response.success) {
+                        $('#newPatientModal').modal('hide');
+                        // Clear modal fields for next time
+                        $('#new-patient-name, #new-patient-phone, #new-patient-email').val('');
+
+                        $('#patient_id').val(response.patient_id);
+                        // Trigger the check patient button click to populate fields
+                        $('#check-patient').click();
+                        alert(response.message);
+                    } else {
+                         alert(response.message || 'Failed to register patient.');
+                    }
+                },
+                error: function(xhr) {
+                    alert('Failed to register patient: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Please try again.'));
+                },
+                complete: function() {
+                     button.prop('disabled', false).text('Register Patient'); // Re-enable button
+                }
+            });
+        });
+
+        // --- Appointment Date/Location/Doctor Logic ---
+        // When Appointment Date/Time Changes
+        $('#appointment_date').on('change', function() {
+            var date = $(this).val();
+            const locationSelect = $('#clinic_id');
+            const doctorSelect = $('#doctor_id');
+
+            // Reset dependent dropdowns
+            updateSelectPicker(locationSelect, [], 'Loading Locations...', true); // Show loading, keep disabled
+            updateSelectPicker(doctorSelect, [], 'Select Location First', true);
+
+            if (!date) {
+                updateSelectPicker(locationSelect, [], 'Select Date/Time First', true); // Reset text if date cleared
+                return;
+            }
+
+            // AJAX Call 1: Get Available Locations
+            $.ajax({
+                url: '{{ route('admin.book-appointment.available-locations') }}',
+                method: 'POST',
+                data: { _token: '{{ csrf_token() }}', date: date },
+                success: function(response) {
+                    if (response.locations && response.locations.length > 0) {
+                        updateSelectPicker(locationSelect, response.locations, 'Select Available Location', false); // Enable
+                    } else {
+                         updateSelectPicker(locationSelect, [], 'No Locations Available', true); // Keep disabled
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Error fetching locations:', xhr.responseText);
+                    updateSelectPicker(locationSelect, [], 'Error Loading Locations', true);
+                    alert('Failed to fetch available locations. Please try again.');
+                }
+            });
+        });
+
+        // When Location Changes
+        $('#clinic_id').on('change', function() {
+            var clinicId = $(this).val();
+            var date = $('#appointment_date').val();
+            const doctorSelect = $('#doctor_id');
+
+            updateSelectPicker(doctorSelect, [], 'Loading Doctors...', true); // Show loading, keep disabled
+
+            if (!clinicId || !date) {
+                 updateSelectPicker(doctorSelect, [], 'Select Location First', true); // Reset text
+                return;
+            }
+
+            // AJAX Call 2: Get Available Doctors
+            $.ajax({
+                url: '{{ route('admin.book-appointment.available-doctors') }}',
                 method: 'POST',
                 data: {
                     _token: '{{ csrf_token() }}',
-                    search: searchTerm
+                    date: date,
+                    clinic_id: clinicId,
+                    duration: $('#service_duration').val() // Send duration
                 },
                 success: function(response) {
-                    // Hide loading indicator
-                    $('#searching-indicator').hide();
-                    
-                    if (response.patients && response.patients.length > 0) {
-                        let resultsHtml = '';
-                        response.patients.forEach(function(patient) {
-                            resultsHtml += `
-                                <li class="list-group-item list-group-item-action" 
-                                    data-patient-id="${patient.user_id}" 
-                                    data-patient-name="${patient.name}" 
-                                    data-patient-email="${patient.email}">
-                                    ${patient.name} (${patient.user_id}) - ${patient.email}
-                                </li>
-                            `;
-                        });
-                        
-                        $('#patient-results-list').html(resultsHtml);
-                        $('#patient-search-results').show();
+                    if (response.doctors && response.doctors.length > 0) {
+                         updateSelectPicker(doctorSelect, response.doctors, 'Select Available Doctor', false); // Enable
                     } else {
-                        $('#patient-results-list').html('<li class="list-group-item">No patients found</li>');
-                        $('#patient-search-results').show();
+                        updateSelectPicker(doctorSelect, [], 'No Doctors Available', true); // Keep disabled
                     }
                 },
-                error: function() {
-                    // Hide loading indicator
-                    $('#searching-indicator').hide();
-                    $('#patient-results-list').html('<li class="list-group-item">Error searching patients</li>');
-                    $('#patient-search-results').show();
+                error: function(xhr) {
+                    console.error('Error fetching doctors:', xhr.responseText);
+                    updateSelectPicker(doctorSelect, [], 'Error Loading Doctors', true);
+                    alert('Failed to fetch available doctors for this location. Please try again.');
                 }
             });
-        }, 300); // 300ms debounce
-    });
-    
-    // Handle Enter key press in search field
-    $('#patient_search').on('keypress', function(e) {
-        if (e.which === 13) { // Enter key
-            e.preventDefault();
-            // If there are search results, select the first one
-            const firstResult = $('#patient-results-list li').first();
-            if (firstResult.length > 0 && !firstResult.hasClass('list-group-item')) {
-                firstResult.click();
-            }
-        }
-    });
-    
-    // Handle patient selection from search results
-    $(document).on('click', '#patient-results-list li', function() {
-        const patientId = $(this).data('patient-id');
-        const patientName = $(this).data('patient-name');
-        const patientEmail = $(this).data('patient-email');
-        
-        // Fill the form fields
-        $('#patient_id').val(patientId);
-        $('#patient_name').val(patientName);
-        $('#patient_email').val(patientEmail);
-        
-        // Hide search results
-        $('#patient-search-results').hide();
-        
-        // Clear search field
-        $('#patient_search').val('');
-        
-        // Show patient details section
-        $('#patient-details').show();
-        
-        // Trigger the date field to become active
-        $('#appointment_date').focus();
-    });
-    
-    // Highlight first result on arrow down
-    $('#patient_search').on('keydown', function(e) {
-        if (e.which === 40) { // Down arrow
-            e.preventDefault();
-            const firstResult = $('#patient-results-list li').first();
-            if (firstResult.length > 0) {
-                $('#patient-results-list li').removeClass('active');
-                firstResult.addClass('active');
-            }
-        }
-    });
-    
-    // Handle selection with arrow keys and Enter
-    $('#patient_search').on('keydown', function(e) {
-        if (e.which === 40) { // Down arrow
-            e.preventDefault();
-            const firstResult = $('#patient-results-list li').first();
-            if (firstResult.length > 0) {
-                $('#patient-results-list li').removeClass('active');
-                firstResult.addClass('active');
-            }
-        } else if (e.which === 13) { // Enter key
-            e.preventDefault();
-            const activeResult = $('#patient-results-list li.active');
-            if (activeResult.length > 0) {
-                activeResult.click();
-            } else {
-                // If no active result, select first one
-                const firstResult = $('#patient-results-list li').first();
-                if (firstResult.length > 0 && !firstResult.hasClass('list-group-item')) {
-                    firstResult.click();
-                }
-            }
-        }
-    });
-
-    // Check patient ID and fetch patient details
-    $('#check-patient').on('click', function() {
-        var patientId = $('#patient_id').val();
-        
-        if (!patientId) {
-            alert('Please enter a patient ID');
-            return;
-        }
-        
-        $.ajax({
-            url: '{{ route('admin.book-appointment.patient-info') }}',
-            method: 'POST',
-            data: {
-                _token: '{{ csrf_token() }}',
-                patient_id: patientId
-            },
-            success: function(response) {
-                if (response.patient) {
-                    $('#patient_name').val(response.patient.name);
-                    $('#patient_email').val(response.patient.email);
-                    $('#patient-details').show();
-                }
-            },
-            error: function(xhr) {
-                if (xhr.status === 404) {
-                    alert('Patient not found. Please check the patient ID.');
-                } else {
-                    alert('An error occurred. Please try again.');
-                }
-            }
         });
-    });
 
-    // When appointment date changes, fetch available doctors
-    $('#appointment_date').on('change', function() {
-        var date = $(this).val();
-        
-        if (!date) {
-            return;
-        }
-        
-        $.ajax({
-            url: '{{ route('admin.book-appointment.available-doctors') }}',
-            method: 'POST',
-            data: {
-                _token: '{{ csrf_token() }}',
-                date: date
-            },
-            success: function(response) {
-                console.log('Success response:', response);
-                if (response.doctors) {
-                    var doctorSelect = $('#doctor_id');
-                    doctorSelect.empty();
-                    doctorSelect.append('<option value="">- Select Doctor -</option>');
-                    
-                    if (response.doctors.length > 0) {
-                        $.each(response.doctors, function(index, doctor) {
-                            doctorSelect.append('<option value="' + doctor.id + '">' + doctor.name + '</option>');
-                        });
-                    } else {
-                        doctorSelect.append('<option value="">No doctors available for this date</option>');
-                    }
-                    
-                    doctorSelect.selectpicker('refresh');
-                }
-            },
-            error: function(xhr, status, error) {
-                console.log('Error details:', xhr, status, error);
-                console.log('Response text:', xhr.responseText);
-                alert('Failed to fetch available doctors. Please try again. Check console for details.');
+        // --- Service, Duration, and Price Logic ---
+        function updatePrice() {
+            var selectedService = $('#service_id option:selected');
+            if (!selectedService.length || !selectedService.val()) {
+                $('#service_price_display').text('₦0.00');
+                $('#service_price').val('0');
+                return;
             }
-        });
-    });
 
-    // Handle walk-in patient registration
-    $('#newPatientModal').on('shown.bs.modal', function () {
-        $('#new-patient-name').focus();
-    });
+            var basePrice = parseFloat(selectedService.data('price'));
+            var selectedDuration = parseInt($('#service_duration').val());
+            // Use a default base duration if not provided, e.g., 30 minutes
+            var baseDuration = parseInt(selectedService.data('duration')) || 30;
 
-    $('#register-walk-in').on('click', function() {
-        var name = $('#new-patient-name').val();
-        var phone = $('#new-patient-phone').val();
-        var email = $('#new-patient-email').val();
-        
-        if (!name || !phone) {
-            alert('Name and phone are required');
-            return;
-        }
-        
-        $.ajax({
-            url: '{{ route('admin.book-appointment.walk-in-patient') }}',
-            method: 'POST',
-            data: {
-                _token: '{{ csrf_token() }}',
-                name: name,
-                phone: phone,
-                email: email
-            },
-            success: function(response) {
-                if (response.success) {
-                    $('#newPatientModal').modal('hide');
-                    $('#patient_id').val(response.patient_id);
-                    $('#check-patient').click(); // Trigger the patient check
-                    alert(response.message);
-                }
-            },
-            error: function() {
-                alert('Failed to register patient. Please try again.');
+            if (isNaN(basePrice) || isNaN(selectedDuration) || isNaN(baseDuration) || baseDuration <= 0) {
+                $('#service_price_display').text('₦0.00'); // Or show an error/base price
+                $('#service_price').val(basePrice.toFixed(2)); // Default to base price on error?
+                console.error("Price calculation error: Invalid data", { basePrice, selectedDuration, baseDuration });
+                return;
             }
-        });
-    });
 
-    // Reset form
-    function resetForm() {
-        document.getElementById('book-appointment-form').reset();
-        // Manually reset price display and duration buttons
-        $('.time-duration-option').removeClass('active');
-        $('.time-duration-option[data-duration="30"]').addClass('active');
-        $('#service_duration').val('30');
-        updatePrice();
-    }
-    
-    // Function to update price based on selected service and duration
-    function updatePrice() {
-        var selectedService = $('#service_id option:selected');
-        if (selectedService.length === 0 || !selectedService.val()) {
-            $('#service_price_display').text('₦0.00');
-            $('#service_price').val('0');
-            return;
+            var calculatedPrice = basePrice * (selectedDuration / baseDuration);
+            $('#service_price_display').text('₦' + calculatedPrice.toFixed(2));
+            $('#service_price').val(calculatedPrice.toFixed(2));
         }
-        
-        var basePrice = parseFloat(selectedService.data('price'));
-        var selectedDuration = parseInt($('#service_duration').val());
-        var baseDuration = parseInt(selectedService.data('duration'));
-        
-        if (isNaN(basePrice) || isNaN(selectedDuration) || isNaN(baseDuration)) {
-            $('#service_price_display').text('₦0.00');
-            $('#service_price').val('0');
-            return;
+
+        // Handle service selection
+        $('#service_id').on('change', function() {
+             // Maybe reset duration to default for the service?
+             // const defaultDuration = $(this).find('option:selected').data('duration') || 30;
+             // $('#service_duration').val(defaultDuration);
+             // $('.time-duration-option').removeClass('active');
+             // $(`.time-duration-option[data-duration="${defaultDuration}"]`).addClass('active');
+            updatePrice();
+        });
+
+        // Handle duration selection
+        $(document).on('click', '.time-duration-option', function(e) {
+            e.preventDefault();
+            $('.time-duration-option').removeClass('active');
+            $(this).addClass('active');
+            var duration = $(this).data('duration');
+            $('#service_duration').val(duration);
+            updatePrice();
+             // IMPORTANT: Re-fetch doctors if duration changes, as conflicts depend on it
+             $('#clinic_id').trigger('change');
+        });
+
+        // --- Reset Form Functionality ---
+        window.resetForm = function() { // Make it globally accessible if needed, or keep local
+            $('#book-appointment-form')[0].reset(); // Reset native form elements
+
+            // Reset Bootstrap Select pickers
+            $('#clinic_id, #doctor_id, #service_id').val('').selectpicker('refresh');
+
+            // Reset patient details visibility and buttons
+            $('#patient-details').hide();
+            $('#patient_name').val('');
+            $('#patient_email').val('');
+            $('#check-patient').show();
+            $('#newPatientModal').closest('div').find('button[data-target="#newPatientModal"]').show();
+
+
+            // Reset duration buttons and hidden input
+            $('.time-duration-option').removeClass('active');
+            $('.time-duration-option[data-duration="30"]').addClass('active');
+            $('#service_duration').val('30');
+
+            // Reset price display
+            updatePrice();
+
+            // Reset and disable location/doctor dropdowns
+            updateSelectPicker($('#clinic_id'), [], 'Select Date/Time First', true);
+            updateSelectPicker($('#doctor_id'), [], 'Select Location First', true);
+
+             // Clear search field and results
+            $('#patient_search').val('');
+            $('#patient-search-results').hide();
         }
-        
-        // Calculate price based on duration ratio
-        var calculatedPrice = basePrice * (selectedDuration / baseDuration);
-        $('#service_price_display').text('₦' + calculatedPrice.toFixed(2));
-        $('#service_price').val(calculatedPrice.toFixed(2));
-    }
-    
-    // Auto-check patient if pre-populated data is present
-    $(document).ready(function() {
-        @if(isset($patientData) && !empty($patientData['user_id']))
-            // If we have pre-populated patient data, populate fields directly
-            $('#patient_id').val('{{ $patientData['user_id'] }}');
-            @if(!empty($patientData['name']))
-                $('#patient_name').val('{{ $patientData['name'] }}');
-            @endif
-            @if(!empty($patientData['email']))
-                $('#patient_email').val('{{ $patientData['email'] }}');
-            @endif
-            // Show the patient details section
-            $('#patient-details').show();
-        @endif
-        
+
+        // --- Initial Page Load Setup ---
         // Set default duration option as active
         $('.time-duration-option[data-duration="30"]').addClass('active');
-        
-        // If a service is already selected, calculate the initial price
-        if ($('#service_id').val()) {
-            $('#service_id').trigger('change');
-        }
-    });
-    
-    // Handle service selection
-    $('#service_id').on('change', function() {
-        updatePrice();
-    });
-    
-    // Handle duration selection
-    $(document).on('click', '.time-duration-option', function(e) {
-        e.preventDefault();
-        
-        // Remove active class from all options
-        $('.time-duration-option').removeClass('active');
-        
-        // Add active class to clicked option
-        $(this).addClass('active');
-        
-        // Set the hidden input value
-        var duration = $(this).data('duration');
-        $('#service_duration').val(duration);
-        
-        // Update the price
-        updatePrice();
-    });
-    
-    // We'll let the form submit normally to handle redirects and session messages properly
-    // The session messages will be displayed at the top of the form
+        $('#service_duration').val('30'); // Ensure hidden input matches
 
+        // Initialize Location/Doctor dropdowns as disabled
+        updateSelectPicker($('#clinic_id'), [], 'Select Date/Time First', true);
+        updateSelectPicker($('#doctor_id'), [], 'Select Location First', true);
+
+         // If a service is already selected (e.g., from validation error), calculate the initial price
+         if ($('#service_id').val()) {
+            updatePrice(); // Use updatePrice which reads current duration
+         } else {
+             updatePrice(); // Calculate initial price (likely ₦0.00)
+         }
+
+
+        // Auto-check patient if pre-populated data is present (from redirect)
+        @if(isset($patientData) && !empty($patientData['user_id']))
+            $('#patient_id').val('{{ $patientData['user_id'] }}');
+            // Trigger check to populate name/email and hide buttons
+            $('#check-patient').click();
+        @endif
+
+    }); // <-- End of jQuery ready function
 </script>
 </body>
 </html>

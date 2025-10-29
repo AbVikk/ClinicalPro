@@ -344,7 +344,9 @@
                         
                         <div class="detail-card">
                             <div class="detail-card-title">Type of Appointment</div>
-                            <div class="detail-card-value">{{ $appointment->consultation->service_type ?? ($appointment->appointmentReason->name ?? $appointment->type ?? 'General Visit') }}</div>
+                            <div class="detail-card-value">
+                                {{ $appointment->consultation?->delivery_channel == 'virtual' ? 'Virtual' : 'Physical' }}
+                            </div>
                         </div>
                         
                         <div class="detail-card">
@@ -354,7 +356,7 @@
                         
                         <div class="detail-card">
                             <div class="detail-card-title">Consultation Fees</div>
-                            <div class="detail-card-value">NGN{{ $appointment->consultation->fee ?? $appointment->consultation_fee ?? '200' }}</div>
+                            <div class="detail-card-value">₦{{ $appointment->consultation->fee ?? $appointment->consultation_fee ?? '200' }}</div>
                         </div>
                         
                         <div class="detail-card">
@@ -364,22 +366,30 @@
                         
                         <div class="detail-card">
                             <div class="detail-card-title">Clinic Location</div>
-                            <div class="detail-card-value">{{ $appointment->consultation->clinic->name ?? $appointment->clinic_location ?? 'Adrian\'s Dentistry' }}</div>
+                            <div class="detail-card-value">
+                                {{ $appointment->consultation?->delivery_channel == 'virtual' ? 'Virtual Session' : ($appointment->consultation?->clinic?->name ?? 'N/A') }}
+                            </div>
                         </div>
                         
                         <div class="detail-card">
-                            <div class="detail-card-title">Location</div>
-                            <div class="detail-card-value">{{ $appointment->consultation->clinic->address ?? $appointment->location ?? 'Newyork, United States' }}</div>
+                            <div class="detail-card-title">Location (Address)</div>
+                            <div class="detail-card-value">
+                                {{ $appointment->consultation?->delivery_channel == 'virtual' ? 'N/A' : ($appointment->consultation?->clinic?->address ?? 'N/A') }}
+                            </div>
                         </div>
                         
                         <div class="detail-card">
-                            <div class="detail-card-title">Visit Type</div>
-                            <div class="detail-card-value">{{ $appointment->visit_type ?? 'General' }}</div>
+                            <div class="detail-card-title">Visit Type (Service)</div>
+                            <div class="detail-card-value">
+                                {{ $appointment->consultation?->service_type ?? ($appointment->appointmentReason?->name ?? 'N/A') }}
+                            </div>
                         </div>
 
                         <div class="detail-card">
                             <div class="detail-card-title">Duration</div>
-                            <div class="detail-card-value">{{ $appointment->consultation->duration_minutes ?? 30 }} minutes</div>
+                            <div class="detail-card-value">
+                                {{ $appointment->consultation?->duration_minutes ?? 30 }} minutes
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -414,6 +424,9 @@
                                 <input type="text" name="no_of_visit" value="{{ $noOfVisits ?? '0' }}" readonly>
                             </div>
                         </div>
+                        <button type="button" class="add-new-btn" id="save-patient-info">
+                            <i class="zmdi zmdi-save"></i> Save
+                        </button>
                     </div>
                     
                     <div class="form-section">
@@ -460,6 +473,9 @@
                                 <input type="text" name="bmi" placeholder="22.0" value="{{ $appointment->vitals->bmi ?? '' }}">
                             </div>
                         </div>
+                        <button type="button" class="add-new-btn" id="save-vitals">
+                            <i class="zmdi zmdi-save"></i> Save
+                        </button>
                     </div>
                     
                     <div class="form-section">
@@ -472,8 +488,8 @@
                             <label>Skin Allergy</label>
                             <textarea name="skin_allergy" placeholder="Enter any skin allergies...">{{ $appointment->clinicalNote->skin_allergy ?? '' }}</textarea>
                         </div>
-                        <button type="button" class="add-new-btn">
-                            <i class="zmdi zmdi-plus"></i> Save
+                        <button type="button" class="add-new-btn" id="save-clinical-notes">
+                            <i class="zmdi zmdi-save"></i> Save
                         </button>
                     </div>
                     
@@ -717,7 +733,7 @@
                         <div class="form-group full-width">
                             <textarea name="advice" placeholder="Enter medical advice...">{{ $appointmentDetail->advice ?? '' }}</textarea>
                         </div>
-                        <button type="button" class="add-new-btn">
+                        <button type="button" class="add-new-btn" id="save-advice">
                             <i class="zmdi zmdi-save"></i> Save
                         </button>
                     </div>
@@ -727,15 +743,16 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Follow Up Date</label>
-                                <input type="date" name="follow_up_date" value="{{ $appointmentDetail->follow_up_date ? $appointmentDetail->follow_up_date->format('Y-m-d') : '' }}">
+                                <input type="date" id="follow_up_date" name="follow_up_date" value="{{ $appointmentDetail->follow_up_date ? $appointmentDetail->follow_up_date->format('Y-m-d') : '' }}">
                             </div>
                             <div class="form-group">
                                 <label>Follow Up Time</label>
-                                <input type="time" name="follow_up_time" value="{{ $appointmentDetail->follow_up_time ? $appointmentDetail->follow_up_time->format('H:i') : '' }}">
+                                <input type="time" id="follow_up_time" name="follow_up_time" value="{{ $appointmentDetail->follow_up_time ? \Carbon\Carbon::parse($appointmentDetail->follow_up_time)->format('H:i') : '' }}">
                             </div>
                         </div>
-                        <button type="button" class="add-new-btn" id="schedule-followup">
-                            <i class="zmdi zmdi-calendar-plus"></i> Schedule Follow-up Appointment
+                        <div id="followup-availability-feedback" style="margin-bottom: 15px; font-weight: bold;"></div>
+                        <button type="button" class="add-new-btn" id="schedule-followup-btn">
+                            <i class="zmdi zmdi-calendar-check"></i> Schedule Follow-up Appointment
                         </button>
                     </div>
                     
@@ -760,7 +777,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM fully loaded and parsed');
-    
+
     // Check if the save button exists
     const saveButton = document.querySelector('.btn-save-end');
     if (saveButton) {
@@ -768,7 +785,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         console.error('Save button not found');
     }
-    
+
     // Check if the form exists
     const form = document.getElementById('appointment-details-form');
     if (form) {
@@ -776,68 +793,51 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         console.error('Form not found');
     }
-    
+
     // Initialize medication name fields
-    // Ensure that either the select or input has the name attribute based on their values
     document.querySelectorAll('.medication-name-select').forEach(function(select) {
         const input = select.closest('td').querySelector('.medication-name-input');
         const row = select.closest('tr');
         const rowIndex = Array.from(row.parentElement.children).indexOf(row);
-        
-        // If select has a value, it should have the name attribute
+
         if (select.value) {
             select.setAttribute('name', `medications[${rowIndex}][name]`);
             input.removeAttribute('name');
         } else {
-            // If select is empty, the input should have the name attribute (if it has a value)
             select.removeAttribute('name');
             if (input.value) {
                 input.setAttribute('name', `medications[${rowIndex}][name]`);
             }
         }
     });
-    
+
     // --- Configuration and Elements ---
     const countdownTimerElement = document.getElementById('countdown-timer');
-    const localStorageKey = 'appointmentSessionEndTime_{{ $appointment->id }}'; 
-    
-    // Get duration from the appointment data, default to 30 minutes
+    const localStorageKey = 'appointmentSessionEndTime_{{ $appointment->id }}';
     const durationMinutes = {{ $appointment->consultation->duration_minutes ?? 30 }};
-    const sessionDurationMs = durationMinutes * 60 * 1000; // Duration in milliseconds
+    const sessionDurationMs = durationMinutes * 60 * 1000;
 
-    // Get appointment start time from Blade
     let initialStartTime;
-    // Check if appointment started_at is set, otherwise use current time as a fallback
     @if($appointment->started_at)
-        // Use the timestamp and multiply by 1000 for JavaScript milliseconds
-        initialStartTime = new Date('{{ \Carbon\Carbon::parse($appointment->started_at)->timestamp * 1000 }}');
+        initialStartTime = new Date("{{ \Carbon\Carbon::parse($appointment->started_at)->toISOString() }}");
     @else
-        // If no start time is recorded, the session hasn't officially started or is a draft
-        initialStartTime = new Date(); 
+        initialStartTime = new Date();
     @endif
-    
-    let sessionEndTime;
 
-    // 1. Check Local Storage for persistence across reloads
+    let sessionEndTime;
     const storedEndTime = localStorage.getItem(localStorageKey);
 
     if (storedEndTime) {
-        // Use stored time if available
         sessionEndTime = parseInt(storedEndTime, 10);
         console.log("Countdown using stored end time:", new Date(sessionEndTime).toISOString());
     } else {
-        // 2. Calculate and store the absolute end time based on duration
         let calculatedEndTime = initialStartTime.getTime() + sessionDurationMs;
-        
-        // Prevent end time from being in the past if page loads much later than initialStartTime
         if (calculatedEndTime < new Date().getTime()) {
-            // Reset to duration minutes from now for expired sessions
-            sessionEndTime = new Date().getTime() + sessionDurationMs; 
+            sessionEndTime = new Date().getTime() + sessionDurationMs;
             console.warn("Calculated end time was in the past. Resetting to " + durationMinutes + " minutes from now.");
         } else {
             sessionEndTime = calculatedEndTime;
         }
-
         localStorage.setItem(localStorageKey, sessionEndTime.toString());
         console.log("Countdown initialized with " + durationMinutes + " minute duration. End time:", new Date(sessionEndTime).toISOString());
     }
@@ -846,8 +846,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateCountdown() {
         const now = new Date().getTime();
         const diff = sessionEndTime - now;
-        
-        // Safety check against the original error
+
         if (!countdownTimerElement) {
             clearInterval(timerInterval);
             console.error("Countdown timer element not found. Stopping interval.");
@@ -857,379 +856,439 @@ document.addEventListener('DOMContentLoaded', function() {
         if (diff <= 0) {
             countdownTimerElement.textContent = '00:00:00';
             clearInterval(timerInterval);
-            endSession(); // Call your auto-end session function
+            endSession();
             return;
         }
-        
+
         const hours = Math.floor(diff / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        
         const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         countdownTimerElement.textContent = timeString;
     }
 
     // Start the timer
-    const timerInterval = setInterval(updateCountdown, 1000);
-    updateCountdown(); 
-    
-    // --- Auxiliary Form Functions (Including the corrected endSession) ---
+    let timerInterval; // Define timerInterval here
+    if (countdownTimerElement) { // Only start if element exists
+         timerInterval = setInterval(updateCountdown, 1000);
+         updateCountdown(); // Initial call
+    }
 
-    // Auto-end session function
+
+    // --- Auxiliary Form Functions ---
     function endSession() {
-        // Clear persistence when the session officially ends
         localStorage.removeItem(localStorageKey);
-        
-        // Show alert
         alert('Session time has expired. The appointment will be ended automatically.');
-        
-        // Submit form to end appointment
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '{{ route("doctor.appointments.end", $appointment->id) }}';
-        
-        // Add CSRF token
+
+        const endForm = document.createElement('form'); // Renamed to avoid conflict
+        endForm.method = 'POST';
+        endForm.action = '{{ route("doctor.appointments.end", $appointment->id) }}';
+
         const csrfToken = document.createElement('input');
         csrfToken.type = 'hidden';
         csrfToken.name = '_token';
         csrfToken.value = '{{ csrf_token() }}';
-        form.appendChild(csrfToken);
-        
-        // Add end reason
+        endForm.appendChild(csrfToken);
+
         const endReason = document.createElement('input');
         endReason.type = 'hidden';
         endReason.name = 'end_reason';
         endReason.value = 'Session time expired';
-        form.appendChild(endReason);
-        
-        document.body.appendChild(form);
-        form.submit();
+        endForm.appendChild(endReason);
+
+        document.body.appendChild(endForm);
+        endForm.submit();
     }
-    
+
     // Handle form submission for Save & End button
     document.querySelector('.btn-save-end')?.addEventListener('click', function(e) {
         e.preventDefault();
-        
-        // Show confirmation dialog
-        if (!confirm('Are you sure you want to save and end this appointment?')) {
-            return;
-        }
-        
-        // Clear persistence when manually ending the session
+        if (!confirm('Are you sure you want to save and end this appointment?')) return;
+
         localStorage.removeItem(localStorageKey);
-        clearInterval(timerInterval); // Stop the timer
-        
+        clearInterval(timerInterval);
+
         const form = document.getElementById('appointment-details-form');
         const formData = new FormData(form);
-        
-        // Log form data for debugging
-        console.log('Form data being submitted:');
-        for (let [key, value] of formData.entries()) {
-            console.log(key, value);
-        }
-        
         const submitButton = this;
         const originalText = submitButton.textContent;
         submitButton.disabled = true;
         submitButton.textContent = 'Saving...';
-        
-        // Submit form using traditional POST (not AJAX) to ensure it works
-        form.submit();
+
+        fetch('{{ route("doctor.appointments.save-details", $appointment->id) }}', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Appointment saved and completed successfully!');
+                window.location.href = data.redirect_url || '{{ route("doctor.dashboard") }}';
+            } else {
+                alert('Error: ' + data.message);
+                submitButton.disabled = false;
+                submitButton.textContent = originalText;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error saving appointment. Please try again.');
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        });
     });
 
     // Cancel appointment
     document.getElementById('cancel-appointment')?.addEventListener('click', function() {
         if (confirm('Are you sure you want to cancel this appointment session?')) {
-            localStorage.removeItem(localStorageKey); // Clear persistence on cancel
-            clearInterval(timerInterval); // Stop the timer
+            localStorage.removeItem(localStorageKey);
+            clearInterval(timerInterval);
             window.location.href = '{{ route("doctor.appointments") }}';
         }
     });
-    
-    // The rest of your auxiliary functions (add-complaint, add-diagnosis, add-medication, etc.) go here.
-    // I'm omitting them for brevity, but you should copy them from your original code into this section.
-    
-    // Example: Re-initializing remove functionality for existing tags/rows
-    document.querySelectorAll('.tag-remove').forEach(function(element) {
+
+    // --- Section Save Functions & Add/Remove Logic ---
+
+    // Generic function to save a section via AJAX
+    function saveSection(formData, successMsg, errorMsgBase) {
+         formData.append('_token', '{{ csrf_token() }}'); // Ensure CSRF token is added
+
+        fetch('{{ route("doctor.appointments.save-details", $appointment->id) }}', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(successMsg);
+            } else {
+                alert(errorMsgBase + ': ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error saving section:', error);
+            alert(errorMsgBase + '. Please try again.');
+        });
+    }
+
+     // Add remove functionality to dynamically added tags/rows
+     function addRemoveListener(element) {
+        element.querySelector('.tag-remove, .remove-medication')?.addEventListener('click', function() {
+            element.remove();
+        });
+    }
+
+    // Initialize remove listeners for elements present on page load
+    document.querySelectorAll('.tag-remove, .remove-medication').forEach(function(element) {
         element.addEventListener('click', function() {
-            this.parentElement.remove();
+            this.closest('.complaint-tag, .diagnosis-tag, .lab-test-item, tr').remove();
         });
     });
-    
-    // Add complaint functionality
+
+    // Save Patient Info
+    document.getElementById('save-patient-info')?.addEventListener('click', function() {
+        const formData = new FormData();
+        formData.append('blood_group', document.querySelector('input[name="blood_group"]').value);
+        saveSection(formData, 'Patient information saved!', 'Error saving patient info');
+    });
+
+    // Save Vitals
+    document.getElementById('save-vitals')?.addEventListener('click', function() {
+        const formData = new FormData();
+        const vitalsFields = ['blood_pressure', 'temperature', 'pulse', 'respiratory_rate', 'spo2', 'height', 'weight', 'waist', 'bsa', 'bmi'];
+        vitalsFields.forEach(field => {
+            const input = form.querySelector(`input[name="${field}"]`); // Use the main form variable
+            if (input) formData.append(field, input.value);
+        });
+        saveSection(formData, 'Vitals saved!', 'Error saving vitals');
+    });
+
+    // Save Clinical Notes
+    document.getElementById('save-clinical-notes')?.addEventListener('click', function() {
+        const formData = new FormData();
+        formData.append('clinical_notes', document.querySelector('textarea[name="clinical_notes"]').value);
+        formData.append('skin_allergy', document.querySelector('textarea[name="skin_allergy"]').value);
+        saveSection(formData, 'Clinical notes saved!', 'Error saving clinical notes');
+    });
+
+    // Save Advice
+    document.getElementById('save-advice')?.addEventListener('click', function() {
+        const formData = new FormData();
+        formData.append('advice', document.querySelector('textarea[name="advice"]').value);
+        saveSection(formData, 'Advice saved!', 'Error saving advice');
+    });
+
+
+    // Add Complaint
     document.getElementById('add-complaint')?.addEventListener('click', function() {
-        const newComplaint = document.getElementById('new-complaint').value.trim();
-        if (newComplaint) {
-            const complaintsContainer = document.getElementById('complaints-container');
-            const complaintTag = document.createElement('div');
-            complaintTag.className = 'complaint-tag';
-            complaintTag.innerHTML = `
-                ${newComplaint} <span class="tag-remove">×</span>
-                <input type="hidden" name="complaints[]" value="${newComplaint}">
-            `;
-            complaintsContainer.appendChild(complaintTag);
-            document.getElementById('new-complaint').value = '';
-            
-            // Add remove functionality
-            complaintTag.querySelector('.tag-remove').addEventListener('click', function() {
-                complaintTag.remove();
-            });
+        const input = document.getElementById('new-complaint');
+        const value = input.value.trim();
+        if (value) {
+            const container = document.getElementById('complaints-container');
+            const tag = document.createElement('div');
+            tag.className = 'complaint-tag';
+            tag.innerHTML = `${value} <span class="tag-remove">×</span><input type="hidden" name="complaints[]" value="${value}">`;
+            container.appendChild(tag);
+            addRemoveListener(tag); // Add listener to the new tag
+            input.value = '';
         }
     });
-    
-    // Add diagnosis functionality
+
+     // Save Complaints
+     document.getElementById('save-complaints')?.addEventListener('click', function() {
+        const formData = new FormData();
+        document.querySelectorAll('#complaints-container input[name^="complaints"]').forEach(input => {
+             formData.append(input.name, input.value);
+        });
+        saveSection(formData, 'Complaints saved!', 'Error saving complaints');
+    });
+
+
+    // Add Diagnosis
     document.getElementById('add-diagnosis')?.addEventListener('click', function() {
-        const newDiagnosis = document.getElementById('new-diagnosis').value.trim();
-        if (newDiagnosis) {
-            const diagnosisContainer = document.getElementById('diagnosis-container');
-            const diagnosisTag = document.createElement('div');
-            diagnosisTag.className = 'diagnosis-tag';
-            diagnosisTag.innerHTML = `
-                ${newDiagnosis} <span class="tag-remove">×</span>
-                <input type="hidden" name="diagnosis[]" value="${newDiagnosis}">
-            `;
-            diagnosisContainer.appendChild(diagnosisTag);
-            document.getElementById('new-diagnosis').value = '';
-            
-            // Add remove functionality
-            diagnosisTag.querySelector('.tag-remove').addEventListener('click', function() {
-                diagnosisTag.remove();
-            });
+        const input = document.getElementById('new-diagnosis');
+        const value = input.value.trim();
+        if (value) {
+            const container = document.getElementById('diagnosis-container');
+            const tag = document.createElement('div');
+            tag.className = 'diagnosis-tag';
+            tag.innerHTML = `${value} <span class="tag-remove">×</span><input type="hidden" name="diagnosis[]" value="${value}">`;
+            container.appendChild(tag);
+            addRemoveListener(tag); // Add listener
+            input.value = '';
         }
     });
-    
-    // Add remove functionality to existing complaint tags
-    document.querySelectorAll('#complaints-container .tag-remove').forEach(function(element) {
-        element.addEventListener('click', function() {
-            this.parentElement.remove();
+
+     // Save Diagnosis
+     document.getElementById('save-diagnosis')?.addEventListener('click', function() {
+        const formData = new FormData();
+        document.querySelectorAll('#diagnosis-container input[name^="diagnosis"]').forEach(input => {
+             formData.append(input.name, input.value);
         });
+        saveSection(formData, 'Diagnosis saved!', 'Error saving diagnosis');
     });
-    
-    // Add remove functionality to existing diagnosis tags
-    document.querySelectorAll('#diagnosis-container .tag-remove').forEach(function(element) {
-        element.addEventListener('click', function() {
-            this.parentElement.remove();
-        });
-    });
-    
-    // Save complaints functionality
-    document.getElementById('save-complaints')?.addEventListener('click', function() {
-        alert('Complaints saved successfully!');
-        // In a real implementation, this would make an AJAX call to save the data
-    });
-    
-    // Save diagnosis functionality
-    document.getElementById('save-diagnosis')?.addEventListener('click', function() {
-        alert('Diagnosis saved successfully!');
-        // In a real implementation, this would make an AJAX call to save the data
-    });
-    
-    // Add lab test functionality
+
+    // Add Lab Test
     document.getElementById('add-lab-test')?.addEventListener('click', function() {
-        const labTestName = document.getElementById('new-lab-test-name').value.trim();
-        
-        if (labTestName) {
-            const labTestsContainer = document.getElementById('lab-tests-container');
-            const currentIndex = labTestsContainer.querySelectorAll('.lab-test-item').length;
-            
-            const labTestTag = document.createElement('div');
-            labTestTag.className = 'complaint-tag lab-test-item';
-            labTestTag.setAttribute('data-index', currentIndex);
-            
-            // Create the tag structure with a file input for this specific lab test
-            labTestTag.innerHTML = `
-                <span class="lab-test-name">${labTestName}</span>
+        const input = document.getElementById('new-lab-test-name');
+        const value = input.value.trim();
+        if (value) {
+            const container = document.getElementById('lab-tests-container');
+            const index = container.querySelectorAll('.lab-test-item').length;
+            const tag = document.createElement('div');
+            tag.className = 'complaint-tag lab-test-item'; // Re-using style, adjust if needed
+            tag.dataset.index = index;
+            tag.innerHTML = `
+                <span class="lab-test-name">${value}</span>
                 <span class="lab-test-file"></span>
                 <span class="tag-remove">×</span>
-                <input type="hidden" name="lab_tests[${currentIndex}][name]" value="${labTestName}">
-                <input type="file" name="lab_tests[${currentIndex}][file]" class="form-control-file lab-test-file-input" style="display: inline-block; width: auto; margin-left: 10px;">
-            `;
-            
-            labTestsContainer.appendChild(labTestTag);
-            document.getElementById('new-lab-test-name').value = '';
-            
-            // Add remove functionality
-            labTestTag.querySelector('.tag-remove').addEventListener('click', function() {
-                labTestTag.remove();
-            });
-            
-            // Add event listener to show file name when selected
-            const fileInput = labTestTag.querySelector('.lab-test-file-input');
+                <input type="hidden" name="lab_tests[${index}][name]" value="${value}">
+                <input type="file" name="lab_tests[${index}][file]" class="form-control-file lab-test-file-input" style="display: inline-block; width: auto; margin-left: 10px;">`;
+            container.appendChild(tag);
+            addRemoveListener(tag); // Add listener
+
+            // Add listener for file name display
+            const fileInput = tag.querySelector('.lab-test-file-input');
             fileInput.addEventListener('change', function() {
-                const fileNameSpan = labTestTag.querySelector('.lab-test-file');
-                if (this.files.length > 0) {
-                    fileNameSpan.textContent = ' (File: ' + this.files[0].name + ')';
-                } else {
-                    fileNameSpan.textContent = '';
-                }
+                const fileNameSpan = tag.querySelector('.lab-test-file');
+                fileNameSpan.textContent = this.files.length > 0 ? ` (File: ${this.files[0].name})` : '';
             });
+
+            input.value = '';
         }
     });
-    
-    // Save lab tests functionality
-    document.getElementById('save-lab-tests')?.addEventListener('click', function() {
-        alert('Lab tests saved successfully!');
-        // In a real implementation, this would make an AJAX call to save the data
+
+     // Save Lab Tests
+     document.getElementById('save-lab-tests')?.addEventListener('click', function() {
+         // Saving lab tests requires file handling, better done via full form submit or specific AJAX
+         alert('Please use the main "Save & End" button to save lab tests with files.');
+         // Or implement specific FormData handling for files if needed for partial saves
+         /*
+         const formData = new FormData();
+         document.querySelectorAll('#lab-tests-container .lab-test-item').forEach((item, i) => {
+             const nameInput = item.querySelector('input[type="hidden"]');
+             const fileInput = item.querySelector('input[type="file"]');
+             if (nameInput) formData.append(`lab_tests[${i}][name]`, nameInput.value);
+             // Append file only if selected
+             if (fileInput && fileInput.files.length > 0) {
+                 formData.append(`lab_tests[${i}][file]`, fileInput.files[0]);
+             } else {
+                  // Check if there was an existing file path hidden input
+                  const existingPathInput = item.querySelector('input[name$="[file_path]"]');
+                  if (existingPathInput) {
+                      formData.append(`lab_tests[${i}][file_path]`, existingPathInput.value);
+                  }
+             }
+         });
+         saveSection(formData, 'Lab tests saved!', 'Error saving lab tests');
+         */
     });
-    
-    // Add remove functionality to existing lab test tags
-    document.querySelectorAll('#lab-tests-container .tag-remove').forEach(function(element) {
-        element.addEventListener('click', function() {
-            this.parentElement.remove();
-        });
-    });
-    
-    // Add medication functionality
+
+    // Add Medication
     document.getElementById('add-medication')?.addEventListener('click', function() {
-        const medicationTable = document.querySelector('#medications-container');
-        const rowCount = medicationTable.querySelectorAll('tr').length;
-        
-        const newRow = document.createElement('tr');
+        const tableBody = document.getElementById('medications-container');
+        const rowCount = tableBody.rows.length;
+        const newRow = tableBody.insertRow();
         newRow.innerHTML = `
             <td>
                 <select name="medications[${rowCount}][name]" class="form-control medication-name-select" data-row="${rowCount}">
                     <option value="">Select or type medication</option>
                     @foreach($drugs as $drug)
-                        <option value="{{ $drug->name }}" data-category="{{ $drug->category->name ?? '' }}" data-dosage="{{ $drug->dosage->mg_value ?? '' }}">
-                            {{ $drug->name }}
-                        </option>
+                        <option value="{{ $drug->name }}" data-category="{{ $drug->category->name ?? '' }}" data-dosage="{{ $drug->dosage->mg_value ?? '' }}">{{ $drug->name }}</option>
                     @endforeach
                 </select>
-                <input type="text" class="form-control medication-name-input" placeholder="Or type medication name" style="display: none; margin-top: 5px;">
+                <input type="text" class="form-control medication-name-input" placeholder="Or type name" style="display: none; margin-top: 5px;">
             </td>
             <td>
                 <select name="medications[${rowCount}][type]" class="form-control medication-type-select">
                     <option value="">Select type</option>
-                    @foreach($categories as $category)
-                        <option value="{{ $category->name }}">{{ $category->name }}</option>
-                    @endforeach
+                    @foreach($categories as $category) <option value="{{ $category->name }}">{{ $category->name }}</option> @endforeach
                 </select>
             </td>
             <td>
                 <select name="medications[${rowCount}][dosage]" class="form-control medication-dosage-select">
                     <option value="">Select dosage</option>
-                    @foreach($dosages as $dosage)
-                        <option value="{{ $dosage->mg_value }}">{{ $dosage->mg_value }}</option>
-                    @endforeach
+                    @foreach($dosages as $dosage) <option value="{{ $dosage->mg_value }}">{{ $dosage->mg_value }}</option> @endforeach
                 </select>
             </td>
-            <td>
-                <input type="text" name="medications[${rowCount}][duration]" class="form-control" placeholder="e.g., 7 days">
-            </td>
-            <td>
-                <input type="text" name="medications[${rowCount}][instructions]" class="form-control" placeholder="e.g., Before meal">
-            </td>
-            <td>
-                <button type="button" class="btn-cancel remove-medication">
-                    <i class="zmdi zmdi-delete"></i>
-                </button>
-            </td>
-        `;
-        medicationTable.appendChild(newRow);
-        
-        // Add remove functionality for the new row
-        const removeButton = newRow.querySelector('.remove-medication');
-        if (removeButton) {
-            removeButton.addEventListener('click', function() {
-                newRow.remove();
+            <td><input type="text" name="medications[${rowCount}][duration]" class="form-control" placeholder="e.g., 7 days"></td>
+            <td><input type="text" name="medications[${rowCount}][instructions]" class="form-control" placeholder="e.g., Before meal"></td>
+            <td><button type="button" class="btn-cancel remove-medication"><i class="zmdi zmdi-delete"></i></button></td>`;
+
+        addRemoveListener(newRow); // Add listener
+        addMedicationNameToggleListener(newRow.querySelector('.medication-name-select')); // Add toggle listener
+    });
+
+     // Save Medications
+     document.getElementById('save-medications')?.addEventListener('click', function() {
+        const formData = new FormData();
+         document.querySelectorAll('#medications-container tr').forEach((row, i) => {
+            row.querySelectorAll('input, select').forEach(input => {
+                 // Adjust name attribute to ensure correct indexing if rows were deleted
+                 const baseName = input.name.replace(/\[\d+\]/, `[${i}]`);
+                 formData.append(baseName, input.value);
             });
-        }
-        
-        // Add event listeners for the new selects
-        const nameSelect = newRow.querySelector('.medication-name-select');
-        const nameInput = newRow.querySelector('.medication-name-input');
-        const typeSelect = newRow.querySelector('.medication-type-select');
-        const dosageSelect = newRow.querySelector('.medication-dosage-select');
-        
-        // Add functionality to toggle between select and input for medication name
-        nameSelect.addEventListener('change', function() {
-            if (this.value === '') {
-                // Remove name attribute from select and add to input
-                this.removeAttribute('name');
-                nameInput.setAttribute('name', `medications[${rowCount}][name]`);
-                nameInput.style.display = 'block';
-                nameInput.focus();
-            } else {
-                // Remove name attribute from input and add to select
-                nameInput.removeAttribute('name');
-                this.setAttribute('name', `medications[${rowCount}][name]`);
-                // Auto-fill type and dosage if available
-                const selectedOption = this.options[this.selectedIndex];
-                const category = selectedOption.getAttribute('data-category');
-                const dosage = selectedOption.getAttribute('data-dosage');
-                
-                if (category) {
-                    typeSelect.value = category;
-                }
-                if (dosage) {
-                    dosageSelect.value = dosage;
-                }
-            }
-        });
+         });
+         saveSection(formData, 'Medications saved!', 'Error saving medications');
     });
-    
-    // Save medications functionality
-    document.getElementById('save-medications')?.addEventListener('click', function() {
-        alert('Medications saved successfully!');
-        // In a real implementation, this would make an AJAX call to save the data
-    });
-    
-    // Handle follow-up scheduling
-    document.getElementById('schedule-followup')?.addEventListener('click', function() {
-        const followUpDate = document.querySelector('input[name="follow_up_date"]').value;
-        const followUpTime = document.querySelector('input[name="follow_up_time"]').value;
-        
-        if (!followUpDate || !followUpTime) {
-            alert('Please enter both follow-up date and time.');
-            return;
-        }
-        
-        // In a real implementation, this would make an AJAX call to schedule the follow-up
-        // For now, we'll just show a confirmation
-        alert(`Follow-up appointment scheduled for ${followUpDate} at ${followUpTime}. This would create an appointment for both doctor and patient in a real implementation.`);
-    });
-    
-    // Add remove functionality to existing medication rows
-    document.querySelectorAll('.remove-medication').forEach(function(element) {
-        element.addEventListener('click', function() {
-            this.closest('tr').remove();
-        });
-    });
-    
-    // Add functionality to toggle between select and input for medication names
-    document.querySelectorAll('.medication-name-select').forEach(function(select) {
-        select.addEventListener('change', function() {
+
+    // Function to add toggle listener for medication name select/input
+    function addMedicationNameToggleListener(selectElement) {
+        selectElement.addEventListener('change', function() {
             const input = this.closest('td').querySelector('.medication-name-input');
             const row = this.closest('tr');
+            // Re-calculate index dynamically on change, might be safer
             const rowIndex = Array.from(row.parentElement.children).indexOf(row);
-            
+
             if (this.value === '') {
-                // Remove name attribute from select and add to input
                 this.removeAttribute('name');
                 input.setAttribute('name', `medications[${rowIndex}][name]`);
                 input.style.display = 'block';
                 input.focus();
             } else {
-                // Remove name attribute from input and add to select
                 input.removeAttribute('name');
+                 input.style.display = 'none'; // Hide input when select is used
                 this.setAttribute('name', `medications[${rowIndex}][name]`);
-                // Auto-fill type and dosage if available
+                // Auto-fill
                 const selectedOption = this.options[this.selectedIndex];
-                const category = selectedOption.getAttribute('data-category');
-                const dosage = selectedOption.getAttribute('data-dosage');
-                const typeSelect = this.closest('tr').querySelector('.medication-type-select');
-                const dosageSelect = this.closest('tr').querySelector('.medication-dosage-select');
-                
-                if (category) {
-                    typeSelect.value = category;
-                }
-                if (dosage) {
-                    dosageSelect.value = dosage;
-                }
+                const category = selectedOption.dataset.category;
+                const dosage = selectedOption.dataset.dosage;
+                const typeSelect = row.querySelector('.medication-type-select');
+                const dosageSelect = row.querySelector('.medication-dosage-select');
+                if (category && typeSelect) typeSelect.value = category;
+                if (dosage && dosageSelect) dosageSelect.value = dosage;
             }
         });
+    }
+
+    // Add toggle listener to medication name fields present on page load
+    document.querySelectorAll('.medication-name-select').forEach(addMedicationNameToggleListener);
+
+
+    // Handle follow-up scheduling with availability check
+    // *** THIS IS THE MOVED CODE ***
+    document.getElementById('schedule-followup-btn')?.addEventListener('click', function() {
+        const followUpDate = document.getElementById('follow_up_date').value;
+        const followUpTime = document.getElementById('follow_up_time').value;
+        const feedbackDiv = document.getElementById('followup-availability-feedback');
+        const saveButton = this;
+
+        feedbackDiv.textContent = ''; // Clear previous feedback
+
+        if (!followUpDate || !followUpTime) {
+            feedbackDiv.style.color = 'red';
+            feedbackDiv.textContent = 'Please enter both follow-up date and time.';
+            return;
+        }
+
+        saveButton.disabled = true;
+        saveButton.innerHTML = '<i class="zmdi zmdi-spinner zmdi-hc-spin"></i> Checking...';
+        feedbackDiv.style.color = '#ff9800'; // Orange for checking
+        feedbackDiv.textContent = 'Checking availability...';
+
+        fetch('{{ route("doctor.appointments.check-followup") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                follow_up_date: followUpDate,
+                follow_up_time: followUpTime
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                 return response.json().then(errData => {
+                     throw new Error(errData.message || `HTTP error! status: ${response.status}`);
+                 }).catch(() => {
+                     throw new Error(`HTTP error! status: ${response.status}`);
+                 });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.available) {
+                feedbackDiv.style.color = 'green';
+                feedbackDiv.textContent = data.message + ' Saving date/time...';
+
+                // Save the Date/Time using AJAX
+                const formData = new FormData();
+                formData.append('follow_up_date', followUpDate);
+                formData.append('follow_up_time', followUpTime);
+                // formData.append('_token', '{{ csrf_token() }}'); // Already handled by saveSection
+
+                // Use the generic saveSection function
+                saveSection(formData, 'Follow-up date and time saved successfully!', 'Error saving follow-up');
+
+                // Re-enable button after save attempt (inside saveSection might be better)
+                // We'll reset it here for simplicity for now
+                 saveButton.disabled = false;
+                 saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Check Availability & Save';
+
+
+            } else {
+                feedbackDiv.style.color = 'red';
+                feedbackDiv.textContent = data.message || 'Selected time slot is not available.';
+                saveButton.disabled = false;
+                saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Check Availability & Save';
+            }
+        })
+        .catch(error => {
+            console.error('Error checking/saving follow-up availability:', error);
+            feedbackDiv.style.color = 'red';
+            feedbackDiv.textContent = 'Error: ' + error.message;
+            saveButton.disabled = false;
+            saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Check Availability & Save';
+        });
     });
-});
+    // *** END OF MOVED CODE ***
+
+
+}); // <-- END OF THE DOMContentLoaded WRAPPER
 </script>
 </body>
 </html>
