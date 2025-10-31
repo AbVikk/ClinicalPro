@@ -1576,7 +1576,7 @@ class DashboardController extends Controller
         try {
             // Validate the request
             $validator = Validator::make($request->all(), [
-                'leave_type' => 'required|string|max:255',
+                'leave_types' => 'required|array|min:1',
                 'start_date' => 'required|date|before_or_equal:end_date',
                 'end_date' => 'required|date|after_or_equal:start_date',
                 'reason' => 'nullable|string|max:1000',
@@ -1593,7 +1593,7 @@ class DashboardController extends Controller
             // Create a single leave request
             $leave = LeaveRequest::create([
                 'user_id' => Auth::user()->id,
-                'leave_type' => $request->leave_type,
+                'leave_type' => implode(',', $request->leave_types),
                 'start_date' => $request->start_date,
                 'end_date' => $request->end_date,
                 'reason' => $request->reason,
@@ -1649,7 +1649,7 @@ class DashboardController extends Controller
             
             // Validate the request for updating leave details
             $validator = Validator::make($request->all(), [
-                'leave_type' => 'required|string|max:255',
+                'leave_types' => 'required|array|min:1',
                 'start_date' => 'required|date|before_or_equal:end_date',
                 'end_date' => 'required|date|after_or_equal:start_date',
                 'reason' => 'nullable|string|max:1000',
@@ -1665,7 +1665,7 @@ class DashboardController extends Controller
             
             // Update the leave request
             $leave->update([
-                'leave_type' => $request->leave_type,
+                'leave_type' => implode(',', $request->leave_types),
                 'start_date' => $request->start_date,
                 'end_date' => $request->end_date,
                 'reason' => $request->reason

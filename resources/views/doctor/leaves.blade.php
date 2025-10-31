@@ -35,9 +35,9 @@
 <section class="content">
     <div class="block-header">
         <div class="row">
-            <div class="col-lg-12 col-md-12 col-sm-12">
-                <h2><i class="zmdi zmdi-airline-seat-recline-normal"></i> <span>Leave Management</span></h2>
-                <ul class="breadcrumb float-md-right">
+            <div class="col-lg-12 col-md-12 col-sm-12 d-flex justify-content-between align-items-center">
+                <h2 class="m-0"><i class="zmdi zmdi-airline-seat-recline-normal"></i> <span>Leave Management</span></h2>
+                <ul class="breadcrumb m-0">
                     <li class="breadcrumb-item"><a href="{{ url('/') }}"><i class="zmdi zmdi-home"></i> Home</a></li>
                     <li class="breadcrumb-item active">Leaves</li>
                 </ul>
@@ -70,23 +70,24 @@
                 <div class="card">
                     <div class="body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="input-group" style="width: 300px;">
+                                <input type="text" class="form-control" placeholder="Search..." id="leaveSearch">
+                                <span class="input-group-addon">
+                                    <i class="zmdi zmdi-search"></i>
+                                </span>
+                            </div>
+    
                             <div class="d-flex align-items-center">
-                                <div class="input-group" style="width: 300px; margin-right: 15px;">
-                                    <input type="text" class="form-control" placeholder="Search..." id="leaveSearch">
-                                    <span class="input-group-addon">
-                                        <i class="zmdi zmdi-search"></i>
-                                    </span>
-                                </div>
-                                <div class="form-group mb-0">
+                                <div class="form-group mb-0" style="margin-right: 15px;">
                                     <select class="form-control" id="sortLeaves">
                                         <option value="recent">Recent First</option>
                                         <option value="old">Old First</option>
                                     </select>
                                 </div>
+                                <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addLeaveModal">
+                                    <i class="zmdi zmdi-plus"></i> Add New Leave
+                                </button>
                             </div>
-                            <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addLeaveModal">
-                                <i class="zmdi zmdi-plus"></i> Add New Leave
-                            </button>
                         </div>
                         
                         <div class="table-responsive">
@@ -174,8 +175,8 @@
                         <div class="col-md-12">
                             <div class="form-group">
                                 <label>Leave Type <span class="text-danger">*</span></label>
-                                <select class="form-control" name="leave_type" required>
-                                    <option value="">Select Leave Type</option>
+                                <select class="form-control selectpicker" name="leave_types[]" required multiple data-live-search="true" title="Select one or more leave types...">
+                                    {{-- <option value="">Select Leave Type</option> --}}
                                     @foreach($leaveTypes as $type)
                                         <option value="{{ $type }}">{{ $type }}</option>
                                     @endforeach
@@ -238,8 +239,7 @@
                         <div class="col-md-12">
                             <div class="form-group">
                                 <label>Leave Type <span class="text-danger">*</span></label>
-                                <select class="form-control" name="leave_type" id="editLeaveType" required>
-                                    <option value="">Select Leave Type</option>
+                                <select class="form-control selectpicker" name="leave_types[]" id="editLeaveType" required multiple       data-live-search="true" title="Select one or more leave types...">
                                     @foreach($leaveTypes as $type)
                                         <option value="{{ $type }}">{{ $type }}</option>
                                     @endforeach
@@ -316,6 +316,7 @@
 
 <script>
     $(document).ready(function() {
+        $('.selectpicker').selectpicker();
         // Function to show messages using Bootstrap Notify
         function showMessage(message, type) {
             // Use Bootstrap Notify instead of Toastr
@@ -369,13 +370,14 @@
             console.log('Save button clicked');
             
             // Check if leave type is selected
-            if (!$('select[name="leave_type"]').val()) {
+            if (!$('select[name="leave_types[]"]').val() || $('select[name="leave_types[]"]').val().length === 0) {
                 showMessage('Please select a leave type', 'error');
                 return;
             }
             
-            const formData = $('#addLeaveForm').serialize();
-            console.log('Form data:', formData);
+            // Use FormData to correctly send the array
+            const formElement = document.getElementById('addLeaveForm');
+            const formData = new FormData(formElement);
             
             // Show loading indicator
             const originalText = $(this).html();
@@ -387,6 +389,8 @@
                 method: 'POST',
                 data: formData,
                 dataType: 'json',
+                processData: false,
+                contentType: false,
                 success: function(response) {
                     console.log('Success response:', response);
                     // Always reset button first
@@ -397,6 +401,7 @@
                         showMessage(response.message || 'Leave request submitted successfully', 'success');
                         $('#addLeaveModal').modal('hide');
                         $('#addLeaveForm')[0].reset();
+                        $('#addLeaveModal').find('.selectpicker').selectpicker('val', []);
                         setTimeout(function() {
                             location.reload();
                         }, 1500);
@@ -435,7 +440,16 @@
             $('#editStartDate').val(leave.start_date);
             $('#editEndDate').val(leave.end_date);
             $('#editReason').val(leave.reason);
-            $('#editLeaveType').val(leave.leave_type);
+            // Check if the leave_type string is not empty
+                if (leave.leave_type) {
+                    // Split the string by the comma into an array
+                    const leaveTypesArray = leave.leave_type.split(',');
+                    // Set the selectpicker's value to that array
+                    $('#editLeaveType').selectpicker('val', leaveTypesArray);
+                } else {
+                    // Otherwise, just set it as empty
+                    $('#editLeaveType').selectpicker('val', []);
+                }
             
             calculateDays('edit');
             $('#editLeaveModal').modal('show');
@@ -447,12 +461,21 @@
             const leaveId = $('#editLeaveId').val();
             
             // Check if leave type is selected
-            if (!$('#editLeaveType').val()) {
+            if (!$('#editLeaveType').val() || $('#editLeaveType').val().length === 0) {
                 showMessage('Please select a leave type', 'error');
                 return;
             }
             
-            const formData = $('#editLeaveForm').serialize();
+            // Manually build the form data to ensure correct names
+            const formData = {
+                // _token: "{{ csrf_token() }}",
+                // _method: 'PUT',
+                id: $('#editLeaveId').val(),
+                leave_types: $('#editLeaveType').val(), // This gets the array from selectpicker
+                start_date: $('#editStartDate').val(),
+                end_date: $('#editEndDate').val(),
+                reason: $('#editReason').val()
+            };
             
             // Show loading indicator
             const originalText = $(this).html();
@@ -462,7 +485,11 @@
             $.ajax({
                 url: "{{ url('doctor/leaves') }}/" + leaveId,
                 method: 'PUT',
-                data: formData,
+                headers: { // <--- ADD THIS BLOCK
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                data: JSON.stringify(formData),
+                contentType: "application/json",
                 dataType: 'json',
                 success: function(response) {
                     console.log('Update success response:', response);
