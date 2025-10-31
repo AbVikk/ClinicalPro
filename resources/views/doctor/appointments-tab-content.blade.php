@@ -17,33 +17,51 @@
                 <tr>
                     <td>
                         <div class="d-flex align-items-center">
-                            <img src="{{ $appointment->patient->photo ? asset('storage/' . $appointment->patient->photo) : asset('assets/images/xs/avatar1.jpg') }}" alt="Patient" class="rounded-circle" width="40">
+                            {{-- *** SAFE CHECK for patient photo *** --}}
+                            <img src="{{ $appointment->patient?->photo ? asset('storage/' . $appointment->patient->photo) : asset('assets/images/xs/avatar1.jpg') }}" alt="Patient" class="rounded-circle" width="40">
                             <div class="ml-3">
-                                <h6 class="mb-0">{{ $appointment->patient->name ?? 'Unknown Patient' }}</h6>
+                                {{-- *** SAFE CHECK for patient name and uses patient_id for link *** --}}
+                                <h6 class="mb-0">
+                                    @if($appointment->patient)
+                                        <a href="{{ route('doctor.patients.appointment-history', $appointment->patient_id) }}">{{ $appointment->patient->name }}</a>
+                                    @else
+                                        Unknown Patient
+                                    @endif
+                                </h6>
                             </div>
                         </div>
                     </td>
                     <td>#APT{{ str_pad($appointment->id, 5, '0', STR_PAD_LEFT) }}</td>
                     <td>{{ \Carbon\Carbon::parse($appointment->appointment_time)->format('d M Y g:i A') }}</td>
-                    <td>{{ $appointment->appointmentReason->name ?? 'General Visit' }}</td>
+                    {{-- *** SAFE CHECK for appointmentReason and consultation *** --}}
+                    <td>{{ $appointment->consultation?->service_type ?? $appointment->appointmentReason?->name ?? 'General Visit' }}</td>
                     <td>{{ ucfirst($appointment->type ?? 'Video Call') }}</td>
                     <td>
-                        @if($tab == 'cancelled')
-                            <span class="badge badge-danger">Cancelled</span>
-                        @elseif($tab == 'completed')
-                            <span class="badge badge-success">Completed</span>
-                        @elseif($tab == 'inprogress')
-                            <a href="{{ route('doctor.appointments.details', $appointment->id) }}" class="badge badge-info">In Progress</a>
+                        {{-- *** THIS IS THE NEW LOGIC FOR STATUS BADGES *** --}}
+                        @php
+                            $statusClass = '';
+                            $statusText = ucfirst($appointment->status);
+                            
+                            if ($appointment->status == 'confirmed') {
+                                $statusClass = 'badge-success';
+                            } elseif ($appointment->status == 'pending' || $appointment->status == 'new') {
+                                $statusClass = 'badge-warning';
+                                $statusText = 'Request';
+                            } elseif ($appointment->status == 'cancelled') {
+                                $statusClass = 'badge-danger';
+                            } elseif ($appointment->status == 'completed') {
+                                $statusClass = 'badge-success'; // Or 'badge-primary'
+                            } elseif ($appointment->status == 'missed') { // <-- ADDED
+                                $statusClass = 'badge-danger'; // <-- Use red badge
+                            } elseif ($appointment->status == 'in_progress') {
+                                $statusClass = 'badge-info';
+                            }
+                        @endphp
+                        
+                        @if($appointment->status == 'in_progress')
+                            <a href="{{ route('doctor.appointments.details', $appointment->id) }}" class="badge {{ $statusClass }}">{{ $statusText }}</a>
                         @else
-                            @if($appointment->status == 'in_progress')
-                                <a href="{{ route('doctor.appointments.details', $appointment->id) }}" class="badge badge-info">In Progress</a>
-                            @elseif($appointment->status == 'confirmed')
-                                <span class="badge badge-success">Confirmed</span>
-                            @else
-                                <span class="badge badge-{{ $appointment->status == 'pending' || $appointment->status == 'new' ? 'warning' : 'success' }}">
-                                    {{ $appointment->status == 'pending' || $appointment->status == 'new' ? 'Request' : 'Confirmed' }}
-                                </span>
-                            @endif
+                            <span class="badge {{ $statusClass }}">{{ $statusText }}</span>
                         @endif
                     </td>
                     <td>
@@ -52,11 +70,14 @@
                                 Actions
                             </button>
                             <div class="dropdown-menu">
-                                <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $appointment->patient->id) }}">
-                                    <i class="zmdi zmdi-account"></i> View Profile
-                                </a>
+                                {{-- *** SAFE CHECK for patient link *** --}}
+                                @if($appointment->patient)
+                                    <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $appointment->patient_id) }}">
+                                        <i class="zmdi zmdi-account"></i> View Profile
+                                    </a>
+                                @endif
                                 
-                                @if($tab != 'cancelled' && $tab != 'completed')
+                                @if($tab != 'cancelled' && $tab != 'completed' && $tab != 'missed')
                                     <a class="dropdown-item" href="#">
                                         <i class="zmdi zmdi-comment-alt-text"></i> Chat
                                     </a>
@@ -88,9 +109,12 @@
                                     @endif
                                 @endif
                                 
-                                <a class="dropdown-item" href="#">
-                                    <i class="zmdi zmdi-edit"></i> Edit
-                                </a>
+                                @if($tab == 'completed' || $tab == 'missed' || $tab == 'cancelled')
+                                    <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $appointment->patient_id) }}">
+                                        <i class="zmdi zmdi-time-restore"></i> View History
+                                    </a>
+                                @endif
+                            
                                 <a class="dropdown-item" href="#">
                                     <i class="zmdi zmdi-delete"></i> Delete
                                 </a>
@@ -121,7 +145,11 @@
             <i class="zmdi zmdi-hourglass zmdi-hc-3x text-muted mb-3"></i>
             <h4>No In Progress Appointments</h4>
             <p class="text-muted">You don't have any appointments in progress.</p>
-        @else
+        @elseif($tab == 'missed') {{-- <-- ADDED --}}
+            <i class="zmdi zmdi-time-off zmdi-hc-3x text-muted mb-3"></i>
+            <h4>No Missed Appointments</h4>
+            <p class="text-muted">You don't have any missed appointments.</p>
+        @else {{-- Default is 'upcoming' --}}
             <i class="zmdi zmdi-calendar zmdi-hc-3x text-muted mb-3"></i>
             <h4>No Upcoming Appointments</h4>
             <p class="text-muted">You don't have any upcoming appointments at the moment.</p>

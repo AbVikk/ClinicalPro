@@ -4,6 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Carbon\Carbon; // Make sure Carbon is imported
+
+/**
+ * @property int $patient_id
+ * @property Carbon $created_at
+ * @property User|null $patient  <-- This tells the editor "patient" is a User (or null)
+ */
 
 class Prescription extends Model
 {

@@ -42,4 +42,14 @@ class DoctorSchedule extends Model
     {
         return $this->belongsTo(User::class, 'doctor_id');
     }
+
+    /**
+     * Get the clinic (if physical) for this schedule.
+     */
+    public function clinic()
+    {
+        // This links the 'location' column on this table
+        // to the 'id' column on the 'clinics' table.
+        return $this->belongsTo(Clinic::class, 'location', 'id');
+    }
 }

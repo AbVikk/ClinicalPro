@@ -356,7 +356,7 @@
                         
                         <div class="detail-card">
                             <div class="detail-card-title">Consultation Fees</div>
-                            <div class="detail-card-value">₦{{ $appointment->consultation->fee ?? $appointment->consultation_fee ?? '200' }}</div>
+                            <div class="detail-card-value">₦{{ $appointment->consultation?->fee ?? $appointment->consultation_fee ?? '200' }}</div>
                         </div>
                         
                         <div class="detail-card">
@@ -391,9 +391,9 @@
                                 {{ $appointment->consultation?->duration_minutes ?? 30 }} minutes
                             </div>
                         </div>
-                    </div>
+                        </div>
                 </div>
-                
+                 
                 <!-- Countdown Timer -->
                 <div class="countdown-section">
                     <div class="countdown-label">Session Time Remaining</div>
@@ -761,7 +761,7 @@
                             <i class="zmdi zmdi-calendar-note"></i> View Appointment History
                         </a>
                         <button type="button" class="btn-cancel" id="cancel-appointment">Cancel</button>
-                        <button type="submit" class="btn-save-end">Save & End</button>
+                        <button type="submit" class="btn-save-end" id="save-and-end-btn">Save & End</button>
                     </div>
                 </form>
             </div>
@@ -814,7 +814,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Configuration and Elements ---
     const countdownTimerElement = document.getElementById('countdown-timer');
     const localStorageKey = 'appointmentSessionEndTime_{{ $appointment->id }}';
-    const durationMinutes = {{ $appointment->consultation->duration_minutes ?? 30 }};
+    const durationMinutes = {{ $appointment->consultation?->duration_minutes ?? 30 }};
     const sessionDurationMs = durationMinutes * 60 * 1000;
 
     let initialStartTime;
@@ -901,7 +901,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Handle form submission for Save & End button
-    document.querySelector('.btn-save-end')?.addEventListener('click', function(e) {
+    document.getElementById('save-and-end-btn')?.addEventListener('click', function(e) {
         e.preventDefault();
         if (!confirm('Are you sure you want to save and end this appointment?')) return;
 
@@ -910,6 +910,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const form = document.getElementById('appointment-details-form');
         const formData = new FormData(form);
+        formData.append('is_full_update', 'true');
         const submitButton = this;
         const originalText = submitButton.textContent;
         submitButton.disabled = true;
@@ -954,7 +955,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function saveSection(formData, successMsg, errorMsgBase) {
          formData.append('_token', '{{ csrf_token() }}'); // Ensure CSRF token is added
 
-        fetch('{{ route("doctor.appointments.save-details", $appointment->id) }}', {
+        return fetch('{{ route("doctor.appointments.save-details", $appointment->id) }}', {
             method: 'POST',
             body: formData,
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -966,6 +967,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 alert(errorMsgBase + ': ' + data.message);
             }
+            return data;
         })
         .catch(error => {
             console.error('Error saving section:', error);
@@ -999,7 +1001,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData();
         const vitalsFields = ['blood_pressure', 'temperature', 'pulse', 'respiratory_rate', 'spo2', 'height', 'weight', 'waist', 'bsa', 'bmi'];
         vitalsFields.forEach(field => {
-            const input = form.querySelector(`input[name="${field}"]`); // Use the main form variable
+            const input = document.querySelector(`input[name="${field}"]`); // Use the main form variable
             if (input) formData.append(field, input.value);
         });
         saveSection(formData, 'Vitals saved!', 'Error saving vitals');
@@ -1039,8 +1041,13 @@ document.addEventListener('DOMContentLoaded', function() {
      // Save Complaints
      document.getElementById('save-complaints')?.addEventListener('click', function() {
         const formData = new FormData();
+        const complaints = [];
         document.querySelectorAll('#complaints-container input[name^="complaints"]').forEach(input => {
-             formData.append(input.name, input.value);
+             complaints.push(input.value);
+        });
+        // Add complaints as an array
+        complaints.forEach((complaint, index) => {
+            formData.append(`complaints[${index}]`, complaint);
         });
         saveSection(formData, 'Complaints saved!', 'Error saving complaints');
     });
@@ -1064,8 +1071,13 @@ document.addEventListener('DOMContentLoaded', function() {
      // Save Diagnosis
      document.getElementById('save-diagnosis')?.addEventListener('click', function() {
         const formData = new FormData();
+        const diagnosis = [];
         document.querySelectorAll('#diagnosis-container input[name^="diagnosis"]').forEach(input => {
-             formData.append(input.name, input.value);
+             diagnosis.push(input.value);
+        });
+        // Add diagnosis as an array
+        diagnosis.forEach((diag, index) => {
+            formData.append(`diagnosis[${index}]`, diag);
         });
         saveSection(formData, 'Diagnosis saved!', 'Error saving diagnosis');
     });
@@ -1163,15 +1175,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
      // Save Medications
      document.getElementById('save-medications')?.addEventListener('click', function() {
-        const formData = new FormData();
-         document.querySelectorAll('#medications-container tr').forEach((row, i) => {
-            row.querySelectorAll('input, select').forEach(input => {
-                 // Adjust name attribute to ensure correct indexing if rows were deleted
-                 const baseName = input.name.replace(/\[\d+\]/, `[${i}]`);
-                 formData.append(baseName, input.value);
-            });
-         });
-         saveSection(formData, 'Medications saved!', 'Error saving medications');
+        const formData = new FormData(document.getElementById('appointment-details-form'));
+        // Filter to only include medication data
+        const medicationData = new FormData();
+        for (const [key, value] of formData.entries()) {
+            if (key.startsWith('medications')) {
+                medicationData.append(key, value);
+            }
+        }
+        saveSection(medicationData, 'Medications saved!', 'Error saving medications');
     });
 
     // Function to add toggle listener for medication name select/input
@@ -1250,6 +1262,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             return response.json();
         })
+        
         .then(data => {
             if (data.available) {
                 feedbackDiv.style.color = 'green';

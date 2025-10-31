@@ -43,3 +43,9 @@ Route::post('/appointments/{appointment}/end', [Doctor\DashboardController::clas
 // Route::post('/appointments/{appointment}/save-details', [Doctor\DashboardController::class, 'saveAppointmentDetails'])->name('appointments.save-details');
 Route::get('/patients/{patient}/appointment-history', [Doctor\DashboardController::class, 'showAppointmentHistory'])->name('patients.appointment-history');
 Route::get('/appointments/{appointment}/end', [Doctor\DashboardController::class, 'endAppointment'])->name('appointments.end.get');
+
+// Leave Management routes
+Route::get('/leaves', [Doctor\DashboardController::class, 'leaves'])->name('leaves');
+Route::post('/leaves', [Doctor\DashboardController::class, 'storeLeave'])->name('leaves.store');
+Route::put('/leaves/{leave}', [Doctor\DashboardController::class, 'updateLeave'])->name('leaves.update');
+Route::delete('/leaves/{leave}', [Doctor\DashboardController::class, 'deleteLeave'])->name('leaves.delete');

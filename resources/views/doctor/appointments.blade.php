@@ -338,6 +338,9 @@
                                 <a class="nav-link {{ $tab == 'inprogress' ? 'active' : '' }}" data-toggle="tab" href="#inprogress">In Progress <span class="count-badge">{{ $inProgressCount ?? 0 }}</span></a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link {{ $tab == 'missed' ? 'active' : '' }}" data-toggle="tab" href="#missed">Missed <span class="count-badge">{{ $missedCount ?? 0 }}</span></a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link {{ $tab == 'cancelled' ? 'active' : '' }}" data-toggle="tab" href="#cancelled">Cancelled <span class="count-badge">{{ $cancelledCount ?? 0 }}</span></a>
                             </li>
                             <li class="nav-item">
@@ -362,6 +365,13 @@
                                             <i class="zmdi zmdi-spinner zmdi-hc-spin"></i> Loading...
                                         </div>
                                     @endif
+                                </div>
+                            </div>
+                            <div role="tabpanel" class="tab-pane {{ $tab == 'missed' ? 'active' : '' }}" id="missed">
+                                <div class="tab-content-container">
+                                    <div class="loading-spinner" style="display: none; text-align: center; padding: 20px;">
+                                        <i class="zmdi zmdi-spinner zmdi-hc-spin"></i> Loading...
+                                    </div>
                                 </div>
                             </div>
                             <div role="tabpanel" class="tab-pane {{ $tab == 'cancelled' ? 'active' : '' }}" id="cancelled">

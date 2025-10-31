@@ -87,32 +87,7 @@
                         </p>
                     </div>                    
                 </div>                               
-                <div class="card">
-                    <div class="header">
-                        <h2><strong>Working</strong> Time</h2>
-                    </div>
-                    <div class="body">
-                        <div class="workingtime">
-                            @if(isset($doctor->availability) && !empty($doctor->availability))
-                                @foreach($doctor->availability as $day => $schedule)
-                                    @if(isset($schedule['available']) && $schedule['available'])
-                                        <h6>{{ $day }}</h6>
-                                        @if(isset($schedule['slots']))
-                                            @foreach($schedule['slots'] as $slot)
-                                                <p>{{ $slot }}</p>
-                                            @endforeach
-                                        @else
-                                            <p>Available</p>
-                                        @endif
-                                        <hr>
-                                    @endif
-                                @endforeach
-                            @else
-                                <p>No availability schedule set</p>
-                            @endif
-                        </div>
-                    </div>
-                </div>
+                
                 <div class="card">
                     <div class="header">
                         <h2><strong>Contact</strong> Information</h2>
@@ -208,123 +183,157 @@
                                 </li>
                             </ul>
                         </div>
+
                         <div class="tab-pane body" id="schedule">
-                            <div class="workingtime">
-                                @if(isset($doctor->availability) && !empty($doctor->availability))
-                                    @foreach($doctor->availability as $day => $schedule)
-                                        @if(isset($schedule['available']) && $schedule['available'])
-                                            <h6>{{ $day }}</h6>
-                                            @if(isset($schedule['slots']) && !empty($schedule['slots']))
-                                                @foreach($schedule['slots'] as $slot)
-                                                    <p>{{ $slot }}</p>
-                                                @endforeach
-                                            @else
-                                                <p>Available all day</p>
-                                            @endif
-                                            <hr>
-                                        @endif
+                            <div class="workingtime"> @php
+                                $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                                @endphp
+                                @foreach($days as $day)
+                                <div class="d-flex align-items-center justify-content-between mb-2 border-bottom pb-2">
+                                    <p class="text-dark font-weight-bold mb-0 text-capitalize">{{ $day }}</p>
+                
+                                    {{-- This code now works because we created $doctorSchedule in the controller --}}
+                                    @if(isset($doctorSchedule[$day]) && $doctorSchedule[$day]->isNotEmpty())
+                                <div>
+                                    @foreach($doctorSchedule[$day] as $schedule)
+                                        <small class="d-block text-muted">
+                                            <i class="zmdi zmdi-time"></i>
+                                            {{-- Format the time --}}
+                                            {{ \Carbon\Carbon::parse($schedule->start_time ?? now())->format('g:i A') }} - {{ \Carbon\Carbon::parse($schedule->end_time ?? now())->format('g:i A') }}
+                             
+                                            {{-- Get the clinic name or location --}}
+                                            ({{ $schedule->location == 'virtual' ? 'Virtual' : ($schedule->clinic?->name ?? 'Clinic '.$schedule->location) }})
+                                        </small>
                                     @endforeach
+                            </div>
                                 @else
-                                    <p>No availability schedule set</p>
+                                {{-- Show "Not Available" if no schedule exists for that day --}}
+                                    <p class="mb-0 text-muted"><i class="zmdi zmdi-block"></i> Not Available</p>
                                 @endif
                             </div>
+                                @endforeach
+        
+                            </div>
+    
                         </div>
                         <div class="tab-pane body" id="appointments">
-                            <div class="table-responsive">
-                                <table class="table table-hover m-b-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Date & Time</th>
-                                            <th>Patient</th>
-                                            <th>Service</th>
-                                            <th>Status</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @php
-                                            // Combine old appointments and new consultations
-                                            $allAppointments = collect();
-                                            
-                                            // Add old appointments
-                                            foreach($doctor->appointments->take(10) as $appointment) {
-                                                $allAppointments->push([
-                                                    'id' => $appointment->id,
-                                                    'date' => $appointment->appointment_time,
-                                                    'patient' => $appointment->patient,
-                                                    'service' => $appointment->type ?? 'General Consultation',
-                                                    'status' => $appointment->status,
-                                                    'type' => 'appointment'
-                                                ]);
-                                            }
-                                            
-                                            // Add new consultations if they exist
-                                            if(isset($consultations)) {
-                                                foreach($consultations->take(10) as $consultation) {
-                                                    $allAppointments->push([
-                                                        'id' => $consultation->id,
-                                                        'date' => $consultation->start_time,
-                                                        'patient' => $consultation->patient,
-                                                        'service' => $consultation->service_type ?? 'General Consultation',
-                                                        'status' => $consultation->status,
-                                                        'type' => 'consultation'
-                                                    ]);
-                                                }
-                                            }
-                                            
-                                            // Sort by date, newest first
-                                            $allAppointments = $allAppointments->sortByDesc('date')->take(10);
-                                        @endphp
-                                        
-                                        @forelse($allAppointments as $item)
-                                            <tr>
-                                                <td>{{ $item['date']->format('M d, Y H:i') }}</td>
-                                                <td>
-                                                    @if($item['patient'])
-                                                        @if($item['patient']->photo)
-                                                            <img src="{{ asset('storage/' . $item['patient']->photo) }}" class="rounded-circle" alt="Avatar" width="30">
-                                                        @else
-                                                            <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="Avatar" width="30">
-                                                        @endif
-                                                        <span>{{ $item['patient']->name ?? 'Unknown Patient' }}</span>
-                                                    @else
-                                                        <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="Avatar" width="30">
-                                                        <span>Unknown Patient</span>
-                                                    @endif
-                                                </td>
-                                                <td>{{ $item['service'] }}</td>
-                                                <td>
-                                                    @if($item['status'] == 'confirmed' || $item['status'] == 'scheduled')
-                                                        <span class="badge badge-success">Confirmed</span>
-                                                    @elseif($item['status'] == 'pending')
-                                                        <span class="badge badge-warning">Pending</span>
-                                                    @elseif($item['status'] == 'cancelled')
-                                                        <span class="badge badge-danger">Cancelled</span>
-                                                    @elseif($item['status'] == 'completed')
-                                                        <span class="badge badge-info">Completed</span>
-                                                    @else
-                                                        <span class="badge badge-default">{{ ucfirst($item['status']) }}</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    @if($item['type'] == 'consultation')
-                                                        <a href="#" class="btn btn-sm btn-info">View</a>
-                                                    @else
-                                                        <a href="{{ route('appointment.show', $item['id']) }}" class="btn btn-sm btn-info">View</a>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                        @empty
-                                            <tr>
-                                                <td colspan="5" class="text-center">No appointments found</td>
-                                            </tr>
-                                        @endforelse
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+    <div class="table-responsive">
+        <table class="table table-hover m-b-0">
+            <thead>
+                <tr>
+                    <th>Date & Time</th>
+                    <th>Patient</th>
+                    <th>Service</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                {{-- 
+                    We loop DIRECTLY over $consultations, which is loaded
+                    by your controller. No more mixing lists!
+                --}}
+                @forelse($consultations->take(20) as $consultation)
+                    <tr>
+                        {{-- Use the consultation's date --}}
+                        <td>{{ $consultation->start_time->format('M d, Y g:i A') }}</td>
+                        <td>
+                            {{-- Use the consultation's patient --}}
+                            @if($consultation->patient)
+                                @if($consultation->patient->photo)
+                                    <img src="{{ asset('storage/' . $consultation->patient->photo) }}" class="rounded-circle" alt="Avatar" width="30">
+                                @else
+                                    <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="Avatar" width="30">
+                                @endif
+                                <span>{{ $consultation->patient->name ?? 'Unknown Patient' }}</span>
+                            @else
+                                <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="Avatar" width="30">
+                                <span>Unknown Patient</span>
+                            @endif
+                        </td>
+                        
+                        {{-- Use the consultation's service type --}}
+                        <td>{{ $consultation->service_type ?? 'General Consultation' }}</td>
+                        
+                        <td>
+                            {{-- Use the consultation's status --}}
+                            @php
+                                $status = $consultation->status ?? 'pending';
+                                $badgeClass = 'badge-default';
+                                if ($status == 'completed') $badgeClass = 'badge-success';
+                                elseif ($status == 'confirmed' || $status == 'scheduled' || $status == 'in_progress') $badgeClass = 'badge-info';
+                                elseif ($status == 'pending') $badgeClass = 'badge-warning';
+                                elseif ($status == 'cancelled' || $status == 'missed') $badgeClass = 'badge-danger';
+                            @endphp
+                            <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
+                        </td>
+                        
+                        <td>
+                            {{-- We know this is a consultation, so we can link to its detail page --}}
+                            {{-- You can update this route when you have one --}}
+                            <a href="#" class="btn btn-sm btn-info">View</a>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="5" class="text-center">No consultations found</td>
+                    </tr>
+                @endforelse
+                
+            </tbody>
+        </table>
+    </div>
+</div>
                     </div>
                 </div>
+
+                <div class="card">
+    <div class="header">
+        <h2><strong>Today's</strong> Schedule</h2>
+    </div>
+    <div class="body">
+        <ul class="list-unstyled activity">
+            
+            @forelse($todaysAppointments as $appointment)
+                <li style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
+                    <div class="media">
+                        <div class="media-body">
+                            <h6 class="m-b-0">
+                                {{-- TIME --}}
+                                <strong class="text-success">{{ \Carbon\Carbon::parse($appointment->appointment_time)->format('g:i A') }}</strong>
+                                
+                                {{-- PATIENT NAME --}}
+                                - {{ $appointment->patient->name ?? 'Unknown Patient' }}
+                            </h6>
+                            
+                            <p class="text-muted m-b-5">
+                                {{-- SERVICE --}}
+                                {{ $appointment->consultation?->service_type ?? $appointment->reason ?? 'Consultation' }}
+                            </p>
+                            
+                            {{-- STATUS --}}
+                            @php
+                                $status = $appointment->status ?? 'pending';
+                                $badgeClass = 'badge-default';
+                                if ($status == 'completed') $badgeClass = 'badge-success';
+                                elseif ($status == 'confirmed' || $status == 'in_progress') $badgeClass = 'badge-info';
+                                elseif ($status == 'pending') $badgeClass = 'badge-warning';
+                                elseif ($status == 'cancelled' || $status == 'missed') $badgeClass = 'badge-danger';
+                            @endphp
+                            <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
+                        </div>
+                    </div>
+                </li>
+            @empty
+                <li>
+                    <p class="text-muted">No appointments scheduled for today.</p>
+                </li>
+            @endforelse
+            
+        </ul>
+    </div>
+</div>
             </div>
         </div>
     </div>

@@ -7,7 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Carbon\Carbon;
+use Illuminate\Support\Carbon;
+
+/**
+ * @property string|null $photo
+ * @property int $appointments_as_patient_count
+ */
 
 class User extends Authenticatable
 {

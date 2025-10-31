@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Department;
 use App\Models\Category;
 use App\Models\DoctorSchedule;
+use App\Models\Clinic;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 
@@ -229,7 +230,7 @@ class DoctorController extends Controller
     /**
      * Display the specified doctor profile.
      */
-    public function show(Doctor $doctor)
+   public function show(Doctor $doctor)
     {
         $doctor->load(['user', 'department', 'category', 'appointments.patient']);
         
@@ -238,8 +239,38 @@ class DoctorController extends Controller
             ->where('doctor_id', $doctor->user_id)
             ->orderBy('start_time', 'desc')
             ->get();
+            
+        // --- THIS IS THE NEW PART ---
+        // We are creating the $doctorSchedule variable
+        // by loading the doctor's schedules (and their clinics)
+        // and grouping them by the day of the week.
+        // This is the same logic your dashboard.blade.php expects.
+        $doctorSchedule = $doctor->schedules()->with('clinic')->get()->groupBy('day_of_week');
+
+        // --- ADD THIS NEW LOGIC ---
+        $todayName = now()->format('l'); // This gets the full day name, e.g., "Thursday"
+        $todayKey = strtolower($todayName);  // This gets the key, e.g., "thursday"
         
-        return view('admin.doctor.profile', compact('doctor', 'consultations'));
+        // This gets just today's schedule from the main list
+        $todaysSchedule = $doctorSchedule->get($todayKey); 
+
+        // --- ADD THIS NEW QUERY ---
+        // Get all appointments for this doctor, for today
+        $todaysAppointments = \App\Models\Appointment::with(['patient', 'consultation'])
+            ->where('doctor_id', $doctor->user_id)
+            ->whereDate('appointment_time', now())
+            ->orderBy('appointment_time', 'asc')
+            ->get();
+        // --- END OF NEW QUERY ---
+        
+        return view('admin.doctor.profile', compact(
+            'doctor', 
+            'consultations', 
+            'doctorSchedule',
+            'todayName',
+            'todaysSchedule',
+            'todaysAppointments' // <-- Pass the new variable
+        ));
     }
 
     /**
