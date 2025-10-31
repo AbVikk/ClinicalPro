@@ -181,7 +181,7 @@
                                             @endif
                                         </td>
                                         <td>
-                                            <a href="{{ route('appointment.show', $appointment->id) }}" class="btn btn-sm btn-info">View</a>
+                                            <a href="{{ route('admin.appointment.show', $appointment->id) }}" class="btn btn-sm btn-info">View</a>
                                         </td>
                                     </tr>
                                     @empty

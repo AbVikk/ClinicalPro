@@ -51,7 +51,7 @@
 <section class="content">
     <div class="block-header">
         <div class="row">
-            <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="col-lg-12 col-md-12 col-sm-12 d-flex justify-content-between align-items-center">
                 <h2><i class="zmdi zmdi-notifications"></i> <span>Appointment Requests</span></h2>
                 <ul class="breadcrumb float-md-right">
                     <li class="breadcrumb-item"><a href="{{ url('/') }}"><i class="zmdi zmdi-home"></i> Home</a></li>

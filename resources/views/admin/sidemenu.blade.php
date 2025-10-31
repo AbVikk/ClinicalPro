@@ -4,9 +4,7 @@
         <p>Please wait...</p>        
     </div>
 </div>
-<!-- Overlay For Sidebars -->
 <div class="overlay"></div>
-<!-- Top Bar -->
 <nav class="navbar p-l-5 p-r-5">
     <ul class="nav navbar-nav navbar-left">
         <li>
@@ -107,13 +105,13 @@
                                     <ul class="list-unstyled team-info">
                                         <li class="m-r-15"><small class="text-muted">Team</small></li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar2.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar2.jpg') }}" alt="Avatar">
                                         </li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar3.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar3.jpg') }}" alt="Avatar">
                                         </li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar4.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar4.jpg') }}" alt="Avatar">
                                         </li>                            
                                     </ul>
                                 </div>
@@ -131,19 +129,19 @@
                                     <ul class="list-unstyled team-info">
                                         <li class="m-r-15"><small class="text-muted">Team</small></li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar10.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar10.jpg') }}" alt="Avatar">
                                         </li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar9.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar9.jpg') }}" alt="Avatar">
                                         </li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar8.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar8.jpg') }}" alt="Avatar">
                                         </li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar7.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar7.jpg') }}" alt="Avatar">
                                         </li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar6.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar6.jpg') }}" alt="Avatar">
                                         </li>
                                     </ul>
                                 </div>
@@ -161,13 +159,13 @@
                                     <ul class="list-unstyled team-info">
                                         <li class="m-r-15"><small class="text-muted">Team</small></li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar5.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar5.jpg') }}" alt="Avatar">
                                         </li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar2.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar2.jpg') }}" alt="Avatar">
                                         </li>
                                         <li>
-                                            <img src="../assets/images/xs/avatar7.jpg" alt="Avatar">
+                                            <img src="{{ asset('assets/images/xs/avatar7.jpg') }}" alt="Avatar">
                                         </li>                            
                                     </ul>
                                 </div>
@@ -195,7 +193,6 @@
         </li>
     </ul>
 </nav>
-<!-- Left Sidebar -->
 <aside id="leftsidebar" class="sidebar">
     <ul class="nav nav-tabs">
         <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#dashboard"><i class="zmdi zmdi-home m-r-5"></i>Clinical</a></li>
@@ -209,7 +206,7 @@
                         <div class="user-info">
                             <div class="image"><a href="{{ url('/admin/profile') }}">
                                 @if(auth()->user()->photo)
-                                    <img src="{{ asset('storage/' . auth()->user()->photo) }}" alt="User">
+                                    <img src="{{ asset('storage/'. auth()->user()->photo) }}" alt="User">
                                 @else
                                     <img src="{{ asset('assets/images/profile_av.jpg') }}" alt="User">
                                 @endif
@@ -426,7 +423,7 @@
                         <div class="user-info m-b-20 p-b-15">
                             <div class="image"><a href="{{ url('/admin/profile') }}">
                                 @if(auth()->user()->photo)
-                                    <img src="{{ asset('storage/' . auth()->user()->photo) }}" alt="User">
+                                    <img src="{{ asset('storage/'. auth()->user()->photo) }}" alt="User">
                                 @else
                                     <img src="{{ asset('assets/images/profile_av.jpg') }}" alt="User">
                                 @endif
@@ -501,7 +498,6 @@
         </div>
     </div>    
 </aside>
-<!-- Right Sidebar -->
 <aside id="rightsidebar" class="right-sidebar">
     <ul class="nav nav-tabs">
         <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#setting"><i class="zmdi zmdi-settings zmdi-hc-spin"></i></a></li>
@@ -559,7 +555,7 @@
                             <div class="orange"></div>
                         </li>
                         <li data-theme="blush">
-                            <div class="blush"></div>                    
+                            <div classs="blush"></div>                    
                         </li>
                     </ul>                    
                 </div>
@@ -832,7 +828,7 @@
                                 <small><strong>E:</strong> maryamamiri@gmail.com</small>
                             </div>
                         </div>
-                        <div class="sl-item">
+                        <div classs="sl-item">
                             <img class="user rounded-circle" src="{{ asset('assets/images/xs/avatar6.jpg') }}" alt="">
                             <div class="sl-content">
                                 <h5 class="m-b-0">Code Change</h5>
@@ -913,7 +909,6 @@
     </div>
 </aside>
 
-<!-- Chat-launcher -->
 <div class="chat-launcher"></div>
 <div class="chat-wrapper">
     <div class="card">
@@ -921,16 +916,16 @@
             <ul class="list-unstyled team-info margin-0">
                 <li class="m-r-15"><h2>Dr. Team</h2></li>
                 <li>
-                    <img src="../assets/images/xs/avatar2.jpg" alt="Avatar">
+                    <img src="{{ asset('assets/images/xs/avatar2.jpg') }}" alt="Avatar">
                 </li>
                 <li>
-                    <img src="../assets/images/xs/avatar3.jpg" alt="Avatar">
+                    <img src="{{ asset('assets/images/xs/avatar3.jpg') }}" alt="Avatar">
                 </li>
                 <li>
-                    <img src="../assets/images/xs/avatar4.jpg" alt="Avatar">
+                    <img src="{{ asset('assets/images/xs/avatar4.jpg') }}" alt="Avatar">
                 </li>
                 <li>
-                    <img src="../assets/images/xs/avatar6.jpg" alt="Avatar">
+                    <img src="{{ asset('assets/images/xs/avatar6.jpg') }}" alt="Avatar">
                 </li>
                 <li>
                     <a href="javascript:void(0);" title="Add Member"><i class="zmdi zmdi-plus-circle"></i></a>

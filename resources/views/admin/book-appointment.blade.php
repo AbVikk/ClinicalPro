@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
+﻿<!doctype html>
 <html class="no-js " lang="en">
 <head>
 <meta charset="utf-8">
@@ -86,7 +86,7 @@
     }
 </style>
 </head>
-<body class="theme-cyan">
+<body class="theme-cyan ls-closed">
 <!-- Page Loader -->
 @include('admin.sidemenu')
 

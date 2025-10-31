@@ -277,9 +277,9 @@
 <section class="content">
     <div class="block-header">
         <div class="row">
-            <div class="col-lg-12 col-md-12 col-sm-12">
-                <h2><i class="zmdi zmdi-calendar"></i> <span>Appointments</span></h2>
-                <ul class="breadcrumb float-md-right">
+            <div class="col-lg-12 col-md-12 col-sm-12 d-flex justify-content-between align-items-center">
+                <h2 class="m-0"><i class="zmdi zmdi-calendar"></i> <span>Appointments</span></h2>
+                <ul class="breadcrumb m-0">
                     <li class="breadcrumb-item"><a href="{{ url('/') }}"><i class="zmdi zmdi-home"></i> Home</a></li>
                     <li class="breadcrumb-item active">Appointments</li>
                 </ul>
@@ -311,24 +311,30 @@
             <div class="col-lg-12">
                 <div class="card">
                     <div class="header">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h2><strong>Manage</strong> Appointments</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            
+                            <h2 class="m-0"><strong>Manage</strong> Appointments</h2>
+                            
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                
+                                <div>
+                                    <select id="type-filter" class="form-control">
+                                        <option value="all" {{ $filter == 'all' ? 'selected' : '' }}>All Types</option>
+                                        <option value="chat" {{ $filter == 'chat' ? 'selected' : '' }}>Chat</option>
+                                        <option value="direct" {{ $filter == 'direct' ? 'selected' : '' }}>Direct Visit</option>
+                                    </select>
+                                </div>
+                                
+                                <div style="position: relative;">
+                                    <input type="text" id="live-search" class="form-control" placeholder="Search patients..." value="{{ $search ?? '' }}">
+                                    <i class="zmdi zmdi-search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #999;"></i>
+                                </div>
+                                
+                            </div>
                         </div>
                     </div>
                     <div class="body p-0">
-                        <div class="search-filter-container p-3">
-                            <div class="search-bar">
-                                <input type="text" id="live-search" class="form-control" placeholder="Search patients..." value="{{ $search ?? '' }}">
-                                <i class="zmdi zmdi-search"></i>
-                            </div>
-                            <div class="filter-dropdown">
-                                <select id="type-filter" class="form-control">
-                                    <option value="all" {{ $filter == 'all' ? 'selected' : '' }}>All Types</option>
-                                    <option value="chat" {{ $filter == 'chat' ? 'selected' : '' }}>Chat</option>
-                                    <option value="direct" {{ $filter == 'direct' ? 'selected' : '' }}>Direct Visit</option>
-                                </select>
-                            </div>
-                        </div>
+                        
                         <!-- Nav tabs -->
                         <ul class="nav nav-tabs" role="tablist">
                             <li class="nav-item">
@@ -814,12 +820,5 @@
         });
     });
 </script>
-
-<!-- Jquery Core Js -->
-<script src="{{ asset('assets/bundles/libscripts.bundle.js') }}"></script>
-<script src="{{ asset('assets/bundles/vendorscripts.bundle.js') }}"></script>
-
-<script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script>
-<script src="{{ asset('assets/js/doctor-links-fix.js') }}"></script><!-- Doctor Links Fix -->
 </body>
 </html>
