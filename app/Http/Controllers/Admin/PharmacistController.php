@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class PharmacistController extends Controller
 {
@@ -100,6 +101,9 @@ class PharmacistController extends Controller
             'status' => $request->status,
         ]);
 
+        // Note: We don't need a whistleblower here because changing status
+        // doesn't affect the *total count* of users on the dashboard.
+
         return redirect()->back()->with('success', 'Pharmacist status updated successfully.');
     }
 
@@ -121,6 +125,13 @@ class PharmacistController extends Controller
 
         // Delete the pharmacist
         $pharmacist->delete();
+
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A user (a pharmacist) was deleted. Erase all user-related "whiteboard" answers!
+        Cache::forget("admin_stats_total_users");
+        Cache::forget("admin_stats_new_registrations_7d");
+        Cache::forget("admin_stats_prev_week_registrations");
+        // --- END OF WHISTLEBLOWER ---
 
         return redirect()->route('admin.pharmacists.index')->with('success', 'Pharmacist deleted successfully.');
     }

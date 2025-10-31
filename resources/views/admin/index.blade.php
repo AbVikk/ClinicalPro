@@ -116,7 +116,7 @@
             <div class="col-lg-4 col-md-12">
                 <div class="card">
                     <div class="body">
-                        <h3 class="number count-to m-b-0" data-from="0" data-to="{{ \App\Models\Invitation::where('used', false)->where('expires_at', '>', now())->count() }}" data-speed="2500" data-fresh-interval="1000">{{ \App\Models\Invitation::where('used', false)->where('expires_at', '>', now())->count() }} <i class="zmdi zmdi-trending-up float-right"></i></h3>
+                        <h3 class="number count-to m-b-0" data-from="0" data-to="{{ $pendingInvitations ?? 0 }}" data-speed="2500" data-fresh-interval="1000"><i class="zmdi zmdi-trending-up float-right"></i></h3>
                         <p class="text-muted">Invitations <i class=""></i></p>
                         <div class="progress">
                             <div class="progress-bar l-parpl" role="progressbar" aria-valuenow="68" aria-valuemin="0" aria-valuemax="100" style="width: 68%;"></div>

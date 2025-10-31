@@ -9,6 +9,7 @@ use App\Models\ClinicInventory;
 use App\Models\PharmacyOrder;
 use App\Models\Payment;
 use App\Models\Prescription;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class ClinicPharmacistController extends Controller
 {
@@ -109,6 +110,12 @@ class ClinicPharmacistController extends Controller
                 }
             }
         }
+
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A new payment was just made, so the dashboard's "Total Payments" is wrong.
+        // Erase the old answer so it recalculates! This will also fix "Net Cash Flow".
+        Cache::forget("admin_stats_total_payments_month");
+        // --- END OF WHISTLEBLOWER ---
 
         return response()->json([
             'message' => 'Sale processed successfully',

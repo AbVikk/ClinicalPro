@@ -201,6 +201,7 @@
                     <li><a href="{{ route('doctor.schedule') }}"><i class="zmdi zmdi-calendar"></i><span>My Schedule</span> </a></li>
                     <li><a href="{{ route('doctor.leaves') }}"><i class="zmdi zmdi-airline-seat-recline-normal"></i><span>Leave</span> </a></li>
                     <li><a href="{{ route('doctor.requests') }}"><i class="zmdi zmdi-notifications"></i><span>Requests</span> <span class="badge badge-info" id="request-count">{{ $requestCount ?? 0 }}</span></a></li>
+                    <li><a href="{{ route('doctor.prescriptions') }}"><i class="zmdi zmdi-file-text"></i><span>Prescriptions</span></a></li>
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-account-add"></i><span>Doctors</span> </a>
                         <ul class="ml-menu">
                             <li><a href="{{ url('/admin/doctors') }}">All Doctors</a></li>

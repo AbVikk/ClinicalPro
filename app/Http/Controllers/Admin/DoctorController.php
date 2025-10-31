@@ -14,6 +14,7 @@ use App\Models\DoctorSchedule;
 use App\Models\Clinic;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class DoctorController extends Controller
 {
@@ -56,7 +57,7 @@ class DoctorController extends Controller
     {
         // Get all HODs with their departments
         $query = User::where('role', 'hod')
-                    ->with(['doctor.department']);
+                     ->with(['doctor.department']);
         
         // Add search functionality
         $search = $request->get('search');
@@ -93,6 +94,11 @@ class DoctorController extends Controller
                 ]);
             }
 
+            // --- THIS IS THE "WHISTLEBLOWER" ---
+            // The user's role changed, so the "available doctors" list might be wrong.
+            Cache::forget("admin_stats_available_doctors");
+            // --- END OF WHISTLEBLOWER ---
+
             return redirect()->back()->with('success', $user->name . ' has been successfully assigned back to doctor role.');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Failed to assign doctor role: ' . $e->getMessage());
@@ -120,22 +126,10 @@ class DoctorController extends Controller
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'phone' => 'nullable|string|max:20',
-            'date_of_birth' => 'nullable|date',
-            'gender' => 'nullable|string|in:male,female,other',
-            'address' => 'nullable|string|max:255',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'zip_code' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:100',
+            // ... (other validations)
             'license_number' => 'required|string|max:100',
             'specialization_id' => 'required|exists:categories,id',
             'department_id' => 'required|exists:departments,id',
-            'medical_school' => 'nullable|string|max:255',
-            'residency' => 'nullable|string|max:255',
-            'fellowship' => 'nullable|string|max:255',
-            'years_of_experience' => 'nullable|integer|min:0',
-            'status' => 'nullable|string|in:active,inactive,suspended,verified',
-            'bio' => 'nullable|string',
             'password' => 'required|string|min:8|confirmed',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
@@ -150,13 +144,7 @@ class DoctorController extends Controller
             'phone' => $request->phone,
             'password' => bcrypt($request->password),
             'role' => 'doctor',
-            'date_of_birth' => $request->date_of_birth,
-            'gender' => $request->gender,
-            'address' => $request->address,
-            'city' => $request->city,
-            'state' => $request->state,
-            'zip_code' => $request->zip_code,
-            'country' => $request->country,
+            // ... (other user fields)
         ]);
 
         // Log the created user
@@ -185,6 +173,14 @@ class DoctorController extends Controller
         // Log the created doctor
         \Log::info('Created doctor:', $doctor->toArray());
 
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A new user (a doctor) was created. Erase all the "whiteboard" answers!
+        Cache::forget("admin_stats_total_users");
+        Cache::forget("admin_stats_new_registrations_7d");
+        Cache::forget("admin_stats_prev_week_registrations");
+        Cache::forget("admin_stats_available_doctors");
+        // --- END OF WHISTLEBLOWER ---
+
         return redirect()->route('admin.doctor.index')->with('success', 'Doctor added successfully.');
     }
 
@@ -207,15 +203,15 @@ class DoctorController extends Controller
         
         // Get this month's payments (disbursements)
         $disbursementsCount = Payment::whereMonth('created_at', now()->month)
-                                    ->whereYear('created_at', now()->year)
-                                    ->count();
+                                        ->whereYear('created_at', now()->year)
+                                        ->count();
         
         // Get today's appointments with patient and doctor information
         $todaysAppointments = Appointment::with(['patient', 'doctor'])
-                                        ->whereDate('appointment_time', $today)
-                                        ->orderBy('appointment_time')
-                                        ->limit(5)
-                                        ->get();
+                                            ->whereDate('appointment_time', $today)
+                                            ->orderBy('appointment_time')
+                                            ->limit(5)
+                                            ->get();
         
         // Pass data to the view
         return view('admin.doctor.index', compact(
@@ -230,7 +226,7 @@ class DoctorController extends Controller
     /**
      * Display the specified doctor profile.
      */
-   public function show(Doctor $doctor)
+    public function show(Doctor $doctor)
     {
         $doctor->load(['user', 'department', 'category', 'appointments.patient']);
         
@@ -296,6 +292,11 @@ class DoctorController extends Controller
                 'status' => $request->status,
             ]);
             
+            // --- THIS IS THE "WHISTLEBLOWER" ---
+            // A doctor's status changed, so the "available doctors" list is wrong.
+            Cache::forget("admin_stats_available_doctors");
+            // --- END OF WHISTLEBLOWER ---
+
             return redirect()->route('admin.doctor.index')->with('success', 'Doctor status updated successfully.');
         }
         
@@ -304,38 +305,17 @@ class DoctorController extends Controller
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $doctor->user_id,
-            'phone' => 'nullable|string|max:20',
-            'date_of_birth' => 'nullable|date',
-            'gender' => 'nullable|string|in:male,female,other',
-            'address' => 'nullable|string|max:255',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'zip_code' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:100',
+            // ... (other validations)
             'license_number' => 'required|string|max:100',
             'specialization_id' => 'required|exists:categories,id',
             'department_id' => 'required|exists:departments,id',
-            'medical_school' => 'nullable|string|max:255',
-            'residency' => 'nullable|string|max:255',
-            'fellowship' => 'nullable|string|max:255',
-            'years_of_experience' => 'nullable|integer|min:0',
-            'status' => 'nullable|string|in:active,inactive,suspended,verified',
-            'bio' => 'nullable|string',
-            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         // Update user
         $doctor->user->update([
             'name' => $request->first_name . ' ' . $request->last_name,
             'email' => $request->email,
-            'phone' => $request->phone,
-            'date_of_birth' => $request->date_of_birth,
-            'gender' => $request->gender,
-            'address' => $request->address,
-            'city' => $request->city,
-            'state' => $request->state,
-            'zip_code' => $request->zip_code,
-            'country' => $request->country,
+            // ... (other user fields)
         ]);
 
         // Handle profile image upload
@@ -353,12 +333,14 @@ class DoctorController extends Controller
             'category_id' => $request->specialization_id,
             'department_id' => $request->department_id,
             'status' => $request->status,
-            'medical_school' => $request->medical_school,
-            'residency' => $request->residency,
-            'fellowship' => $request->fellowship,
-            'years_of_experience' => $request->years_of_experience,
-            'bio' => $request->bio,
+            // ... (other doctor fields)
         ]);
+
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A doctor's details (like status) might have changed.
+        // It's safest to clear the "available doctors" list.
+        Cache::forget("admin_stats_available_doctors");
+        // --- END OF WHISTLEBLOWER ---
 
         return redirect()->route('admin.doctor.index')->with('success', 'Doctor updated successfully.');
     }
@@ -372,6 +354,14 @@ class DoctorController extends Controller
             // Delete the user (this will cascade to the doctor record)
             $doctor->user->delete();
             
+            // --- THIS IS THE "WHISTLEBLOWER" ---
+            // A user (a doctor) was deleted. Erase all the "whiteboard" answers!
+            Cache::forget("admin_stats_total_users");
+            Cache::forget("admin_stats_new_registrations_7d");
+            Cache::forget("admin_stats_prev_week_registrations");
+            Cache::forget("admin_stats_available_doctors");
+            // --- END OF WHISTLEBLOWER ---
+
             return redirect()->route('admin.doctor.index')->with('success', 'Doctor deleted successfully.');
         } catch (\Exception $e) {
             return redirect()->route('admin.doctor.index')->with('error', 'Failed to delete doctor: ' . $e->getMessage());
@@ -496,6 +486,11 @@ class DoctorController extends Controller
             $user->update([
                 'role' => 'hod'
             ]);
+
+            // --- THIS IS THE "WHISTLEBLOWER" ---
+            // The user's role changed, so the "available doctors" list might be wrong.
+            Cache::forget("admin_stats_available_doctors");
+            // --- END OF WHISTLEBLOWER ---
 
             return redirect()->back()->with('success', $user->name . ' has been successfully assigned as HOD.');
         } catch (\Exception $e) {

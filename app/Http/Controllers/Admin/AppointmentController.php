@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Appointment;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class AppointmentController extends Controller
 {
@@ -16,6 +17,7 @@ class AppointmentController extends Controller
      */
     public function index()
     {
+        // This is a "read" page, no cache forget needed.
         $appointments = Appointment::with(['patient', 'doctor'])
             ->orderBy('created_at', 'desc')
             ->paginate(10);
@@ -31,6 +33,7 @@ class AppointmentController extends Controller
      */
     public function show($id)
     {
+        // This is a "read" page, no cache forget needed.
         $appointment = Appointment::with(['patient', 'doctor'])->findOrFail($id);
         
         return view('admin.appointment-show', compact('appointment'));
@@ -61,6 +64,14 @@ class AppointmentController extends Controller
         $appointment->doctor_id = $doctorId;
         $appointment->save();
         
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // The recent appointments list is now outdated because a doctor was added.
+        // We also "forget" the available doctors list, just in case assigning one
+        // should affect their availability (it's safer to clear it).
+        Cache::forget("admin_stats_recent_appointments");
+        Cache::forget("admin_stats_available_doctors"); 
+        // --- END OF WHISTLEBLOWER ---
+
         // Create notification for the doctor
         $patient = $appointment->patient;
         if ($patient) {
@@ -91,6 +102,13 @@ class AppointmentController extends Controller
         $oldStatus = $appointment->status;
         $appointment->update($request->only(['appointment_date', 'status', 'reason']));
         
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // An appointment's status changed, so all appointment counts and lists are wrong.
+        Cache::forget("admin_stats_pending_appointments");
+        Cache::forget("admin_stats_prev_week_pending");
+        Cache::forget("admin_stats_recent_appointments");
+        // --- END OF WHISTLEBLOWER ---
+
         // Create notification for the patient if status changed to confirmed
         if ($oldStatus != 'confirmed' && $appointment->status == 'confirmed') {
             $doctor = $appointment->doctor;
@@ -120,6 +138,13 @@ class AppointmentController extends Controller
     {
         $appointment = Appointment::findOrFail($id);
         $appointment->delete();
+        
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // An appointment was deleted, so all appointment counts and lists are wrong.
+        Cache::forget("admin_stats_pending_appointments");
+        Cache::forget("admin_stats_prev_week_pending");
+        Cache::forget("admin_stats_recent_appointments");
+        // --- END OF WHISTLEBLOWER ---
         
         return response()->json(['success' => 'Appointment deleted successfully']);
     }

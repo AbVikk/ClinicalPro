@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Appointment;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class PatientController extends Controller
 {
@@ -83,6 +84,14 @@ class PatientController extends Controller
         // Delete the patient
         $patient->delete();
         
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A user (a patient) was deleted. Erase all user/patient-related "whiteboard" answers!
+        Cache::forget("admin_stats_total_users");
+        Cache::forget("admin_stats_new_registrations_7d");
+        Cache::forget("admin_stats_prev_week_registrations");
+        Cache::forget("admin_stats_new_patients_list");
+        // --- END OF WHISTLEBLOWER ---
+
         return redirect()->route('patients.index')
             ->with('success', 'Patient deleted successfully.');
     }

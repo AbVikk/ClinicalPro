@@ -16,6 +16,13 @@
 <link rel="stylesheet" href="{{ asset('assets/css/timeline.css') }}">
 <link rel="stylesheet" href="{{ asset('assets/css/main.css') }}">
 <link rel="stylesheet" href="{{ asset('assets/css/color_skins.css') }}">
+
+<!-- Added a little extra style for the new timeline bullets -->
+<style>
+    .new_timeline ul li .bullet.red { background-color: #E53935; }
+    .new_timeline ul li .bullet.orange { background-color: #FB8C00; }
+</style>
+
 </head>
 <body class="theme-cyan">
 <!-- Page Loader -->
@@ -217,123 +224,151 @@
     
                         </div>
                         <div class="tab-pane body" id="appointments">
-    <div class="table-responsive">
-        <table class="table table-hover m-b-0">
-            <thead>
-                <tr>
-                    <th>Date & Time</th>
-                    <th>Patient</th>
-                    <th>Service</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                
-                {{-- 
-                    We loop DIRECTLY over $consultations, which is loaded
-                    by your controller. No more mixing lists!
-                --}}
-                @forelse($consultations->take(20) as $consultation)
-                    <tr>
-                        {{-- Use the consultation's date --}}
-                        <td>{{ $consultation->start_time->format('M d, Y g:i A') }}</td>
-                        <td>
-                            {{-- Use the consultation's patient --}}
-                            @if($consultation->patient)
-                                @if($consultation->patient->photo)
-                                    <img src="{{ asset('storage/' . $consultation->patient->photo) }}" class="rounded-circle" alt="Avatar" width="30">
-                                @else
-                                    <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="Avatar" width="30">
-                                @endif
-                                <span>{{ $consultation->patient->name ?? 'Unknown Patient' }}</span>
-                            @else
-                                <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="Avatar" width="30">
-                                <span>Unknown Patient</span>
-                            @endif
-                        </td>
-                        
-                        {{-- Use the consultation's service type --}}
-                        <td>{{ $consultation->service_type ?? 'General Consultation' }}</td>
-                        
-                        <td>
-                            {{-- Use the consultation's status --}}
-                            @php
-                                $status = $consultation->status ?? 'pending';
-                                $badgeClass = 'badge-default';
-                                if ($status == 'completed') $badgeClass = 'badge-success';
-                                elseif ($status == 'confirmed' || $status == 'scheduled' || $status == 'in_progress') $badgeClass = 'badge-info';
-                                elseif ($status == 'pending') $badgeClass = 'badge-warning';
-                                elseif ($status == 'cancelled' || $status == 'missed') $badgeClass = 'badge-danger';
-                            @endphp
-                            <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
-                        </td>
-                        
-                        <td>
-                            {{-- We know this is a consultation, so we can link to its detail page --}}
-                            {{-- You can update this route when you have one --}}
-                            <a href="#" class="btn btn-sm btn-info">View</a>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="5" class="text-center">No consultations found</td>
-                    </tr>
-                @endforelse
-                
-            </tbody>
-        </table>
-    </div>
-</div>
+                            <div class="table-responsive">
+                                <table class="table table-hover m-b-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Date & Time</th>
+                                            <th>Patient</th>
+                                            <th>Service</th>
+                                            <th>Status</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        
+                                        {{-- 
+                                            We loop DIRECTLY over $consultations, which is loaded
+                                            by your controller. No more mixing lists!
+                                        --}}
+                                        @forelse($consultations->take(20) as $consultation)
+                                            <tr>
+                                                {{-- Use the consultation's date --}}
+                                                <td>{{ $consultation->start_time->format('M d, Y g:i A') }}</td>
+                                                <td>
+                                                    {{-- Use the consultation's patient --}}
+                                                    @if($consultation->patient)
+                                                        @if($consultation->patient->photo)
+                                                            <img src="{{ asset('storage/' . $consultation->patient->photo) }}" class="rounded-circle" alt="Avatar" width="30">
+                                                        @else
+                                                            <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="Avatar" width="30">
+                                                        @endif
+                                                        <span>{{ $consultation->patient->name ?? 'Unknown Patient' }}</span>
+                                                    @else
+                                                        <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="Avatar" width="30">
+                                                        <span>Unknown Patient</span>
+                                                    @endif
+                                                </td>
+                                                
+                                                {{-- Use the consultation's service type --}}
+                                                <td>{{ $consultation->service_type ?? 'General Consultation' }}</td>
+                                                
+                                                <td>
+                                                    {{-- Use the consultation's status --}}
+                                                    @php
+                                                        $status = $consultation->status ?? 'pending';
+                                                        $badgeClass = 'badge-default';
+                                                        if ($status == 'completed') $badgeClass = 'badge-success';
+                                                        elseif ($status == 'confirmed' || $status == 'scheduled' || $status == 'in_progress') $badgeClass = 'badge-info';
+                                                        elseif ($status == 'pending') $badgeClass = 'badge-warning';
+                                                        elseif ($status == 'cancelled' || $status == 'missed') $badgeClass = 'badge-danger';
+                                                    @endphp
+                                                    <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
+                                                </td>
+                                                
+                                                <td>
+                                                    {{-- We know this is a consultation, so we can link to its detail page --}}
+                                                    {{-- You can update this route when you have one --}}
+                                                    <a href="#" class="btn btn-sm btn-info">View</a>
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="5" class="text-center">No consultations found</td>
+                                            </tr>
+                                        @endforelse
+                                        
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
+                <!-- ############################################################### -->
+                <!-- THIS IS THE NEW, BEAUTIFUL "TODAY'S SCHEDULE" CARD -->
+                <!-- ############################################################### -->
                 <div class="card">
-    <div class="header">
-        <h2><strong>Today's</strong> Schedule</h2>
-    </div>
-    <div class="body">
-        <ul class="list-unstyled activity">
-            
-            @forelse($todaysAppointments as $appointment)
-                <li style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
-                    <div class="media">
-                        <div class="media-body">
-                            <h6 class="m-b-0">
-                                {{-- TIME --}}
-                                <strong class="text-success">{{ \Carbon\Carbon::parse($appointment->appointment_time)->format('g:i A') }}</strong>
-                                
-                                {{-- PATIENT NAME --}}
-                                - {{ $appointment->patient->name ?? 'Unknown Patient' }}
-                            </h6>
-                            
-                            <p class="text-muted m-b-5">
-                                {{-- SERVICE --}}
-                                {{ $appointment->consultation?->service_type ?? $appointment->reason ?? 'Consultation' }}
-                            </p>
-                            
-                            {{-- STATUS --}}
-                            @php
-                                $status = $appointment->status ?? 'pending';
-                                $badgeClass = 'badge-default';
-                                if ($status == 'completed') $badgeClass = 'badge-success';
-                                elseif ($status == 'confirmed' || $status == 'in_progress') $badgeClass = 'badge-info';
-                                elseif ($status == 'pending') $badgeClass = 'badge-warning';
-                                elseif ($status == 'cancelled' || $status == 'missed') $badgeClass = 'badge-danger';
-                            @endphp
-                            <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
+                    <div class="header">
+                        <h2><strong>Today's</strong> Schedule</h2>
+                        <ul class="header-dropdown">
+                            <li class="remove">
+                                <a role="button" class="boxs-close"><i class="zmdi zmdi-close"></i></a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="body">
+                        <div class="new_timeline">
+                            <div class="header">
+                                <!-- This header is now dynamic and shows the REAL current date -->
+                                <div class="color-overlay">
+                                    <div class="day-number">{{ now()->format('d') }}</div>
+                                    <div class="date-right">
+                                    <div class="day-name">{{ now()->format('l') }}</div>
+                                    <div class="month">{{ now()->format('F Y') }}</div>
+                                    </div>
+                                </div>                                
+                            </div>
+                            <!-- This list is now dynamic and shows the REAL appointments -->
+                            <ul>
+                                @forelse($todaysAppointments as $appointment)
+                                    @php
+                                        // This logic picks the bullet color based on the appointment status
+                                        $status = $appointment->status ?? 'pending';
+                                        $bulletColor = 'orange'; // default for pending
+                                        if ($status == 'confirmed' || $status == 'in_progress') $bulletColor = 'green';
+                                        elseif ($status == 'completed') $bulletColor = 'pink';
+                                        elseif ($status == 'cancelled' || $status == 'missed') $bulletColor = 'red';
+                                    @endphp
+                                    <li>
+                                        <div class="bullet {{ $bulletColor }}"></div>
+                                        <div class="time">{{ \Carbon\Carbon::parse($appointment->appointment_time)->format('g:i A') }}</div>
+                                        <div class="desc">
+                                            <h3>{{ $appointment->patient->name ?? 'Unknown Patient' }}</h3>
+                                            <h4>
+                                                {{ $appointment->consultation?->service_type ?? $appointment->reason ?? 'Consultation' }}
+                                                
+                                                <!-- This is the status badge logic from your old card -->
+                                                @php
+                                                    $badgeClass = 'badge-default';
+                                                    if ($status == 'completed') $badgeClass = 'badge-success';
+                                                    elseif ($status == 'confirmed' || $status == 'in_progress') $badgeClass = 'badge-info';
+                                                    elseif ($status == 'pending') $badgeClass = 'badge-warning';
+                                                    elseif ($status == 'cancelled' || $status == 'missed') $badgeClass = 'badge-danger';
+                                                @endphp
+                                                <span class="badge {{ $badgeClass }}">{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
+                                            </h4>
+                                        </div>
+                                    </li>
+                                @empty
+                                    <!-- This shows if there are no appointments for today -->
+                                    <li>
+                                        <div class="bullet orange"></div>
+                                        <div class="time">All Day</div>
+                                        <div class="desc">
+                                            <h3>No appointments today</h3>
+                                            <h4>The schedule is clear.</h4>
+                                        </div>
+                                    </li>
+                                @endforelse
+                            </ul>
                         </div>
                     </div>
-                </li>
-            @empty
-                <li>
-                    <p class="text-muted">No appointments scheduled for today.</p>
-                </li>
-            @endforelse
-            
-        </ul>
-    </div>
-</div>
+                </div>
+                <!-- ############################################################### -->
+                <!-- END OF NEW CARD -->
+                <!-- ############################################################### -->
+
             </div>
         </div>
     </div>

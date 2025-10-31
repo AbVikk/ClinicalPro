@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Http; // Added for Paystack API calls
 use Illuminate\Support\Facades\Log; // Added for logging
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class PaymentController extends Controller
 {
@@ -72,7 +73,11 @@ class PaymentController extends Controller
             'cheque' => 'cash_in_clinic',
         ];
         
-        $method = $request->method;
+        // --- FIX HERE ---
+        // $method = $request->method; // This line causes the error
+        $method = $request->input('method'); // <-- This is the correct fix
+        // --- END FIX ---
+
         if (isset($methodMapping[$method])) {
             $method = $methodMapping[$method];
         }
@@ -97,6 +102,13 @@ class PaymentController extends Controller
             'transaction_date' => $request->transaction_date ?? now(),
             'clinic_id' => Auth::user()->clinic_id ?? 1, // Default to virtual clinic if not set
         ]);
+
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A payment was created, so erase the "Total Payments" from the whiteboard.
+        if ($status === 'paid') {
+            Cache::forget("admin_stats_total_payments_month");
+        }
+        // --- END OF WHISTLEBLOWER ---
 
         return redirect()->route('admin.payments.index')
             ->with('success', 'Payment added successfully.');
@@ -159,7 +171,11 @@ class PaymentController extends Controller
             'cheque' => 'cash_in_clinic',
         ];
         
-        $method = $request->method;
+        // --- FIX HERE ---
+        // $method = $request->method; // This line causes the error
+        $method = $request->input('method'); // <-- This is the correct fix
+        // --- END FIX ---
+        
         if (isset($methodMapping[$method])) {
             $method = $methodMapping[$method];
         }
@@ -184,6 +200,12 @@ class PaymentController extends Controller
             'transaction_date' => $request->transaction_date ?? $payment->transaction_date,
         ]);
 
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A payment was updated. The total could be wrong if the status changed.
+        // It's safest to just erase the "Total Payments" from the whiteboard.
+        Cache::forget("admin_stats_total_payments_month");
+        // --- END OF WHISTLEBLOWER ---
+
         return redirect()->route('admin.payments.index')
             ->with('success', 'Payment updated successfully.');
     }
@@ -194,6 +216,11 @@ class PaymentController extends Controller
     public function destroy(Payment $payment)
     {
         $payment->delete();
+
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A payment was deleted. Erase the "Total Payments" from the whiteboard.
+        Cache::forget("admin_stats_total_payments_month");
+        // --- END OF WHISTLEBLOWER ---
 
         return redirect()->route('admin.payments.index')
             ->with('success', 'Payment deleted successfully.');
@@ -273,6 +300,11 @@ class PaymentController extends Controller
                         'clinic_id' => Auth::user()->clinic_id ?? 1,
                     ]
                 );
+
+                // --- THIS IS THE "WHISTLEBLOWER" ---
+                // This is an old callback, but let's add it just in case.
+                Cache::forget("admin_stats_total_payments_month");
+                // --- END OF WHISTLEBLOWER ---
 
                 // Return custom success page
                 return view('admin.payments.success', compact('payment'));
@@ -475,6 +507,14 @@ class PaymentController extends Controller
                                 Log::info("Notification sent to Patient ID: " . $patient->id);
                             }
 
+                            // --- THIS IS THE "DOUBLE WHISTLEBLOWER" ---
+                            // 1. A payment was made.
+                            Cache::forget("admin_stats_total_payments_month");
+                            // 2. An appointment was created.
+                            Cache::forget("admin_stats_pending_appointments");
+                            Cache::forget("admin_stats_recent_appointments");
+                            // --- END OF WHISTLEBLOWER ---
+
                             // Redirect to a specific Appointment Success page
                             // return redirect()->route('admin.appointment.success', ['appointment_id' => $appointment->id]);
                              return view('admin.payments.success', compact('payment', 'appointment', 'consultation'));
@@ -496,6 +536,12 @@ class PaymentController extends Controller
                 else {
                      // --- Handle other successful payment types (like Wallet Top-Up) ---
                      Log::info("Processing successful OTHER payment (e.g., Wallet Top-Up) for reference: " . $reference);
+                     
+                     // --- THIS IS THE "WHISTLEBLOWER" ---
+                     // A wallet top-up is a payment. Erase the "Total Payments" from the whiteboard.
+                     Cache::forget("admin_stats_total_payments_month");
+                     // --- END OF WHISTLEBLOWER ---
+                     
                      // Add your wallet top-up logic here if needed
                      // Redirect to general success page
                      return view('admin.payments.success', compact('payment'));
@@ -512,6 +558,11 @@ class PaymentController extends Controller
                     $payment->status = 'failed'; // Mark as failed
                     $payment->save();
                     Log::info("Payment record (ID: {$payment->id}) status updated to 'failed'.");
+
+                    // --- THIS IS THE "WHISTLEBLOWER" ---
+                    // A payment was updated to "failed". Safest to clear the cache.
+                    Cache::forget("admin_stats_total_payments_month");
+                    // --- END OF WHISTLEBLOWER ---
 
                     // Find and cancel the associated consultation (if it exists)
                     $consultation = Consultation::find($payment->consultation_id);

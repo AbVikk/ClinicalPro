@@ -13,7 +13,8 @@ use App\Models\ServiceTimePricing;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
-use App\Models\Clinic; 
+use App\Models\Clinic;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class BookAppointmentController extends Controller
 {
@@ -121,52 +122,52 @@ class BookAppointmentController extends Controller
 
         // 5. Filter those doctors by verified status (User and Profile)
         $verifiedDoctorIds = User::whereIn('id', $scheduledDoctorIds)
-                   ->where('role', 'doctor')
-                   ->where('status', 'active') // Check User status
-                   ->whereHas('doctorProfile', function ($query) { // Check doctors_new status
-                        $query->where('status', 'verified'); // Use lowercase 'verified'
-                   })
-                   ->pluck('id'); // Get just the IDs
+                      ->where('role', 'doctor')
+                      ->where('status', 'active') // Check User status
+                      ->whereHas('doctorProfile', function ($query) { // Check doctors_new status
+                           $query->where('status', 'verified'); // Use lowercase 'verified'
+                      })
+                      ->pluck('id'); // Get just the IDs
         Log::info("Found " . $verifiedDoctorIds->count() . " verified doctors matching schedule.");
 
          if ($verifiedDoctorIds->isEmpty()) {
-             Log::info("No *verified* doctors match the schedule. Returning empty list.");
-             Log::info("=== GetAvailableDoctors End ===");
-             return response()->json(['doctors' => []]);
-        }
+              Log::info("No *verified* doctors match the schedule. Returning empty list.");
+              Log::info("=== GetAvailableDoctors End ===");
+              return response()->json(['doctors' => []]);
+         }
 
 
         // --- 6. CORRECTED AGAIN: Check for Conflicting Consultations ---
-            Log::info("Checking for conflicts for doctor IDs: " . json_encode($verifiedDoctorIds->toArray())); // Log the IDs going into the check
-            $conflictingDoctorIds = \App\Models\Consultation::whereIn('doctor_id', $verifiedDoctorIds) // *** Use Consultation model ***
-                // Look for consultations that are NOT completed, missed, or cancelled
-                ->whereNotIn('status', ['completed', 'missed', 'cancelled'])
-                // Check for overlap:
-                // (ExistingStart < ProposedEnd) AND (ExistingEnd > ProposedStart)
-                ->where(function ($query) use ($appointmentStart, $appointmentEnd) {
-                    $query->where('start_time', '<', $appointmentEnd) // *** Use Consultation's start_time ***
-                          ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $appointmentStart); // *** Use Consultation's start_time AND duration_minutes ***
-                })
-                ->pluck('doctor_id') // Get IDs of doctors WITH conflicts
-                ->unique();
-            Log::info("Found " . $conflictingDoctorIds->count() . " doctors with conflicting consultations: " . json_encode($conflictingDoctorIds->toArray()));
-            // --- END CONFLICT CHECK ---
+             Log::info("Checking for conflicts for doctor IDs: " . json_encode($verifiedDoctorIds->toArray())); // Log the IDs going into the check
+             $conflictingDoctorIds = \App\Models\Consultation::whereIn('doctor_id', $verifiedDoctorIds) // *** Use Consultation model ***
+                 // Look for consultations that are NOT completed, missed, or cancelled
+                 ->whereNotIn('status', ['completed', 'missed', 'cancelled'])
+                 // Check for overlap:
+                 // (ExistingStart < ProposedEnd) AND (ExistingEnd > ProposedStart)
+                 ->where(function ($query) use ($appointmentStart, $appointmentEnd) {
+                     $query->where('start_time', '<', $appointmentEnd) // *** Use Consultation's start_time ***
+                           ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $appointmentStart); // *** Use Consultation's start_time AND duration_minutes ***
+                 })
+                 ->pluck('doctor_id') // Get IDs of doctors WITH conflicts
+                 ->unique();
+             Log::info("Found " . $conflictingDoctorIds->count() . " doctors with conflicting consultations: " . json_encode($conflictingDoctorIds->toArray()));
+             // --- END CONFLICT CHECK ---
 
-            // 7. Get the IDs of doctors who are verified AND have NO conflicts
-            // Use collect() helper to make diff() easier
-            $trulyAvailableDoctorIds = collect($verifiedDoctorIds)->diff($conflictingDoctorIds);
-            Log::info("Final available (verified, no conflict) doctor IDs: " . json_encode($trulyAvailableDoctorIds->toArray())); // Use toArray() for logging
+             // 7. Get the IDs of doctors who are verified AND have NO conflicts
+             // Use collect() helper to make diff() easier
+             $trulyAvailableDoctorIds = collect($verifiedDoctorIds)->diff($conflictingDoctorIds);
+             Log::info("Final available (verified, no conflict) doctor IDs: " . json_encode($trulyAvailableDoctorIds->toArray())); // Use toArray() for logging
 
-            // 8. Get the details for the final list (Users table)
-            $doctors = User::whereIn('id', $trulyAvailableDoctorIds)
+             // 8. Get the details for the final list (Users table)
+             $doctors = User::whereIn('id', $trulyAvailableDoctorIds)
                            ->select('id', 'name')
                            ->get();
-            Log::info("Returning " . $doctors->count() . " final available doctors.");
+             Log::info("Returning " . $doctors->count() . " final available doctors.");
 
-            // 9. Send the list back
-            Log::info("=== GetAvailableDoctors End ===");
-            return response()->json(['doctors' => $doctors]);
-        } // Make sure this closing brace matches the function definition
+             // 9. Send the list back
+             Log::info("=== GetAvailableDoctors End ===");
+             return response()->json(['doctors' => $doctors]);
+    } // Make sure this closing brace matches the function definition
 
     /**
      * Find available LOCATIONS based on a selected date and time.
@@ -461,6 +462,14 @@ class BookAppointmentController extends Controller
         $user->password = bcrypt('password123');
         
         $user->save();
+
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A new patient was created. Erase the "whiteboard" answers!
+        Cache::forget("admin_stats_total_users");
+        Cache::forget("admin_stats_new_registrations_7d");
+        Cache::forget("admin_stats_new_patients_list");
+        Cache::forget("admin_stats_prev_week_registrations");
+        // --- END OF WHISTLEBLOWER ---
         
         return response()->json([
             'success' => true,

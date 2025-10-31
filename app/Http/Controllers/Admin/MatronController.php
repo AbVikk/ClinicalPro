@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Department;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class MatronController extends Controller
 {
@@ -16,8 +17,8 @@ class MatronController extends Controller
     {
         try {
             $matrons = User::where('role', User::ROLE_MATRON)
-                        ->with('department')
-                        ->paginate(15);
+                           ->with('department')
+                           ->paginate(15);
             
             return view('admin.matrons.index', compact('matrons'))
                 ->with('success', 'Matrons list loaded successfully.');
@@ -46,7 +47,7 @@ class MatronController extends Controller
         try {
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
-                'email' => 'required|string|email|max:255|unique:users',
+                'email' => 'required|string|email|max:2F55|unique:users',
                 'password' => 'required|string|min:8|confirmed',
                 'department_id' => 'required|exists:departments,id',
             ]);
@@ -59,6 +60,13 @@ class MatronController extends Controller
                 'department_id' => $validated['department_id'],
             ]);
             
+            // --- THIS IS THE "WHISTLEBLOWER" ---
+            // A new user (a Matron) was created. Erase all user-related "whiteboard" answers!
+            Cache::forget("admin_stats_total_users");
+            Cache::forget("admin_stats_new_registrations_7d");
+            Cache::forget("admin_stats_prev_week_registrations");
+            // --- END OF WHISTLEBLOWER ---
+
             return redirect()->route('admin.matrons.index')->with('success', 'Matron created and assigned to department successfully.');
         } catch (\Exception $e) {
             Log::error('Failed to create matron: ' . $e->getMessage());
@@ -111,6 +119,9 @@ class MatronController extends Controller
 
             $matron->update($updateData);
             
+            // Note: No cache forget is needed here because just changing a name
+            // or department doesn't change the *total count* of users.
+            
             return redirect()->route('admin.matrons.index')->with('success', 'Matron updated successfully.');
         } catch (\Exception $e) {
             Log::error('Failed to update matron: ' . $e->getMessage());
@@ -127,6 +138,13 @@ class MatronController extends Controller
             }
             
             $matron->delete();
+            
+            // --- THIS IS THE "WHISTLEBLOWER" ---
+            // A user (a Matron) was deleted. Erase all user-related "whiteboard" answers!
+            Cache::forget("admin_stats_total_users");
+            Cache::forget("admin_stats_new_registrations_7d");
+            Cache::forget("admin_stats_prev_week_registrations");
+            // --- END OF WHISTLEBLOWER ---
             
             return redirect()->route('admin.matrons.index')->with('success', 'Matron deleted successfully.');
         } catch (\Exception $e) {

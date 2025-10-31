@@ -49,3 +49,8 @@ Route::get('/leaves', [Doctor\DashboardController::class, 'leaves'])->name('leav
 Route::post('/leaves', [Doctor\DashboardController::class, 'storeLeave'])->name('leaves.store');
 Route::put('/leaves/{leave}', [Doctor\DashboardController::class, 'updateLeave'])->name('leaves.update');
 Route::delete('/leaves/{leave}', [Doctor\DashboardController::class, 'deleteLeave'])->name('leaves.delete');
+
+// Prescription routes
+Route::get('/prescriptions', [Doctor\DashboardController::class, 'prescriptions'])->name('prescriptions');
+Route::get('/prescriptions/{prescription}', [Doctor\DashboardController::class, 'showPrescription'])->name('prescriptions.show');
+Route::delete('/prescriptions/{prescription}', [Doctor\DashboardController::class, 'deletePrescription'])->name('prescriptions.delete');

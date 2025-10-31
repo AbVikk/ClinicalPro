@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\Attendance;
 use App\Models\LeaveRequest;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class ClinicStaffController extends Controller
 {
@@ -26,8 +27,8 @@ class ClinicStaffController extends Controller
             ->when($search, function ($query, $search) {
                 return $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%")
-                      ->orWhere('phone', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
                 });
             });
             
@@ -123,6 +124,15 @@ class ClinicStaffController extends Controller
         $user->user_id = $userId;
         $user->save();
 
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A new user was created. Erase all user-related "whiteboard" answers!
+        Cache::forget("admin_stats_total_users");
+        Cache::forget("admin_stats_new_registrations_7d");
+        Cache::forget("admin_stats_prev_week_registrations");
+        // This new user *might* be a doctor, so clear the available doctors list too.
+        Cache::forget("admin_stats_available_doctors"); 
+        // --- END OF WHISTLEBLOWER ---
+
         return redirect()->route('admin.clinic-staff.index')
             ->with('success', 'Nurse created successfully with ID: ' . $userId);
     }
@@ -184,6 +194,10 @@ class ClinicStaffController extends Controller
         $staffMember->gender = $request->gender;
         $staffMember->save();
 
+        // Note: No cache forget is needed here *unless* the update changes
+        // the user's 'role' or 'status', which this one doesn't.
+        // If you add a "status" update, you would add Cache::forget here.
+
         return redirect()->route('admin.clinic-staff.index')
             ->with('success', 'Staff member updated successfully.');
     }
@@ -200,6 +214,14 @@ class ClinicStaffController extends Controller
             ->findOrFail($id);
             
         $staffMember->delete();
+
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A user was deleted. Erase all user-related "whiteboard" answers!
+        Cache::forget("admin_stats_total_users");
+        Cache::forget("admin_stats_new_registrations_7d");
+        Cache::forget("admin_stats_prev_week_registrations");
+        Cache::forget("admin_stats_available_doctors"); 
+        // --- END OF WHISTLEBLOWER ---
 
         return redirect()->route('admin.clinic-staff.index')
             ->with('success', 'Staff member deleted successfully.');
@@ -231,13 +253,13 @@ class ClinicStaffController extends Controller
             ->groupBy('role')
             ->pluck('user_count', 'role')
             ->toArray();
-        
+            
         // Get the latest user creation dates for each role as "last updated"
         $latestRoleDates = User::select('role', DB::raw('MAX(created_at) as latest_date'))
             ->groupBy('role')
             ->pluck('latest_date', 'role')
             ->toArray();
-        
+            
         // Format dates or use today's date if none exist
         $formatDate = function($date) {
             return $date ? date('Y-m-d', strtotime($date)) : date('Y-m-d');

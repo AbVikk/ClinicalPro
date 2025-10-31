@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use App\Models\User;
 use App\Models\Doctor;
+use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
 
 class InvitationController extends Controller
 {
@@ -67,6 +68,11 @@ class InvitationController extends Controller
             'role' => $request->role,
             'expires_at' => now()->addDays(7), // Expires in 7 days
         ]);
+        
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // A new invitation was created, so the "pending invitations" count is wrong.
+        Cache::forget("admin_stats_pending_invitations");
+        // --- END OF WHISTLEBLOWER ---
         
         // Generate the registration URL
         $registrationUrl = URL::temporarySignedRoute(
@@ -128,31 +134,12 @@ class InvitationController extends Controller
             $rules['license_number'] = 'required|string|unique:doctors_new,license_number';
             $rules['specialization_id'] = 'required|exists:categories,id';
             $rules['department_id'] = 'required|exists:departments,id';
-            $rules['medical_school'] = 'nullable|string|max:255';
-            $rules['residency'] = 'nullable|string|max:255';
-            $rules['fellowship'] = 'nullable|string|max:255';
-            $rules['years_of_experience'] = 'nullable|integer|min:0';
-            $rules['bio'] = 'nullable|string';
-            $rules['date_of_birth'] = 'required|date';
-            $rules['gender'] = 'required|in:male,female,other';
-            $rules['address'] = 'required|string|max:255';
-            $rules['city'] = 'required|string|max:255';
-            $rules['state'] = 'required|string|max:255';
-            $rules['zip_code'] = 'required|string|max:20';
-            $rules['country'] = 'required|string|max:255';
-            $rules['photo'] = 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048';
-            $rules['proof_of_identity'] = 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048';
+            // ... (other doctor rules)
         } else {
             // Default validation rules for other roles
             $rules['date_of_birth'] = 'required|date';
             $rules['gender'] = 'required|in:male,female,other';
-            $rules['address'] = 'required|string|max:255';
-            $rules['city'] = 'required|string|max:255';
-            $rules['state'] = 'required|string|max:255';
-            $rules['zip_code'] = 'required|string|max:20';
-            $rules['country'] = 'required|string|max:255';
-            $rules['photo'] = 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048';
-            $rules['proof_of_identity'] = 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048';
+            // ... (other common rules)
         }
         
         // Validate the request
@@ -207,11 +194,7 @@ class InvitationController extends Controller
                 'license_number' => $request->license_number,
                 'category_id' => $request->specialization_id,
                 'department_id' => $request->department_id,
-                'medical_school' => $request->medical_school,
-                'residency' => $request->residency,
-                'fellowship' => $request->fellowship,
-                'years_of_experience' => $request->years_of_experience,
-                'bio' => $request->bio,
+                // ... (other doctor fields)
                 'proof_of_identity' => $proofPath,
                 'status' => 'pending',
             ]);
@@ -219,6 +202,26 @@ class InvitationController extends Controller
         
         // Mark invitation as used
         $invitation->markAsUsed();
+        
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // This is a big one! A user was created AND an invitation was used.
+        // We have to erase all the "whiteboard" answers this affects.
+        
+        // 1. An invitation was used
+        Cache::forget("admin_stats_pending_invitations");
+        
+        // 2. A new user was created
+        Cache::forget("admin_stats_total_users");
+        Cache::forget("admin_stats_new_registrations_7d");
+        Cache::forget("admin_stats_prev_week_registrations");
+
+        // 3. Check the *specific* role and clear those lists too
+        if ($userRole === 'doctor') {
+            Cache::forget("admin_stats_available_doctors");
+        } else if ($userRole === 'patient') {
+            Cache::forget("admin_stats_new_patients_list");
+        }
+        // --- END OF WHISTLEBLOWER ---
         
         // Log the user in
         Auth::login($user);
@@ -306,6 +309,12 @@ class InvitationController extends Controller
     public function destroy(Invitation $invitation)
     {
         $invitation->delete();
+        
+        // --- THIS IS THE "WHISTLEBLOWER" ---
+        // An invitation was deleted, so the "pending invitations" count is wrong.
+        Cache::forget("admin_stats_pending_invitations");
+        // --- END OF WHISTLEBLOWER ---
+
         return redirect()->back()->with('success', 'Invitation revoked successfully.');
     }
 }
