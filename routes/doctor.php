@@ -54,3 +54,8 @@ Route::delete('/leaves/{leave}', [Doctor\DashboardController::class, 'deleteLeav
 Route::get('/prescriptions', [Doctor\DashboardController::class, 'prescriptions'])->name('prescriptions');
 Route::get('/prescriptions/{prescription}', [Doctor\DashboardController::class, 'showPrescription'])->name('prescriptions.show');
 Route::delete('/prescriptions/{prescription}', [Doctor\DashboardController::class, 'deletePrescription'])->name('prescriptions.delete');
+
+
+Route::get('/ajax/request-count', [Doctor\DashboardController::class, 'ajaxGetRequestCount'])->name('ajax.requestCount');
+Route::get('/ajax/notification-count', [Doctor\DashboardController::class, 'ajaxGetNotificationCount'])->name('ajax.notificationCount');
+

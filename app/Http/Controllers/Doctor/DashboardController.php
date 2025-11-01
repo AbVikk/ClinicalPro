@@ -16,12 +16,13 @@ use App\Models\Medication;
 use App\Models\Prescription;
 use App\Models\User;
 use App\Models\Clinic; 
-use App\Models\LabTest;
+use App\Models\LabTest; // Import LabTest model
 use App\Models\Consultation;
 use App\Models\DoctorSchedule; 
 use App\Models\LeaveRequest; 
 use Illuminate\Support\Facades\DB; 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage; // Import Storage for file uploads
 
 class DashboardController extends Controller
 {
@@ -35,6 +36,13 @@ class DashboardController extends Controller
             'is_read' => false,
             'channel' => 'database', // Default channel for in-app notifications
         ]);
+
+        // --- FIX: Erase notification cache keys immediately after creation (The Whistleblower) ---
+        Cache::forget("doctor_{$userId}_notifications");
+        Cache::forget("doctor_{$userId}_notification_count");
+        // We also clear the request count because the badge combines both
+        Cache::forget("doctor_{$userId}_request_count");
+        // --- END FIX ---
     }
     
     // Method to mark all notifications as read
@@ -66,39 +74,124 @@ class DashboardController extends Controller
     // Helper method to get unread notifications for the authenticated user
     private function getUnreadNotifications()
     {
-        $doctorId = Auth::id();
-        // Cache notifications for 1 hour
-        return Cache::remember("doctor_{$doctorId}_notifications", 3600, function () use ($doctorId) {
-            return User::find($doctorId)->notifications()
-                ->where('is_read', false)
-                ->orderBy('created_at', 'desc')
-                ->limit(5)
-                ->get();
-        });
+        // This is the only place it is uncached for the initial page load
+        return Auth::user()->notifications()
+            ->where('is_read', false)
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
     }
     
     // Helper method to get notification count
     private function getNotificationCount()
     {
-        $doctorId = Auth::id();
-        // Cache notification count for 1 hour
-        return Cache::remember("doctor_{$doctorId}_notification_count", 3600, function () use ($doctorId) {
-            return User::find($doctorId)->notifications()
+            return Auth::user()->notifications()
                 ->where('is_read', false)
                 ->count();
-        });
     }
     
     // Helper method to get appointment request count
     private function getAppointmentRequestCount()
     {
         $doctorId = Auth::id();
-        // Cache request count for 1 hour
-        return Cache::remember("doctor_{$doctorId}_request_count", 3600, function () use ($doctorId) {
             return Appointment::where('doctor_id', $doctorId)
-                ->whereIn('status', ['pending', 'new'])
+                ->whereIn('status', ['pending', 'new', 'scheduled'])
                 ->count();
+    }
+    
+    // --- FIX: Helper method to gather and save Vitals ---
+    private function saveVitals(Request $request, $appointmentId, $doctorId) {
+        $vitalsData = $request->only(['blood_pressure', 'temperature', 'pulse', 'respiratory_rate', 'spo2', 'height', 'weight', 'waist', 'bsa', 'bmi']);
+        // Filter out null or empty values
+        $vitalsData = array_filter($vitalsData, function($value) {
+            return !is_null($value) && $value !== '';
         });
+
+        if (!empty($vitalsData)) {
+            $vitalsData['doctor_id'] = $doctorId; 
+            Vitals::updateOrCreate(
+                ['appointment_id' => $appointmentId],
+                $vitalsData
+            );
+        }
+    }
+
+    // --- FIX: Helper method to gather and save Clinical Notes ---
+    private function saveClinicalNotes(Request $request, $appointmentId, $doctorId) {
+        $clinicalData = $request->only(['clinical_notes', 'skin_allergy']);
+        
+        if (isset($clinicalData['clinical_notes']) || isset($clinicalData['skin_allergy'])) {
+             ClinicalNote::updateOrCreate(
+                ['appointment_id' => $appointmentId],
+                [
+                    'doctor_id' => $doctorId, 
+                    'note_text' => $clinicalData['clinical_notes'] ?? null,
+                    'skin_allergy' => $clinicalData['skin_allergy'] ?? null,
+                    'note_type' => 'clinical'
+                ]
+            );
+        }
+    }
+
+    // --- FIX: Helper method to gather and save Medications ---
+    private function saveMedications(Request $request, $appointmentId) {
+        Medication::where('appointment_id', $appointmentId)->delete();
+        
+        if ($request->medications) {
+            foreach ($request->medications as $index => $medicationData) {
+                $medName = $medicationData['name'] ?? null; 
+
+                if (empty($medName) && isset($medicationData['name_input'])) {
+                    $medName = $medicationData['name_input'];
+                }
+                
+                if (!empty($medName)) {
+                    Medication::create([
+                        'appointment_id' => $appointmentId,
+                        'medication_name' => $medName,
+                        'type' => $medicationData['type'] ?? null,
+                        'dosage' => $medicationData['dosage'] ?? null,
+                        'duration' => $medicationData['duration'] ?? null,
+                        'instructions' => $medicationData['instructions'] ?? null,
+                    ]);
+                }
+            }
+        }
+    }
+
+    // --- FIX: Helper method to gather and save Lab Tests ---
+    private function saveLabTests(Request $request, $appointmentId, $doctorId) {
+        $labTests = $request->lab_tests ?? [];
+        $existingTestNames = [];
+        
+        $allTests = LabTest::where('appointment_id', $appointmentId)->get()->keyBy('test_name');
+
+        foreach ($labTests as $testData) {
+            $testName = $testData['name'] ?? null;
+            $filePath = $testData['file_path'] ?? null;
+
+            if ($testName) {
+                $test = $allTests->get($testName);
+
+                if (isset($testData['file']) && $testData['file'] instanceof \Illuminate\Http\UploadedFile) {
+                    $filePath = $testData['file']->store('lab_tests', 'public');
+                }
+                
+                $test = LabTest::updateOrCreate(
+                    ['appointment_id' => $appointmentId, 'test_name' => $testName],
+                    [
+                        'doctor_id' => $doctorId, 
+                        'file_path' => $filePath
+                    ]
+                );
+
+                $existingTestNames[] = $testName;
+            }
+        }
+        
+        LabTest::where('appointment_id', $appointmentId)
+            ->whereNotIn('test_name', $existingTestNames)
+            ->delete();
     }
     
     public function index()
@@ -113,7 +206,6 @@ class DashboardController extends Controller
         $doctorId = Auth::user()->id;
         
         // --- NEW: Auto-Update Missed Appointments ---
-        // This is a "write" operation, so we DON'T cache it.
         Appointment::where('doctor_id', $doctorId)
             ->whereIn('status', ['confirmed', 'pending'])
             ->where('appointment_time', '<', now())
@@ -126,7 +218,7 @@ class DashboardController extends Controller
         $requestCount = $this->getAppointmentRequestCount();
 
         // Set a "cache time" in seconds. 3600 = 1 hour.
-        $cacheTime = 3600;
+        $cacheTime = 3600; 
         
         // 1. Wrap the query in Cache::remember
         $todaysAppointments = Cache::remember("doctor_{$doctorId}_todays_appointments", $cacheTime, function () use ($doctorId, $today) {
@@ -655,7 +747,7 @@ class DashboardController extends Controller
             // Update the consultation end_time if there's a linked consultation
             $payment = $appointment->payment;
             if ($payment && $payment->consultation_id) {
-                $consultation = \App\Models\Consultation::find($payment->consultation_id);
+                $consultation = Consultation::find($payment->consultation_id);
                 if ($consultation) {
                     $consultation->update([
                         'end_time' => now(),
@@ -684,7 +776,12 @@ class DashboardController extends Controller
                 "doctor_{$doctorId}_top_patients",
                 "doctor_{$doctorId}_request_count"
             ];
-            Cache::forgetMultiple($cacheKeys);
+            
+            // --- FIX FOR forgetMultiple (Cache Erase) ---
+            foreach ($cacheKeys as $key) {
+                Cache::forget($key);
+            }
+            // --- END OF FIX ---
             
             if ($request->ajax()) {
                 return response()->json([
@@ -854,7 +951,9 @@ class DashboardController extends Controller
     public function saveAppointmentDetails(Request $request, Appointment $appointment)
     {
         // Verify the appointment belongs to the authenticated doctor
-        if ($appointment->doctor_id !== Auth::user()->id) {
+        $doctorId = Auth::user()->id; // FIX: Define doctorId here
+        
+        if ($appointment->doctor_id !== $doctorId) {
             if ($request->ajax()) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized access'], 403);
             }
@@ -862,11 +961,11 @@ class DashboardController extends Controller
         }
         
         // Check if this is a partial update (section-specific save)
-        $isPartialUpdate = ( // <--- ADD THIS OPENING PARENTHESIS
+        $isPartialUpdate = (
                           $request->has('complaints') || 
                           $request->has('diagnosis') || 
                           $request->has('medications') || 
-                          $request->has('lab_tests') ||
+                          $request->has('lab_tests') || 
                           $request->has('blood_group') ||
                           $request->has('advice') ||
                           $request->has('follow_up_date') ||
@@ -874,54 +973,54 @@ class DashboardController extends Controller
                           $request->has('clinical_notes') ||
                           $request->has('skin_allergy') ||
                           $request->hasAny(['blood_pressure', 'temperature', 'pulse', 'respiratory_rate', 'spo2', 'height', 'weight', 'waist', 'bsa', 'bmi'])
-        ) && !$request->has('is_full_update'); // <--- ADD THIS CLOSING PARENTHESIS
+        ) && !$request->has('is_full_update'); 
+
+        // FIX: Re-run validation as full validation might be too strict for partial updates
+        $validatorRules = [
+            'blood_group' => 'nullable|string|max:10',
+            'advice' => 'nullable|string|max:1000',
+            'follow_up_date' => 'nullable|date',
+            'follow_up_time' => 'nullable|date_format:H:i',
+            // Vitals validation
+            'blood_pressure' => 'nullable|string|max:20',
+            'temperature' => 'nullable|string|max:10',
+            'pulse' => 'nullable|string|max:10',
+            'respiratory_rate' => 'nullable|string|max:10',
+            'spo2' => 'nullable|string|max:10',
+            'height' => 'nullable|string|max:10',
+            'weight' => 'nullable|string|max:10',
+            'waist' => 'nullable|string|max:10',
+            'bsa' => 'nullable|string|max:10',
+            'bmi' => 'nullable|string|max:10',
+            // Clinical notes
+            'clinical_notes' => 'nullable|string|max:1000',
+            'skin_allergy' => 'nullable|string|max:500',
+            // Medications validation (using basic checks for partial save)
+            'medications' => 'nullable|array',
+            'medications.*.name' => 'nullable|string|max:100',
+            'medications.*.type' => 'nullable|string|max:50',
+            'medications.*.dosage' => 'nullable|string|max:50',
+            'medications.*.duration' => 'nullable|string|max:50',
+            'medications.*.instructions' => 'nullable|string|max:200',
+            // Lab tests validation (using basic checks for partial save)
+            'lab_tests' => 'nullable|array',
+            // FIX: Allow file upload per item
+            'lab_tests.*.file' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048', 
+            'lab_tests.*.name' => 'nullable|string|max:100',
+            // Complaints and diagnosis validation
+            'complaints' => 'nullable|array',
+            'complaints.*' => 'nullable|string|max:200',
+            'diagnosis' => 'nullable|array',
+            'diagnosis.*' => 'nullable|string|max:200',
+        ];
         
-        // If it's a partial update, we don't validate all fields
-        if (!$isPartialUpdate) {
-            // Full validation for complete save
-            $validator = Validator::make($request->all(), [
-                'blood_group' => 'nullable|string|max:10',
-                'advice' => 'nullable|string|max:1000',
-                'follow_up_date' => 'nullable|date',
-                'follow_up_time' => 'nullable|date_format:H:i',
-                // Vitals validation
-                'blood_pressure' => 'nullable|string|max:20',
-                'temperature' => 'nullable|string|max:10',
-                'pulse' => 'nullable|string|max:10',
-                'respiratory_rate' => 'nullable|string|max:10',
-                'spo2' => 'nullable|string|max:10',
-                'height' => 'nullable|string|max:10',
-                'weight' => 'nullable|string|max:10',
-                'waist' => 'nullable|string|max:10',
-                'bsa' => 'nullable|string|max:10',
-                'bmi' => 'nullable|string|max:10',
-                // Clinical notes
-                'clinical_notes' => 'nullable|string|max:1000',
-                'skin_allergy' => 'nullable|string|max:500',
-                // Medications validation
-                'medications' => 'nullable|array',
-                'medications.*.name' => 'nullable|string|max:100',
-                'medications.*.type' => 'nullable|string|max:50',
-                'medications.*.dosage' => 'nullable|string|max:50',
-                'medications.*.duration' => 'nullable|string|max:50',
-                'medications.*.instructions' => 'nullable|string|max:200',
-                // Lab tests validation
-                'lab_tests' => 'nullable|array',
-                'lab_tests.*.name' => 'nullable|string|max:100',
-                'new_lab_test_file' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048',
-                // Complaints and diagnosis validation
-                'complaints' => 'nullable|array',
-                'complaints.*' => 'nullable|string|max:200',
-                'diagnosis' => 'nullable|array',
-                'diagnosis.*' => 'nullable|string|max:200',
-            ]);
-            
-            if ($validator->fails()) {
-                if ($request->ajax()) {
-                    return response()->json(['success' => false, 'message' => 'Validation failed: ' . implode(', ', $validator->errors()->all())], 422);
-                }
-                return redirect()->back()->withErrors($validator)->withInput();
+        $validator = Validator::make($request->all(), $validatorRules);
+
+        if ($validator->fails()) {
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Validation failed: ' . implode(', ', $validator->errors()->all())], 422);
             }
+            return redirect()->back()->withErrors($validator)->withInput();
         }
         
         try {
@@ -930,36 +1029,38 @@ class DashboardController extends Controller
                 'appointment_id' => $appointment->id
             ]);
             
-            // Handle partial updates
+            // --- PARTIAL UPDATE LOGIC ---
             if ($isPartialUpdate) {
-                // (Partial update logic for complaints, diagnosis, vitals, etc. goes here)
-                // ...
-                // Handle medications update
+                
+                // 1. Save Vitals
+                $this->saveVitals($request, $appointment->id, $doctorId);
+
+                // 2. Save Clinical Notes (Skin Allergy/Notes)
+                $this->saveClinicalNotes($request, $appointment->id, $doctorId);
+
+                // 3. Save Medications
                 if ($request->has('medications')) {
-                    // First, delete existing medications for this appointment
-                    Medication::where('appointment_id', $appointment->id)->delete();
-                    
-                    // Then create new medications
-                    if ($request->medications) {
-                        foreach ($request->medications as $index => $medicationData) {
-                            if (!empty($medicationData['name'])) {
-                                Medication::create([
-                                    'appointment_id' => $appointment->id,
-                                    'medication_name' => $medicationData['name'],
-                                    'type' => $medicationData['type'] ?? null,
-                                    'dosage' => $medicationData['dosage'] ?? null,
-                                    'duration' => $medicationData['duration'] ?? null,
-                                    'instructions' => $medicationData['instructions'] ?? null,
-                                ]);
-                            }
-                        }
-                    }
-                    // Since medications might be shown on the dashboard (e.g., recent prescriptions)
-                    // We should clear the prescription cache
+                    $this->saveMedications($request, $appointment->id);
                     Cache::forget("doctor_".Auth::id()."_recent_prescriptions");
                 }
+
+                // 4. Save Lab Tests
+                if ($request->has('lab_tests')) {
+                    $this->saveLabTests($request, $appointment->id, $doctorId);
+                }
+
+                // 5. Save AppointmentDetail fields (Advice, Blood Group, Complaints, Diagnosis, Follow-up)
+                $updateDetailData = [];
+                if ($request->has('blood_group')) $updateDetailData['blood_group'] = $request->blood_group;
+                if ($request->has('advice')) $updateDetailData['advice'] = $request->advice;
+                if ($request->has('follow_up_date')) $updateDetailData['follow_up_date'] = $request->follow_up_date;
+                if ($request->has('follow_up_time')) $updateDetailData['follow_up_time'] = $request->follow_up_time;
+                if ($request->has('complaints')) $updateDetailData['complaints'] = $request->complaints;
+                if ($request->has('diagnosis')) $updateDetailData['diagnosis'] = $request->diagnosis;
                 
-                // (Other partial update logic...)
+                if (!empty($updateDetailData)) {
+                    $appointmentDetail->update($updateDetailData);
+                }
 
                 if ($request->ajax()) {
                     return response()->json([
@@ -971,44 +1072,41 @@ class DashboardController extends Controller
                 return redirect()->back()->with('success', 'Section data saved successfully.');
             }
             
-            // Handle full update (Save & End)
-            // (Full update logic... save vitals, notes, etc.)
-            // ...
+            // --- FULL UPDATE LOGIC (Save & End) ---
             
-            // Handle medications
-            // First, delete existing medications for this appointment
-            Medication::where('appointment_id', $appointment->id)->delete();
-            
-            // Then create new medications
-            if ($request->medications) {
-                foreach ($request->medications as $index => $medicationData) {
-                    if (!empty($medicationData['name'])) {
-                        Medication::create([
-                            'appointment_id' => $appointment->id,
-                            'medication_name' => $medicationData['name'],
-                            'type' => $medicationData['type'] ?? null,
-                            'dosage' => $medicationData['dosage'] ?? null,
-                            'duration' => $medicationData['duration'] ?? null,
-                            'instructions' => $medicationData['instructions'] ?? null,
-                        ]);
-                    }
-                }
-            }
-            
-            // (Full update logic for lab tests, complaints, etc.)
-            // ...
+            // 1. Save Vitals
+            $this->saveVitals($request, $appointment->id, $doctorId);
 
-            // Update the appointment status to 'completed'
+            // 2. Save Clinical Notes (Skin Allergy/Notes)
+            $this->saveClinicalNotes($request, $appointment->id, $doctorId);
+            
+            // 3. Save Medications
+            $this->saveMedications($request, $appointment->id);
+            
+            // 4. Save Lab Tests
+            $this->saveLabTests($request, $appointment->id, $doctorId);
+
+            // 5. Save AppointmentDetail fields (All fields)
+            $appointmentDetail->update([
+                'blood_group' => $request->blood_group,
+                'advice' => $request->advice,
+                'follow_up_date' => $request->follow_up_date,
+                'follow_up_time' => $request->follow_up_time,
+                'complaints' => $request->complaints,
+                'diagnosis' => $request->diagnosis,
+            ]);
+
+            // 6. Update the appointment status to 'completed'
             $appointment->update([
                 'status' => 'completed',
                 'completed_at' => now(),
                 'end_reason' => 'Session completed by doctor'
             ]);
             
-            // Update the consultation end_time if there's a linked consultation
+            // 7. Update the consultation end_time
             $payment = $appointment->payment;
             if ($payment && $payment->consultation_id) {
-                $consultation = \App\Models\Consultation::find($payment->consultation_id);
+                $consultation = Consultation::find($payment->consultation_id);
                 if ($consultation) {
                     $consultation->update([
                         'end_time' => now(),
@@ -1017,9 +1115,7 @@ class DashboardController extends Controller
                 }
             }
             
-            // --- THIS IS THE "WALKIE-TALKIE" CALL ---
-            // Erase ALL the answers from the "whiteboard"
-            $doctorId = Auth::user()->id;
+            // 8. Clear Cache (FIXED loop)
             $cacheKeys = [
                 "doctor_{$doctorId}_todays_appointments",
                 "doctor_{$doctorId}_upcoming_appointments",
@@ -1037,7 +1133,10 @@ class DashboardController extends Controller
                 "doctor_{$doctorId}_top_patients",
                 "doctor_{$doctorId}_request_count"
             ];
-            Cache::forgetMultiple($cacheKeys);
+            
+            foreach ($cacheKeys as $key) {
+                Cache::forget($key);
+            }
             
             if ($request->ajax()) {
                 return response()->json([
@@ -1049,6 +1148,9 @@ class DashboardController extends Controller
             
             return redirect()->route('doctor.dashboard')->with('success', 'Appointment details saved successfully and session completed.');
         } catch (\Exception $e) {
+            // FIX: Log and return the exception message
+            Log::error('Error saving appointment details: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            
             if ($request->ajax()) {
                 return response()->json(['success' => false, 'message' => 'Error saving appointment details: ' . $e->getMessage()], 500);
             }
@@ -1761,5 +1863,33 @@ class DashboardController extends Controller
                 'message' => 'Error uploading lab test result: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * AJAX endpoint to get the count of new appointment requests.
+     * This is the "phone number" our JavaScript will call.
+     */
+    public function ajaxGetRequestCount()
+    {
+        // The total number for the side menu badge should be the sum of new requests AND unread notifications
+        // We cache the *result* of the count here for 30 seconds
+        $doctorId = Auth::id();
+        $totalCount = Cache::remember("doctor_{$doctorId}_total_request_and_notification_count", 30, function () {
+            return $this->getAppointmentRequestCount() + $this->getNotificationCount(); // <--- FIXED: Removed (false)
+        });
+        
+        return response()->json(['count' => $totalCount]);
+    }
+
+    // Existing helper method for the notification dot (This will be called by AJAX)
+    public function ajaxGetNotificationCount()
+    {
+        // We cache the *result* of the count here for 30 seconds
+        $doctorId = Auth::id();
+        $count = Cache::remember("doctor_{$doctorId}_just_notification_count", 30, function () {
+            return $this->getNotificationCount(); // <--- FIXED: Removed (false)
+        });
+        
+        return response()->json(['count' => $count]);
     }
 }

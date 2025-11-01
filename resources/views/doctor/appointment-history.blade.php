@@ -723,7 +723,7 @@
                             </div>
                             <div class="form-group">
                                 <label>Follow Up Time</label>
-                                <input type="time" name="follow_up_time" value="{{ $currentAppointmentDetail->follow_up_time ? $currentAppointmentDetail->follow_up_time->format('H:i') : '' }}">
+                                <input type="time" name="follow_up_time" value="{{ $currentAppointmentDetail->follow_up_time ? $currentAppointmentDetail->follow_up_time->format('H:i:s') : '' }}">
                             </div>
                         </div>
                         @if($currentAppointmentDetail->follow_up_date)

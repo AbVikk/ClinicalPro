@@ -20,7 +20,11 @@
         <li class="d-none d-lg-inline-block"><a href="mail-inbox.blade.php" title="Inbox"><i class="zmdi zmdi-email"></i></a></li>
         <li><a href="contact.blade.php" title="Contact List"><i class="zmdi zmdi-account-box-phone"></i></a></li>
         <li class="dropdown"> <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown" role="button"><i class="zmdi zmdi-notifications"></i>
-            <div class="notify" style="display: {{ (isset($notificationCount) && $notificationCount > 0) ? 'block' : 'none' }};"><span class="heartbit"></span><span class="point"></span></div>
+            
+            <!-- 
+                This element holds the red notification dot 
+            -->
+            <div class="notify" id="notification-dot" style="display: {{ (isset($notificationCount) && $notificationCount > 0) ? 'block' : 'none' }};"><span class="heartbit"></span><span class="point"></span></div>
             </a>
             <ul class="dropdown-menu pullDown">
                 <li class="body">
@@ -200,7 +204,13 @@
                     <li><a href="{{ route('doctor.appointments') }}"><i class="zmdi zmdi-calendar-check"></i><span>Appointment</span> </a></li>
                     <li><a href="{{ route('doctor.schedule') }}"><i class="zmdi zmdi-calendar"></i><span>My Schedule</span> </a></li>
                     <li><a href="{{ route('doctor.leaves') }}"><i class="zmdi zmdi-airline-seat-recline-normal"></i><span>Leave</span> </a></li>
-                    <li><a href="{{ route('doctor.requests') }}"><i class="zmdi zmdi-notifications"></i><span>Requests</span> <span class="badge badge-info" id="request-count">{{ $requestCount ?? 0 }}</span></a></li>
+                    <li>
+                        <a href="{{ route('doctor.requests') }}"><i class="zmdi zmdi-notifications"></i>
+                            <span>Requests</span> 
+                            <!-- FIX: The ID is correctly placed on the badge for the JS to update it -->
+                            <span class="badge badge-info" id="live-request-count-badge">{{ $requestCount ?? 0 }}</span>
+                        </a>
+                    </li>
                     <li><a href="{{ route('doctor.prescriptions') }}"><i class="zmdi zmdi-file-text"></i><span>Prescriptions</span></a></li>
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-account-add"></i><span>Doctors</span> </a>
                         <ul class="ml-menu">
@@ -442,7 +452,7 @@
                     </div>
                     <div class="row">
                         <div class="col-7">                            
-                            <small class="displayblock">DISK USAGE</small>
+                            <small class="displayblock">DISK USAGE</MALL>
                             <h5 class="m-b-0 h6">60.10%</h5>
                         </div>
                         <div class="col-5">
@@ -799,3 +809,4 @@
         </div>
     </div>
 </div>
+
