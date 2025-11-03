@@ -684,6 +684,7 @@
                                     <th>Type/Category</th>
                                     <th>Dosage</th>
                                     <th>Duration</th>
+                                    <th>Use Pattern</th>
                                     <th>Instructions</th>
                                 </tr>
                             </thead>
@@ -695,12 +696,13 @@
                                         <td>{{ $medication->type ?? 'N/A' }}</td>
                                         <td>{{ $medication->dosage ?? 'N/A' }}</td>
                                         <td>{{ $medication->duration ?? 'N/A' }}</td>
+                                        <td>{{ $medication->use_pattern ?? 'N/A' }}</td>
                                         <td>{{ $medication->instructions ?? 'N/A' }}</td>
                                     </tr>
                                     @endforeach
                                 @else
                                     <tr>
-                                        <td colspan="5">No medications recorded</td>
+                                        <td colspan="6">No medications recorded</td>
                                     </tr>
                                 @endif
                             </tbody>
@@ -802,11 +804,14 @@
         const detailCards = document.querySelectorAll('.detail-card-value');
         if (detailCards.length > 0) detailCards[0].textContent = '#APT' + String(appointment.id || '').padStart(5, '0');
         if (detailCards.length > 1) detailCards[1].textContent = appointment.doctor_name || 'N/A';
-        if (detailCards.length > 2) detailCards[2].textContent = appointment.appointment_reason || appointment.type || 'General Visit';
+        if (detailCards.length > 2) detailCards[2].textContent = appointment.type_display || 'General Visit'; // 🛑 FIX 1A
         if (detailCards.length > 3) detailCards[3].textContent = (appointment.status || '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-        if (detailCards.length > 4) detailCards[4].textContent = '$' + (appointment.consultation_fee || '200');
+        if (detailCards.length > 4) detailCards[4].textContent = '₦' + (appointment.consultation_fee || '200');
         if (detailCards.length > 5) {
-            detailCards[5].textContent = appointment.appointment_time ? new Date(appointment.appointment_time).toLocaleString('en-US', {
+            detailCards[5].textContent = appointment.duration_display + ' minutes'; // 🛑 FIX 1B: Time Spent
+        }
+        if (detailCards.length > 6) {
+            detailCards[6].textContent = appointment.appointment_time ? new Date(appointment.appointment_time).toLocaleString('en-US', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
@@ -814,9 +819,9 @@
                 minute: '2-digit'
             }) : 'N/A';
         }
-        if (detailCards.length > 6) detailCards[6].textContent = appointment.clinic_location || 'Adrian\'s Dentistry';
-        if (detailCards.length > 7) detailCards[7].textContent = appointment.location || 'Newyork, United States';
-        if (detailCards.length > 8) detailCards[8].textContent = appointment.visit_type || 'General';
+        if (detailCards.length > 7) detailCards[7].textContent = appointment.clinic_display || 'N/A'; // 🛑 FIX 1C: Clinic Location
+        if (detailCards.length > 8) detailCards[8].textContent = appointment.location_display || 'N/A'; // 🛑 FIX 1D: Location Address
+        if (detailCards.length > 9) detailCards[9].textContent = appointment.service_display || 'General'; // 🛑 FIX 1E: Visit Type
         // Total visits stays static from server-side rendering
         
         // Update form fields
@@ -832,7 +837,7 @@
         if (skinAllergy) skinAllergy.value = appointment.skin_allergy || '';
         if (advice) advice.value = appointment.advice || '';
         if (followUpDate) followUpDate.value = appointment.follow_up_date || '';
-        if (followUpTime) followUpTime.value = appointment.follow_up_time || '';
+        if (followUpTime) followUpTime.value = appointment.follow_up_time ? appointment.follow_up_time.substring(0, 5) : '';
         
         // Update vitals
         const bloodPressure = document.querySelector('input[name="blood_pressure"]');
@@ -1004,6 +1009,7 @@
                     <td>${med.type || 'N/A'}</td>
                     <td>${med.dosage || 'N/A'}</td>
                     <td>${med.duration || 'N/A'}</td>
+                    <td>${med.use_pattern || 'N/A'}</td>
                     <td>${med.instructions || 'N/A'}</td>
                 `;
                 tbody.appendChild(row);
@@ -1011,7 +1017,7 @@
         } else {
             console.log('No medications found, showing default message');
             const row = document.createElement('tr');
-            row.innerHTML = '<td colspan="5">No medications recorded</td>';
+            row.innerHTML = '<td colspan="6">No medications recorded</td>';
             tbody.appendChild(row);
         }
     }

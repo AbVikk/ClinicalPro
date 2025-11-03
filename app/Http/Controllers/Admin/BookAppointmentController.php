@@ -14,7 +14,9 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use App\Models\Clinic;
-use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
+use Illuminate\Support\Facades\Cache; 
+use Illuminate\Support\Facades\Auth; 
+use Illuminate\Support\Facades\Validator; 
 
 class BookAppointmentController extends Controller
 {
@@ -36,7 +38,7 @@ class BookAppointmentController extends Controller
         }
         
         // Fetch all active services for the dropdown
-        $services = Service::with('activeTimePricings')->get();
+        $services = Service::with('activeTimePricings')->select('id', 'service_name', 'price_amount', 'default_duration')->get();
         $clinics = Clinic::where('is_physical', 1)->get(); 
         
         return view('admin.book-appointment', compact('patientData', 'services', 'clinics'));
@@ -105,11 +107,7 @@ class BookAppointmentController extends Controller
             ->where('start_date', '<=', $date)
             ->where('end_date', '>=', $date)
             ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $startTime)
-            ->where(DB::raw('CAST(end_time AS TIME)'), '>', $startTime) // Check start time fits schedule
-             // --- ALSO CHECK END TIME FITS SCHEDULE ---
-             // Ensures the *entire* duration fits within the doctor's scheduled block
             ->where(DB::raw('CAST(end_time AS TIME)'), '>=', $appointmentEnd->format('H:i:s'))
-             // --- END END TIME CHECK ---
             ->pluck('doctor_id')
             ->unique();
         Log::info("Found " . $scheduledDoctorIds->count() . " doctor IDs matching schedule rules.");
@@ -137,26 +135,21 @@ class BookAppointmentController extends Controller
          }
 
 
-        // --- 6. CORRECTED AGAIN: Check for Conflicting Consultations ---
-             Log::info("Checking for conflicts for doctor IDs: " . json_encode($verifiedDoctorIds->toArray())); // Log the IDs going into the check
-             $conflictingDoctorIds = \App\Models\Consultation::whereIn('doctor_id', $verifiedDoctorIds) // *** Use Consultation model ***
-                 // Look for consultations that are NOT completed, missed, or cancelled
+        // --- 6. Check for Conflicting Consultations ---
+             Log::info("Checking for conflicts for doctor IDs: " . json_encode($verifiedDoctorIds->toArray())); 
+             $conflictingDoctorIds = \App\Models\Consultation::whereIn('doctor_id', $verifiedDoctorIds) 
                  ->whereNotIn('status', ['completed', 'missed', 'cancelled'])
-                 // Check for overlap:
-                 // (ExistingStart < ProposedEnd) AND (ExistingEnd > ProposedStart)
                  ->where(function ($query) use ($appointmentStart, $appointmentEnd) {
-                     $query->where('start_time', '<', $appointmentEnd) // *** Use Consultation's start_time ***
-                           ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $appointmentStart); // *** Use Consultation's start_time AND duration_minutes ***
+                     $query->where('start_time', '<', $appointmentEnd) 
+                           ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $appointmentStart); 
                  })
-                 ->pluck('doctor_id') // Get IDs of doctors WITH conflicts
+                 ->pluck('doctor_id') 
                  ->unique();
              Log::info("Found " . $conflictingDoctorIds->count() . " doctors with conflicting consultations: " . json_encode($conflictingDoctorIds->toArray()));
-             // --- END CONFLICT CHECK ---
 
              // 7. Get the IDs of doctors who are verified AND have NO conflicts
-             // Use collect() helper to make diff() easier
              $trulyAvailableDoctorIds = collect($verifiedDoctorIds)->diff($conflictingDoctorIds);
-             Log::info("Final available (verified, no conflict) doctor IDs: " . json_encode($trulyAvailableDoctorIds->toArray())); // Use toArray() for logging
+             Log::info("Final available (verified, no conflict) doctor IDs: " . json_encode($trulyAvailableDoctorIds->toArray())); 
 
              // 8. Get the details for the final list (Users table)
              $doctors = User::whereIn('id', $trulyAvailableDoctorIds)
@@ -167,18 +160,17 @@ class BookAppointmentController extends Controller
              // 9. Send the list back
              Log::info("=== GetAvailableDoctors End ===");
              return response()->json(['doctors' => $doctors]);
-    } // Make sure this closing brace matches the function definition
+    } 
 
     /**
      * Find available LOCATIONS based on a selected date and time.
-     * (With added logging and CORRECTED status checks)
      */
     public function getAvailableLocations(Request $request)
     {
         // 1. Get the date/time string
         $dateTimeString = $request->input('date');
-        Log::info("=== GetAvailableLocations Start ==="); // LOG START
-        Log::info("Received date/time string: " . $dateTimeString); // LOG 1
+        Log::info("=== GetAvailableLocations Start ==="); 
+        Log::info("Received date/time string: " . $dateTimeString); 
         if (!$dateTimeString) {
             Log::warning("No date/time string received.");
             return response()->json(['locations' => []]);
@@ -196,80 +188,65 @@ class BookAppointmentController extends Controller
         $dayOfWeek = strtolower($selectedDateTime->format('l'));
         $time = $selectedDateTime->format('H:i:s');
         $date = $selectedDateTime->format('Y-m-d');
-        Log::info("Checking Rulebook for: Day={$dayOfWeek}, Date={$date}, Time={$time}"); // LOG 2
+        Log::info("Checking Rulebook for: Day={$dayOfWeek}, Date={$date}, Time={$time}"); 
 
-        // 4. Find matching schedules WITHOUT doctor check first
+        // 4. Find matching schedules WITHOUT duration check here
         $schedulesQuery = DoctorSchedule::where('day_of_week', $dayOfWeek)
             ->where('start_date', '<=', $date)
             ->where('end_date', '>=', $date)
             ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $time)
             ->where(DB::raw('CAST(end_time AS TIME)'), '>', $time);
 
-        Log::debug("SQL for matching schedules (Time/Date only): " . $schedulesQuery->toSql(), $schedulesQuery->getBindings()); // LOG 3
         $schedulesFound = $schedulesQuery->get();
-        Log::info("Found " . $schedulesFound->count() . " schedules matching time/date criteria."); // LOG 4
+        Log::info("Found " . $schedulesFound->count() . " schedules matching time/date criteria."); 
 
         if ($schedulesFound->isEmpty()) {
             Log::info("No schedules match time/date. Returning empty locations.");
-            Log::info("=== GetAvailableLocations End ==="); // LOG END
+            Log::info("=== GetAvailableLocations End ==="); 
             return response()->json(['locations' => []]);
         }
 
         // 5. NOW check the doctors for those schedules
         $verifiedDoctorIds = [];
         foreach ($schedulesFound as $schedule) {
-            $doctorUser = $schedule->doctor; // Use the relationship
+            $doctorUser = $schedule->doctor; 
 
-            // --- START DETAILED DOCTOR CHECK ---
             if (!$doctorUser) {
-                Log::warning("Schedule ID {$schedule->id} has no linked user (doctor_id: {$schedule->doctor_id}). Skipping.");
                 continue;
             }
 
-            Log::info("Checking Doctor User ID: {$doctorUser->id}, Name: {$doctorUser->name}, Role: {$doctorUser->role}, User Status: '{$doctorUser->status}'");
-
             if ($doctorUser->role !== 'doctor') {
-                 Log::info("--> User ID {$doctorUser->id} is not a doctor. Skipping.");
                  continue;
             }
-            // *** CORRECTED STATUS CHECK FOR USER ***
-            if ($doctorUser->status !== 'active') { // Use 'active' from users table
-                 Log::info("--> User ID {$doctorUser->id} status is not 'active'. Skipping.");
+            
+            if ($doctorUser->status !== 'active') { 
                  continue;
             }
 
-            // --- Check the Doctor Profile (doctors_new table) ---
-            // !!! Using 'doctorProfile' based on your User model !!!
             $doctorProfile = $doctorUser->doctorProfile;
 
             if (!$doctorProfile) {
-                Log::warning("--> User ID {$doctorUser->id} has no Doctor Profile (doctors_new record). Skipping.");
                 continue;
             }
 
-            Log::info("--> Checking Doctor Profile Status: '{$doctorProfile->status}'");
-            // *** CORRECTED STATUS CHECK FOR DOCTOR PROFILE ***
-            if ($doctorProfile->status !== 'verified') { // Use 'Verified' from doctors_new table
-                Log::info("--> Doctor Profile status for User ID {$doctorUser->id} is not 'Verified'. Skipping.");
+            if ($doctorProfile->status !== 'verified') { 
                 continue;
             }
-            // --- END DETAILED DOCTOR CHECK ---
 
-            Log::info("===> Doctor User ID {$doctorUser->id} PASSED all checks. Adding to list.");
-            $verifiedDoctorIds[] = $doctorUser->id; // Add the USER ID
+            $verifiedDoctorIds[] = $doctorUser->id; 
         }
-        // Make sure the list has unique IDs
+        
         $uniqueVerifiedDoctorIds = array_unique($verifiedDoctorIds);
-        Log::info("Unique Verified Doctor User IDs found: " . json_encode($uniqueVerifiedDoctorIds)); // LOG 5
+        Log::info("Unique Verified Doctor User IDs found: " . json_encode($uniqueVerifiedDoctorIds)); 
 
         // 6. Filter the original schedules to only include those linked to verified doctors
         $finalSchedules = $schedulesFound->whereIn('doctor_id', $uniqueVerifiedDoctorIds);
-        Log::info("Found " . $finalSchedules->count() . " schedules linked to verified doctors."); // LOG 6
+        Log::info("Found " . $finalSchedules->count() . " schedules linked to verified doctors."); 
 
 
         // 7. Get unique locations from the FINAL schedules
         $availableLocationIds = $finalSchedules->pluck('location')->unique()->values();
-        Log::info("Unique location IDs from final schedules: " . json_encode($availableLocationIds)); // LOG 7
+        Log::info("Unique location IDs from final schedules: " . json_encode($availableLocationIds)); 
 
         // 8. Build the final list
         $locations = [];
@@ -283,7 +260,6 @@ class BookAppointmentController extends Controller
         }
 
         if (!empty($clinicIds)) {
-             Log::info("Fetching names for clinic IDs: " . json_encode($clinicIds)); // LOG 8
             $clinics = \App\Models\Clinic::whereIn('id', $clinicIds)->select('id', 'name')->get();
             foreach ($clinics as $clinic) {
                 $locations[] = ['id' => $clinic->id, 'name' => $clinic->name];
@@ -295,8 +271,8 @@ class BookAppointmentController extends Controller
             return strcmp($a['name'], $b['name']);
         });
 
-        Log::info("Returning final locations list: " . json_encode($locations)); // LOG 9
-        Log::info("=== GetAvailableLocations End ==="); // LOG END
+        Log::info("Returning final locations list: " . json_encode($locations)); 
+        Log::info("=== GetAvailableLocations End ==="); 
         return response()->json(['locations' => $locations]);
     }
         
@@ -327,70 +303,89 @@ class BookAppointmentController extends Controller
         $request->merge(['appointment_date' => $formattedDate]);
         
         $request->validate([
-            'patient_id' => 'required|exists:users,user_id', // Patient ID is required and must exist
+            'patient_id' => 'required|exists:users,user_id', 
             'doctor_id' => 'required|exists:users,id',
             'appointment_date' => 'required|date',
             'service_id' => 'required|exists:hospital_services,id',
-            'service_duration' => 'required|integer|in:30,40,60', // Validate duration
-            'service_price' => 'required|numeric|min:0', // Validate price
+            'service_duration' => 'required|integer|min:1', 
+            'service_price' => 'required|numeric|min:0', 
             'reason' => 'nullable|string',
+            'clinic_id' => 'required|string', // Allow 'virtual' string
         ]);
         
-        // Get the patient user ID
         $patient = User::where('user_id', $request->input('patient_id'))->first();
-        
-        // Get the service
         $service = Service::findOrFail($request->input('service_id'));
         
-        // SECURITY: Do not trust the service_price from the form submission
-        // Recalculate the price based on service and duration for data integrity
+        // --- NEW SMARTER BILLING LOGIC (FIXED) ---
         $basePrice = $service->price_amount;
-        $duration = $request->input('service_duration');
+        $baseDuration = $service->default_duration ?? 30; // e.g., 30
+        $submittedDuration = $request->input('service_duration'); // e.g., 15
+        $submittedFee = $request->input('service_price');
         
-        // Define the price modifiers based on selected duration (minutes)
-        // 30 mins: 1.0 (Base Price)
-        // 40 mins: 1.25 (Base Price + 25%)
-        // 60 mins: 1.50 (Base Price + 50%)
-        $durationModifiers = [
-            30 => 1.0,
-            40 => 1.25,
-            60 => 1.50
-        ];
+        // Calculate the Rate Per Minute (e.g., 5000 / 30 = 166.67)
+        $ratePerMinute = round($basePrice / $baseDuration, 2); 
         
-        $modifier = $durationModifiers[$duration] ?? 1.0;
-        $calculatedFee = $basePrice * $modifier;
+        // FIX 1: Calculate the linear fee for the actual duration
+        $calculatedFee = $submittedDuration * $ratePerMinute;
         
-        // Create Consultation Record (initially scheduled but pending payment)
+        // FIX 2: Enforce a Minimum Fee (e.g., based on 15 mins)
+        $minBillableDuration = 15;
+        $minFee = $minBillableDuration * $ratePerMinute;
+        
+        // The final fee must be at least the 15-minute minimum (2500).
+        $calculatedFee = max($calculatedFee, $minFee); 
+        
+        // Round the final calculated fee to the nearest whole number for payment
+        $calculatedFee = round($calculatedFee);
+        
+        // SECURITY CHECK: Ensure the submitted fee is close to the server's calculation
+        if (abs($calculatedFee - $submittedFee) > 1) {
+             Log::warning("Price Mismatch: Calculated={$calculatedFee}, Submitted={$submittedFee}. Using Calculated Fee.");
+        }
+        // --- END NEW SMARTER BILLING LOGIC ---
+        
+        // --- FIX: Determine Location ID and Delivery Channel ---
+        $clinicInput = $request->input('clinic_id'); 
+        $isVirtual = $clinicInput === 'virtual';
+        
+        // FIX 4: Assign integer 1 (or your designated 'Virtual Clinic' ID) when the input is 'virtual'.
+        $locationId = $isVirtual ? 1 : (is_numeric($clinicInput) ? (int)$clinicInput : 1); 
+        
+        // Create Consultation Record 
         $consultation = new \App\Models\Consultation();
         $consultation->patient_id = $patient->id;
         $consultation->doctor_id = $request->input('doctor_id');
-        $consultation->location_id = 1; // Default to virtual channel
-        $consultation->delivery_channel = 'virtual'; // Default to virtual
+        
+        // FIX: Use the cleaned integer ID/NULL
+        $consultation->location_id = $locationId; 
+        
+        // FIX: Use 'virtual' or 'physical' string
+        $consultation->delivery_channel = $isVirtual ? 'virtual' : 'physical'; 
+        
         $consultation->service_type = $service->service_name;
-        $consultation->reason = $request->input('reason'); // Store the reason in the consultation
-        $consultation->duration_minutes = $request->input('service_duration'); // Store the duration
-        $consultation->fee = $calculatedFee; // Use our calculated fee, not the submitted one
-        $consultation->status = 'scheduled'; // Use 'scheduled' as it's a valid enum value
+        $consultation->reason = $request->input('reason'); 
+        $consultation->duration_minutes = $request->input('service_duration'); 
+        $consultation->fee = $calculatedFee; 
+        $consultation->status = 'missed';
         $consultation->start_time = $request->input('appointment_date');
         $consultation->save();
         
-        // Create Payment Record (initially pending)
+        // Create Payment Record 
         $payment = new \App\Models\Payment();
         $payment->user_id = $patient->id;
         $payment->consultation_id = $consultation->id;
-        $payment->clinic_id = 1; // Default to virtual channel
-        $payment->amount = $calculatedFee; // Use our calculated fee, not the submitted one
+        
+        // FIX: Use the cleaned integer ID/NULL
+        $payment->clinic_id = $locationId; 
+        
+        $payment->amount = $calculatedFee; 
     
-        // Set payment method and status for pending payment
-        $payment->method = 'card_online'; // Will be updated after successful payment
-        $payment->status = 'pending_cash_verification'; // Pending until payment is verified
+        $payment->method = 'card_online'; 
+        $payment->status = 'pending_cash_verification'; 
         
         $payment->reference = 'CONS-' . $consultation->id . '-' . time();
         $payment->transaction_date = now();
         $payment->save();
-        
-        // DO NOT create appointment record yet - only create after successful payment
-        // DO NOT create notification yet - only create after successful payment
         
         // Redirect to payment page
         return redirect()->route('admin.appointment.payment.initialize', [
@@ -403,8 +398,6 @@ class BookAppointmentController extends Controller
     
     /**
      * Show the doctor availability management form.
-     *
-     * @return \Illuminate\Http\Response
      */
     public function showAvailabilityForm()
     {
@@ -414,9 +407,6 @@ class BookAppointmentController extends Controller
     
     /**
      * Update doctor availability.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
      */
     public function updateAvailability(Request $request)
     {
@@ -434,9 +424,6 @@ class BookAppointmentController extends Controller
     
     /**
      * Store a walk-in patient and redirect back to booking.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
      */
     public function storeWalkInPatient(Request $request)
     {
@@ -446,7 +433,6 @@ class BookAppointmentController extends Controller
             'email' => 'nullable|email|max:255',
         ]);
         
-        // Create a new patient user
         $user = new User();
         $user->name = $request->input('name');
         $user->phone = $request->input('phone');
@@ -454,22 +440,17 @@ class BookAppointmentController extends Controller
         $user->role = 'patient';
         $user->status = 'active';
         
-        // Generate a unique patient ID
         $userId = 'PAT-' . time() . '-' . rand(1000, 9999);
         $user->user_id = $userId;
         
-        // Set a default password (should be changed by patient later)
         $user->password = bcrypt('password123');
         
         $user->save();
 
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // A new patient was created. Erase the "whiteboard" answers!
         Cache::forget("admin_stats_total_users");
         Cache::forget("admin_stats_new_registrations_7d");
         Cache::forget("admin_stats_new_patients_list");
         Cache::forget("admin_stats_prev_week_registrations");
-        // --- END OF WHISTLEBLOWER ---
         
         return response()->json([
             'success' => true,
@@ -486,15 +467,12 @@ class BookAppointmentController extends Controller
         $consultationId = $request->input('consultation_id');
         $paymentId = $request->input('payment_id');
         $serviceId = $request->input('service_id');
-        $patientId = $request->input('patient_id');
         
-        // Get consultation and payment details
         $consultation = \App\Models\Consultation::findOrFail($consultationId);
         $payment = \App\Models\Payment::findOrFail($paymentId);
         $patient = \App\Models\User::findOrFail($consultation->patient_id);
         $service = \App\Models\Service::findOrFail($serviceId ?? $consultation->service_type);
         
-        // Get Paystack public key
         $publicKey = config('services.paystack.public_key');
         
         return view('admin.appointment-payment', compact('consultation', 'payment', 'patient', 'publicKey', 'service'));
@@ -502,9 +480,6 @@ class BookAppointmentController extends Controller
     
     /**
      * Search patients by name.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
      */
     public function searchPatients(Request $request)
     {
@@ -525,9 +500,6 @@ class BookAppointmentController extends Controller
     
     /**
      * Get time-based pricing for a service.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
      */
     public function getServiceTimePricing(Request $request)
     {
@@ -535,7 +507,6 @@ class BookAppointmentController extends Controller
         
         $service = Service::with('activeTimePricings')->findOrFail($serviceId);
         
-        // Return the time pricings for this service
         return response()->json([
             'time_pricings' => $service->activeTimePricings,
             'default_price' => $service->price_amount,

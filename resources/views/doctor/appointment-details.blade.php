@@ -7,15 +7,13 @@
 <meta name="description" content="Doctor appointment details">
 
 <title>ClinicalPro || Appointment Details</title>
-<!-- Favicon -->
 <link rel="icon" href="{{ asset('assets/favicon.ico') }}" type="image/x-icon">
 
-<!-- Bootstrap CSS -->
 <link rel="stylesheet" href="{{ asset('assets/plugins/bootstrap/css/bootstrap.min.css') }}">
 
-<!-- Custom Css -->
 <link rel="stylesheet" href="{{ asset('assets/css/main.css') }}">
 <link rel="stylesheet" href="{{ asset('assets/css/color_skins.css') }}">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
 
 <style>
     .appointment-header {
@@ -273,7 +271,6 @@
 </style>
 </head>
 <body class="theme-cyan">
-<!-- Page Loader -->
 <div class="page-loader-wrapper">
     <div class="loader">
         <div class="m-t-30"><img class="zmdi-hc-spin" src="{{ asset('assets/images/logo.svg') }}" width="48" height="48" alt="Clinical Pro"></div>
@@ -281,7 +278,6 @@
     </div>
 </div>
 
-<!-- Include Doctor Sidemenu -->
 @include('doctor.sidemenu')
 
 <section class="content">
@@ -299,7 +295,6 @@
     </div>
 
     <div class="container-fluid">
-        <!-- Flash Messages -->
         @if(session('success'))
             <div class="alert alert-success alert-dismissible fade show" role="alert">
                 <strong>Success!</strong> {{ session('success') }}
@@ -320,7 +315,6 @@
 
         <div class="row clearfix">
             <div class="col-lg-12">
-                <!-- Appointment Header -->
                 <div class="appointment-header">
                     <div class="patient-info-section">
                         <img src="{{ $appointment->patient->photo ? asset('storage/' . $appointment->patient->photo) : asset('assets/images/xs/avatar1.jpg') }}" alt="Patient" class="patient-image">
@@ -394,14 +388,12 @@
                         </div>
                 </div>
                  
-                <!-- Countdown Timer -->
                 <div class="countdown-section">
                     <div class="countdown-label">Session Time Remaining</div>
                     <div class="countdown-timer" id="countdown-timer">--:--:--</div>
                     <div class="countdown-label">This session will end automatically</div>
                 </div>
                 
-                <!-- Appointment Details Form -->
                 <form id="appointment-details-form" action="{{ route('doctor.appointments.save-details', $appointment->id) }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <div class="form-section">
@@ -508,7 +500,6 @@
                                     @if(!empty($labTest->file_path))
                                         <input type="hidden" name="lab_tests[{{ $index }}][file_path]" value="{{ $labTest->file_path }}">
                                     @endif
-                                    <!-- Add file input for existing lab tests -->
                                     <input type="file" name="lab_tests[{{ $index }}][file]" class="form-control-file lab-test-file-input" style="display: none;">
                                 </div>
                                 @endforeach
@@ -518,7 +509,6 @@
                             <div class="form-group">
                                 <input type="text" id="new-lab-test-name" placeholder="Lab test name">
                             </div>
-                            <!-- Remove the global file input and add a placeholder for new tests -->
                             <div class="form-group">
                                 <div id="new-lab-test-file-placeholder"></div>
                             </div>
@@ -620,6 +610,7 @@
                                     <th>Type/Category</th>
                                     <th>Dosage</th>
                                     <th>Duration</th>
+                                    <th>Use Pattern</th>
                                     <th>Instructions</th>
                                     <th>Action</th>
                                 </tr>
@@ -661,6 +652,11 @@
                                         </td>
                                         <td>
                                             <input type="text" name="medications[{{ $index }}][duration]" class="form-control" placeholder="e.g., 7 days" value="{{ $medication->duration }}">
+                                        </td>
+                                        <td>
+                                            <select name="medications[{{ $index }}][use_pattern]" class="form-control medication-use-pattern-select">
+                                                <option value="{{ $medication->use_pattern ?? '' }}" selected>{{ $medication->use_pattern ?? 'Select pattern' }}</option>
+                                            </select>
                                         </td>
                                         <td>
                                             <input type="text" name="medications[{{ $index }}][instructions]" class="form-control" placeholder="e.g., Before meal" value="{{ $medication->instructions }}">
@@ -707,6 +703,11 @@
                                         </td>
                                         <td>
                                             <input type="text" name="medications[0][duration]" class="form-control" placeholder="e.g., 7 days">
+                                        </td>
+                                        <td>
+                                            <select name="medications[0][use_pattern]" class="form-control medication-use-pattern-select">
+                                                <option value="">Select pattern</option>
+                                            </select>
                                         </td>
                                         <td>
                                             <input type="text" name="medications[0][instructions]" class="form-control" placeholder="e.g., Before meal">
@@ -769,49 +770,81 @@
     </div>
 </section>
 
-<!-- Jquery Core Js -->
 <script src="{{ asset('assets/bundles/libscripts.bundle.js') }}"></script>
 <script src="{{ asset('assets/bundles/vendorscripts.bundle.js') }}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
 <script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM fully loaded and parsed');
 
-    // Check if the save button exists
-    const saveButton = document.querySelector('.btn-save-end');
-    if (saveButton) {
-        console.log('Save button found');
-    } else {
-        console.error('Save button not found');
-    }
+    // --- Configuration for Use Patterns ---
+    const usePatterns = [
+        '1-0-1', '1-1-1', '2-0-0', '0-0-1', 
+        '1-0-0', '0-1-0', '0-1-1', '2-1-1',
+        '2-1-2', '1-2-1', '2-2-2', '0-0-0'
+    ];
 
-    // Check if the form exists
-    const form = document.getElementById('appointment-details-form');
-    if (form) {
-        console.log('Form found');
-    } else {
-        console.error('Form not found');
-    }
+    // Function to populate the use pattern dropdown
+    function populateUsePatterns(selectElement, selectedValue = '') {
+        // Clear all options first
+        selectElement.innerHTML = ''; 
+        
+        // 1. Add the initial saved/placeholder option
+        const initialOption = document.createElement('option');
+        initialOption.value = selectedValue;
+        initialOption.textContent = selectedValue || 'Select pattern';
+        initialOption.selected = true;
+        selectElement.appendChild(initialOption);
 
-    // Initialize medication name fields
-    document.querySelectorAll('.medication-name-select').forEach(function(select) {
-        const input = select.closest('td').querySelector('.medication-name-input');
-        const row = select.closest('tr');
-        const rowIndex = Array.from(row.parentElement.children).indexOf(row);
-
-        if (select.value) {
-            select.setAttribute('name', `medications[${rowIndex}][name]`);
-            input.removeAttribute('name');
-        } else {
-            select.removeAttribute('name');
-            if (input.value) {
-                input.setAttribute('name', `medications[${rowIndex}][name]`);
+        // 2. Add all other options, skipping the one already added (if it's in the list)
+        usePatterns.forEach(pattern => {
+            if (pattern !== selectedValue) {
+                const option = document.createElement('option');
+                option.value = pattern;
+                option.textContent = pattern;
+                selectElement.appendChild(option);
             }
-        }
-    });
+        });
+    }
 
-    // --- Configuration and Elements ---
+    // --- Select2 Initialization Function ---
+    function initializeSelect2OnRow(rowElement) {
+        // Medication Name (Select or Type)
+        $(rowElement).find('.medication-name-select').select2({
+            tags: true, // Allows typing a name not in the list
+            placeholder: "Select or type medication name",
+            allowClear: true,
+            theme: "default"
+        });
+
+        // Medication Type/Category
+        $(rowElement).find('.medication-type-select').select2({
+            placeholder: "Select category",
+            allowClear: true,
+            theme: "default"
+        });
+        
+        // Medication Dosage
+        $(rowElement).find('.medication-dosage-select').select2({
+            placeholder: "Select dosage",
+            allowClear: true,
+            theme: "default"
+        });
+        
+        // Use Pattern
+        $(rowElement).find('.medication-use-pattern-select').select2({
+            placeholder: "Select pattern",
+            allowClear: true,
+            theme: "default"
+        });
+    }
+
+    // 🛑 CRITICAL FIX: Removed the buggy initial medication name fields logic here.
+    // The fields will now retain their name from Blade, and the 'change' listener will manage the rest.
+
+    // --- Core Session Countdown Logic ---
     const countdownTimerElement = document.getElementById('countdown-timer');
     const localStorageKey = 'appointmentSessionEndTime_{{ $appointment->id }}';
     const durationMinutes = {{ $appointment->consultation?->duration_minutes ?? 30 }};
@@ -842,7 +875,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Countdown initialized with " + durationMinutes + " minute duration. End time:", new Date(sessionEndTime).toISOString());
     }
 
-    // --- Core Countdown Function ---
     function updateCountdown() {
         const now = new Date().getTime();
         const diff = sessionEndTime - now;
@@ -867,20 +899,18 @@ document.addEventListener('DOMContentLoaded', function() {
         countdownTimerElement.textContent = timeString;
     }
 
-    // Start the timer
-    let timerInterval; // Define timerInterval here
-    if (countdownTimerElement) { // Only start if element exists
+    let timerInterval;
+    if (countdownTimerElement) {
          timerInterval = setInterval(updateCountdown, 1000);
-         updateCountdown(); // Initial call
+         updateCountdown();
     }
 
 
-    // --- Auxiliary Form Functions ---
     function endSession() {
         localStorage.removeItem(localStorageKey);
         alert('Session time has expired. The appointment will be ended automatically.');
 
-        const endForm = document.createElement('form'); // Renamed to avoid conflict
+        const endForm = document.createElement('form');
         endForm.method = 'POST';
         endForm.action = '{{ route("doctor.appointments.end", $appointment->id) }}';
 
@@ -899,6 +929,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.appendChild(endForm);
         endForm.submit();
     }
+
+    // --- Form Submission and Section Saving ---
 
     // Handle form submission for Save & End button
     document.getElementById('save-and-end-btn')?.addEventListener('click', function(e) {
@@ -949,11 +981,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // --- Section Save Functions & Add/Remove Logic ---
-
     // Generic function to save a section via AJAX
     function saveSection(formData, successMsg, errorMsgBase) {
-         formData.append('_token', '{{ csrf_token() }}'); // Ensure CSRF token is added
+         formData.append('_token', '{{ csrf_token() }}');
 
         return fetch('{{ route("doctor.appointments.save-details", $appointment->id) }}', {
             method: 'POST',
@@ -978,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', function() {
      // Add remove functionality to dynamically added tags/rows
      function addRemoveListener(element) {
         element.querySelector('.tag-remove, .remove-medication')?.addEventListener('click', function() {
-            element.remove();
+            this.closest('.complaint-tag, .diagnosis-tag, .lab-test-item, tr').remove();
         });
     }
 
@@ -1001,7 +1031,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData();
         const vitalsFields = ['blood_pressure', 'temperature', 'pulse', 'respiratory_rate', 'spo2', 'height', 'weight', 'waist', 'bsa', 'bmi'];
         vitalsFields.forEach(field => {
-            const input = document.querySelector(`input[name="${field}"]`); // Use the main form variable
+            const input = document.querySelector(`input[name="${field}"]`);
             if (input) formData.append(field, input.value);
         });
         saveSection(formData, 'Vitals saved!', 'Error saving vitals');
@@ -1033,7 +1063,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tag.className = 'complaint-tag';
             tag.innerHTML = `${value} <span class="tag-remove">×</span><input type="hidden" name="complaints[]" value="${value}">`;
             container.appendChild(tag);
-            addRemoveListener(tag); // Add listener to the new tag
+            addRemoveListener(tag);
             input.value = '';
         }
     });
@@ -1045,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('#complaints-container input[name^="complaints"]').forEach(input => {
              complaints.push(input.value);
         });
-        // Add complaints as an array
+        
         complaints.forEach((complaint, index) => {
             formData.append(`complaints[${index}]`, complaint);
         });
@@ -1063,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tag.className = 'diagnosis-tag';
             tag.innerHTML = `${value} <span class="tag-remove">×</span><input type="hidden" name="diagnosis[]" value="${value}">`;
             container.appendChild(tag);
-            addRemoveListener(tag); // Add listener
+            addRemoveListener(tag);
             input.value = '';
         }
     });
@@ -1075,7 +1105,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('#diagnosis-container input[name^="diagnosis"]').forEach(input => {
              diagnosis.push(input.value);
         });
-        // Add diagnosis as an array
+        
         diagnosis.forEach((diag, index) => {
             formData.append(`diagnosis[${index}]`, diag);
         });
@@ -1090,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const container = document.getElementById('lab-tests-container');
             const index = container.querySelectorAll('.lab-test-item').length;
             const tag = document.createElement('div');
-            tag.className = 'complaint-tag lab-test-item'; // Re-using style, adjust if needed
+            tag.className = 'complaint-tag lab-test-item';
             tag.dataset.index = index;
             tag.innerHTML = `
                 <span class="lab-test-name">${value}</span>
@@ -1099,9 +1129,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <input type="hidden" name="lab_tests[${index}][name]" value="${value}">
                 <input type="file" name="lab_tests[${index}][file]" class="form-control-file lab-test-file-input" style="display: inline-block; width: auto; margin-left: 10px;">`;
             container.appendChild(tag);
-            addRemoveListener(tag); // Add listener
+            addRemoveListener(tag);
 
-            // Add listener for file name display
             const fileInput = tag.querySelector('.lab-test-file-input');
             fileInput.addEventListener('change', function() {
                 const fileNameSpan = tag.querySelector('.lab-test-file');
@@ -1114,28 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
      // Save Lab Tests
      document.getElementById('save-lab-tests')?.addEventListener('click', function() {
-         // Saving lab tests requires file handling, better done via full form submit or specific AJAX
-         alert('Please use the main "Save & End" button to save lab tests with files.');
-         // Or implement specific FormData handling for files if needed for partial saves
-         /*
-         const formData = new FormData();
-         document.querySelectorAll('#lab-tests-container .lab-test-item').forEach((item, i) => {
-             const nameInput = item.querySelector('input[type="hidden"]');
-             const fileInput = item.querySelector('input[type="file"]');
-             if (nameInput) formData.append(`lab_tests[${i}][name]`, nameInput.value);
-             // Append file only if selected
-             if (fileInput && fileInput.files.length > 0) {
-                 formData.append(`lab_tests[${i}][file]`, fileInput.files[0]);
-             } else {
-                  // Check if there was an existing file path hidden input
-                  const existingPathInput = item.querySelector('input[name$="[file_path]"]');
-                  if (existingPathInput) {
-                      formData.append(`lab_tests[${i}][file_path]`, existingPathInput.value);
-                  }
-             }
-         });
-         saveSection(formData, 'Lab tests saved!', 'Error saving lab tests');
-         */
+         alert('To save lab tests with files, please use the main "Save & End" button.');
     });
 
     // Add Medication
@@ -1166,24 +1174,66 @@ document.addEventListener('DOMContentLoaded', function() {
                 </select>
             </td>
             <td><input type="text" name="medications[${rowCount}][duration]" class="form-control" placeholder="e.g., 7 days"></td>
+            <td>
+                <select name="medications[${rowCount}][use_pattern]" class="form-control medication-use-pattern-select"></select>
+            </td>
             <td><input type="text" name="medications[${rowCount}][instructions]" class="form-control" placeholder="e.g., Before meal"></td>
             <td><button type="button" class="btn-cancel remove-medication"><i class="zmdi zmdi-delete"></i></button></td>`;
 
-        addRemoveListener(newRow); // Add listener
-        addMedicationNameToggleListener(newRow.querySelector('.medication-name-select')); // Add toggle listener
+        addRemoveListener(newRow);
+        addMedicationNameToggleListener(newRow.querySelector('.medication-name-select'));
+        populateUsePatterns(newRow.querySelector('.medication-use-pattern-select'));
+        initializeSelect2OnRow(newRow); // Initialize Select2 on the new row
     });
 
      // Save Medications
      document.getElementById('save-medications')?.addEventListener('click', function() {
         const formData = new FormData(document.getElementById('appointment-details-form'));
-        // Filter to only include medication data
         const medicationData = new FormData();
-        for (const [key, value] of formData.entries()) {
-            if (key.startsWith('medications')) {
-                medicationData.append(key, value);
+        // Since we removed the buggy initialization, ALL fields should be present.
+        // We rely on Laravel's input processing to correctly merge the data.
+        
+        // This loop is redundant and can cause issues. It's best to rely on Laravel to process
+        // all input fields named 'medications[...]'
+
+        // The current implementation of saving medications relies on ALL fields being passed,
+        // so we must send ALL data, not just medication data.
+        // Let's modify the function to send a simplified form of medication data.
+        
+        // --- FIX: Gather all medication-related fields for partial update ---
+        const medicationForm = document.createElement('form');
+        document.querySelectorAll('#medications-container tr').forEach((row, index) => {
+            const nameSelect = row.querySelector('.medication-name-select');
+            const nameInput = row.querySelector('.medication-name-input');
+            
+            // Re-assert name attributes for submission coherence
+            if (nameSelect && nameInput) {
+                 if (nameSelect.value) { // Name selected from list
+                    nameSelect.setAttribute('name', `medications[${index}][name]`);
+                    nameInput.removeAttribute('name');
+                } else if (nameInput.value) { // Custom name typed
+                    nameInput.setAttribute('name', `medications[${index}][name]`);
+                    nameSelect.removeAttribute('name');
+                } else {
+                    // Remove both names if the row is empty
+                    nameSelect.removeAttribute('name');
+                    nameInput.removeAttribute('name');
+                }
             }
-        }
-        saveSection(medicationData, 'Medications saved!', 'Error saving medications');
+            
+            // Clone and append all inputs and selects from the row to the temporary form
+            row.querySelectorAll('input, select').forEach(control => {
+                if (control.name && control.name.startsWith('medications')) {
+                    const clonedControl = control.cloneNode(true);
+                    medicationForm.appendChild(clonedControl);
+                }
+            });
+        });
+        
+        const medicationFormData = new FormData(medicationForm);
+        // --- END FIX ---
+        
+        saveSection(medicationFormData, 'Medications saved!', 'Error saving medications');
     });
 
     // Function to add toggle listener for medication name select/input
@@ -1191,43 +1241,109 @@ document.addEventListener('DOMContentLoaded', function() {
         selectElement.addEventListener('change', function() {
             const input = this.closest('td').querySelector('.medication-name-input');
             const row = this.closest('tr');
-            // Re-calculate index dynamically on change, might be safer
+            // Re-calculate index dynamically
             const rowIndex = Array.from(row.parentElement.children).indexOf(row);
 
-            if (this.value === '') {
-                this.removeAttribute('name');
-                input.setAttribute('name', `medications[${rowIndex}][name]`);
-                input.style.display = 'block';
-                input.focus();
-            } else {
-                input.removeAttribute('name');
-                 input.style.display = 'none'; // Hide input when select is used
+            if (this.value) {
+                input.value = ''; // Clear custom input
+                input.style.display = 'none';
+                
+                // Set name on SELECT (Standard)
                 this.setAttribute('name', `medications[${rowIndex}][name]`);
-                // Auto-fill
+                input.removeAttribute('name');
+                
+                // Auto-fill Type and Dosage from data attributes
                 const selectedOption = this.options[this.selectedIndex];
-                const category = selectedOption.dataset.category;
-                const dosage = selectedOption.dataset.dosage;
+                const category = selectedOption ? selectedOption.dataset.category : '';
+                const dosage = selectedOption ? selectedOption.dataset.dosage : '';
+                
                 const typeSelect = row.querySelector('.medication-type-select');
                 const dosageSelect = row.querySelector('.medication-dosage-select');
-                if (category && typeSelect) typeSelect.value = category;
-                if (dosage && dosageSelect) dosageSelect.value = dosage;
+                
+                // Use Select2's method to set value if Select2 is initialized
+                if ($(typeSelect).data('select2')) {
+                    $(typeSelect).val(category).trigger('change');
+                } else if (typeSelect) {
+                    typeSelect.value = category;
+                }
+                
+                if ($(dosageSelect).data('select2')) {
+                    $(dosageSelect).val(dosage).trigger('change');
+                } else if (dosageSelect) {
+                    dosageSelect.value = dosage;
+                }
+            } else {
+                // If SELECT is cleared, show custom input
+                input.style.display = 'block';
+                input.focus();
+
+                // Set name on INPUT (Custom)
+                input.setAttribute('name', `medications[${rowIndex}][name]`);
+                this.removeAttribute('name');
             }
+        });
+        
+        // Handle when a custom tag is entered in Select2
+        $(selectElement).on('select2:close', function() {
+            const row = this.closest('tr');
+            const rowIndex = Array.from(row.parentElement.children).indexOf(row);
+            const input = this.closest('td').querySelector('.medication-name-input');
+            const customValue = $(this).val();
+
+            if (!customValue || (customValue.length === 1 && customValue[0] === '')) {
+                 // Nothing selected/cleared
+                 $(this).val(null).trigger('change'); 
+                 // Force switch to custom input
+                 this.removeAttribute('name');
+                 input.setAttribute('name', `medications[${rowIndex}][name]`);
+                 input.style.display = 'block';
+                 input.focus();
+            } else if (typeof customValue === 'object' && customValue.length > 0 && customValue[0] && !this.querySelector(`option[value="${customValue[0]}"]`)) {
+                // This is a custom tag entered by the doctor (Select2 with tags enabled)
+                
+                // Clear select name/value
+                $(this).val(null).trigger('change');
+                this.removeAttribute('name');
+                
+                // Set name on INPUT and use the custom value
+                input.setAttribute('name', `medications[${rowIndex}][name]`);
+                input.value = customValue[0]; // Take the first custom value
+                input.style.display = 'block';
+            }
+        });
+        
+        // Handle custom input changes (just ensure name is present)
+        selectElement.closest('td').querySelector('.medication-name-input')?.addEventListener('input', function() {
+            const row = this.closest('tr');
+            const rowIndex = Array.from(row.parentElement.children).indexOf(row);
+            this.setAttribute('name', `medications[${rowIndex}][name]`);
         });
     }
 
-    // Add toggle listener to medication name fields present on page load
-    document.querySelectorAll('.medication-name-select').forEach(addMedicationNameToggleListener);
+    // --- Initializers ---
 
+    // 1. Initialize Select2 on all existing rows
+    document.querySelectorAll('.medication-table tbody tr').forEach(row => {
+        initializeSelect2OnRow(row);
+    });
+    
+    // 2. Add toggle listener to medication name fields present on page load
+    document.querySelectorAll('.medication-name-select').forEach(addMedicationNameToggleListener);
+    
+    // 3. Populate use pattern for existing rows
+    document.querySelectorAll('.medication-use-pattern-select').forEach(select => {
+        const savedValue = select.querySelector('option:checked')?.value || '';
+        populateUsePatterns(select, savedValue);
+    });
 
     // Handle follow-up scheduling with availability check
-    // *** THIS IS THE MOVED CODE ***
     document.getElementById('schedule-followup-btn')?.addEventListener('click', function() {
         const followUpDate = document.getElementById('follow_up_date').value;
         const followUpTime = document.getElementById('follow_up_time').value;
         const feedbackDiv = document.getElementById('followup-availability-feedback');
         const saveButton = this;
 
-        feedbackDiv.textContent = ''; // Clear previous feedback
+        feedbackDiv.textContent = '';
 
         if (!followUpDate || !followUpTime) {
             feedbackDiv.style.color = 'red';
@@ -1237,7 +1353,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         saveButton.disabled = true;
         saveButton.innerHTML = '<i class="zmdi zmdi-spinner zmdi-hc-spin"></i> Checking...';
-        feedbackDiv.style.color = '#ff9800'; // Orange for checking
+        feedbackDiv.style.color = '#ff9800';
         feedbackDiv.textContent = 'Checking availability...';
 
         fetch('{{ route("doctor.appointments.check-followup") }}', {
@@ -1272,22 +1388,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 const formData = new FormData();
                 formData.append('follow_up_date', followUpDate);
                 formData.append('follow_up_time', followUpTime);
-                // formData.append('_token', '{{ csrf_token() }}'); // Already handled by saveSection
 
-                // Use the generic saveSection function
                 saveSection(formData, 'Follow-up date and time saved successfully!', 'Error saving follow-up');
 
-                // Re-enable button after save attempt (inside saveSection might be better)
-                // We'll reset it here for simplicity for now
                  saveButton.disabled = false;
-                 saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Check Availability & Save';
+                 saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Schedule Follow-up Appointment';
 
 
             } else {
                 feedbackDiv.style.color = 'red';
                 feedbackDiv.textContent = data.message || 'Selected time slot is not available.';
                 saveButton.disabled = false;
-                saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Check Availability & Save';
+                saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Schedule Follow-up Appointment';
             }
         })
         .catch(error => {
@@ -1295,10 +1407,9 @@ document.addEventListener('DOMContentLoaded', function() {
             feedbackDiv.style.color = 'red';
             feedbackDiv.textContent = 'Error: ' + error.message;
             saveButton.disabled = false;
-            saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Check Availability & Save';
+            saveButton.innerHTML = '<i class="zmdi zmdi-calendar-check"></i> Schedule Follow-up Appointment';
         });
     });
-    // *** END OF MOVED CODE ***
 
 
 }); // <-- END OF THE DOMContentLoaded WRAPPER

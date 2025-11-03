@@ -7,19 +7,14 @@
 <meta name="description" content="Responsive Bootstrap 4 and web Application ui kit.">
 
 <title>Clinical Pro || Book Appointment</title>
-<!-- Favicon -->
 <link rel="icon" href="{{ asset('assets/favicon.ico') }}" type="image/x-icon">
 
-<!-- Bootstrap CSS -->
 <link rel="stylesheet" href="{{ asset('assets/plugins/bootstrap/css/bootstrap.min.css') }}">
 
-<!-- Bootstrap Material Datetimepicker CSS -->
 <link href="{{ asset('assets/plugins/bootstrap-material-datetimepicker/css/bootstrap-material-datetimepicker.css') }}" rel="stylesheet">
 
-<!-- Bootstrap Select CSS -->
 <link href="{{ asset('assets/plugins/bootstrap-select/css/bootstrap-select.css') }}" rel="stylesheet">
 
-<!-- Custom Css -->
 <link rel="stylesheet" href="{{ asset('assets/css/main.css') }}">
 <link rel="stylesheet" href="{{ asset('assets/css/color_skins.css') }}">
 
@@ -69,14 +64,24 @@
         border-width: 0.2em;
     }
     
+    .duration-options {
+        display: flex; /* Use flexbox for layout */
+        flex-wrap: wrap; /* Allow wrapping */
+        gap: 5px; /* Spacing between buttons */
+        margin-top: 5px;
+    }
+
     .time-duration-option {
+        /* Adjusted for flexbox layout */
         display: inline-block;
         padding: 8px 15px;
-        margin: 5px;
         border: 1px solid #ddd;
         border-radius: 4px;
         cursor: pointer;
         background-color: #f8f9fa;
+        font-size: 14px;
+        line-height: 1.2;
+        transition: all 0.2s;
     }
 
     .time-duration-option.active {
@@ -84,10 +89,15 @@
         color: white;
         border-color: #007bff;
     }
+    
+    #service_duration {
+        max-width: 150px; /* Keep the custom input reasonably sized */
+        display: block; /* Ensure it starts on a new line */
+        margin-top: 10px;
+    }
 </style>
 </head>
 <body class="theme-cyan ls-closed">
-<!-- Page Loader -->
 @include('admin.sidemenu')
 
 <section class="content">
@@ -217,11 +227,7 @@
                                     <div class="form-group">
                                         <label for="clinic_id">Select Location *</label>
                                         <select id="clinic_id" name="clinic_id" class="form-control show-tick" required>
-                                            <option value="">- Select Location -</option>
-                                            <option value="virtual">Virtual Session</option>
-                                            @foreach($clinics as $clinic)
-                                                <option value="{{ $clinic->id }}">{{ $clinic->name }}</option>
-                                            @endforeach
+                                            <option value="">- Select Date/Time First -</option>
                                         </select>
                                     </div>
                                 </div>
@@ -244,7 +250,7 @@
                                                 @foreach($services as $service)
                                                     <option value="{{ $service->id }}" 
                                                             data-price="{{ $service->price_amount }}" 
-                                                            data-duration="{{ $service->default_duration }}">
+                                                            data-duration="{{ $service->default_duration ?? 30 }}">
                                                         {{ $service->service_name }} ({{ $service->formatted_price }})
                                                     </option>
                                                 @endforeach
@@ -253,13 +259,16 @@
                                     </div>
                                     <div class="col-sm-6">
                                         <div class="form-group">
-                                            <label for="service_duration">Duration *</label>
+                                            <label for="service_duration">Duration (Minutes)*</label>
                                             <div class="duration-options" id="duration-options">
+                                                <div class="time-duration-option" data-duration="15">15 mins</div>
                                                 <div class="time-duration-option active" data-duration="30">30 mins</div>
                                                 <div class="time-duration-option" data-duration="40">40 mins</div>
+                                                <div class="time-duration-option" data-duration="45">45 mins</div>
                                                 <div class="time-duration-option" data-duration="60">60 mins</div>
+                                                <div class="time-duration-option" data-duration="90">90 mins</div>
                                             </div>
-                                            <input type="hidden" id="service_duration" name="service_duration" value="30">
+                                            <input type="number" id="service_duration" name="service_duration" class="form-control mt-2" value="30" min="5" placeholder="Custom Minutes" required>
                                         </div>
                                     </div>
                                 </div>
@@ -296,7 +305,6 @@
     </div>
 </section>
 
-<!-- Walk-In Patient Modal -->
 <div class="modal fade" id="newPatientModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -325,10 +333,7 @@
     </div>
 </div>
 
-<!-- Jquery Core Js -->
-<script src="{{ asset('assets/bundles/libscripts.bundle.js') }}"></script> <!-- Bootstrap JS and jQuery v3.2.1 -->
-
-<!-- slimscroll, waves Scripts Plugin Js -->
+<script src="{{ asset('assets/bundles/libscripts.bundle.js') }}"></script> 
 <script src="{{ asset('assets/bundles/vendorscripts.bundle.js') }}"></script>
 
 <script>
@@ -336,46 +341,113 @@
     $.fn.selectpicker.Constructor.DEFAULTS.tickIcon = 'zmdi-check';
 </script>
 
-<!-- Moment Plugin Js -->
 <script src="{{ asset('assets/plugins/momentjs/moment.js') }}"></script>
 
-<!-- Bootstrap Material Datetimepicker Js -->
 <script src="{{ asset('assets/plugins/bootstrap-material-datetimepicker/js/bootstrap-material-datetimepicker.js') }}"></script>
 
-<!-- Service Management Js -->
 <script src="{{ asset('js/services.js') }}"></script>
 
-<!-- Custom Js -->
 <script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script>
 <script>
+    // Helper function to update Bootstrap Select Pickers
+    function updateSelectPicker(selectElement, options, placeholder, isDisabled) {
+        selectElement.empty();
+        selectElement.append('<option value="">- ' + placeholder + ' -</option>');
+        
+        if (options && options.length > 0) {
+            options.forEach(function(option) {
+                // Check if the location is virtual or a physical clinic
+                const id = option.id === 'virtual' ? 'virtual' : option.id;
+                selectElement.append(
+                    '<option value="' + id + '">' +
+                    option.name + 
+                    '</option>'
+                );
+            });
+        }
+        
+        selectElement.prop('disabled', isDisabled);
+        selectElement.selectpicker('refresh');
+    }
+
     $(function () { // Use jQuery's ready function ONCE for all code
 
         // --- Initialize Plugins ---
         $('.datetimepicker').bootstrapMaterialDatePicker({
-            format: 'dddd DD MMMM YYYY - HH:mm', // Matched PHP format: 'l d F Y - H:i'
+            format: 'dddd DD MMMM YYYY - HH:mm',
             clearButton: true,
             weekStart: 1,
-            minDate: new Date() // Prevent selecting past dates
+            minDate: new Date()
         });
 
         // Initialize Bootstrap Select
         $('.show-tick').selectpicker();
 
-        // --- Helper Function to Update Dropdown ---
-        function updateSelectPicker(selector, options, defaultText, disabled = false) {
-            const select = $(selector);
-            select.empty(); // Clear existing options
-            select.append(`<option value="">- ${defaultText} -</option>`); // Add default
-            if (options && options.length > 0) {
-                $.each(options, function(index, item) {
-                    select.append(`<option value="${item.id}">${item.name}</option>`);
-                });
-            } else if (!disabled) { // Only show 'No options' if it's enabled but empty
-                 select.append(`<option value="" disabled>No options available</option>`);
-            }
-            select.prop('disabled', disabled); // Set disabled state
-            select.selectpicker('refresh'); // Refresh the plugin
+
+        // --- Core Smart Billing Logic ---
+        function getServiceData(serviceId) {
+            const serviceOption = $('#service_id option[value="' + serviceId + '"]');
+            if (!serviceOption.length) return null;
+            
+            // Data is pulled from the Blade attributes (data-price and data-duration)
+            const basePrice = parseFloat(serviceOption.data('price')) || 0;
+            const includedDuration = parseInt(serviceOption.data('duration')) || 30; // e.g., 30 mins
+            
+            // Calculate the Rate Per Minute: Base Price / Included Duration
+            const ratePerMinute = basePrice / includedDuration; 
+            
+            return {
+                basePrice: basePrice,
+                includedDuration: includedDuration,
+                ratePerMinute: ratePerMinute
+            };
         }
+
+        function updatePrice() {
+            var selectedServiceId = $('#service_id').val();
+            // PULL DURATION FROM THE VISIBLE NUMBER INPUT
+            var duration = parseInt($('#service_duration').val()); 
+            
+            const feeDisplayField = $('#service_price_display');
+            const feeValueField = $('#service_price');
+            
+            // 1. Get Service Details
+            const serviceData = getServiceData(selectedServiceId);
+
+            if (!serviceData || isNaN(duration) || duration < 1) {
+                feeDisplayField.text('₦0.00');
+                feeValueField.val('0');
+                return;
+            }
+            
+            const { basePrice, includedDuration, ratePerMinute } = serviceData;
+            let finalFee = 0;
+            
+            // 2. Core Calculation Logic
+            // The simplest, fairest model is: Final Fee = Duration * Rate Per Minute
+            
+            finalFee = duration * ratePerMinute;
+            
+            // Enforce a sensible minimum fee based on the smallest duration (e.g. 15 minutes)
+            // If the minimum duration is 15, the minimum fee should be 15 * rate.
+            const minBillableDuration = 15;
+            const minFee = minBillableDuration * ratePerMinute;
+            
+            // This ensures 15 mins is NOT equal to 30 mins price, fixing the bug.
+            finalFee = Math.max(finalFee, minFee); 
+            
+            // 3. Display and Hidden Value Update
+            finalFee = Math.round(finalFee); // Round to the nearest whole Naira
+            
+            feeDisplayField.text('₦' + finalFee.toLocaleString('en-NG', { maximumFractionDigits: 0 }));
+            feeValueField.val(finalFee); // Hidden field gets the final numeric value
+            
+            // IMPORTANT: Re-fetch doctors if price/duration changes
+            $('#clinic_id').trigger('change');
+        }
+        
+        // --- End NEW Core Smart Billing Logic ---
+
 
         // --- Patient Search & Selection ---
         let searchTimeout;
@@ -425,7 +497,7 @@
 
         // Handle patient selection from search results
         $(document).on('click', '#patient-results-list li', function() {
-            if ($(this).data('patient-id')) { // Ensure it's a real patient item
+            if ($(this).data('patient-id')) {
                 const patientId = $(this).data('patient-id');
                 const patientName = $(this).data('patient-name');
                 const patientEmail = $(this).data('patient-email');
@@ -436,17 +508,13 @@
                 $('#patient-search-results').hide();
                 $('#patient_search').val('');
                 $('#patient-details').show();
-                // Hide the Check/New buttons as patient is selected
                 $('#check-patient').hide();
                 $('#newPatientModal').closest('div').find('button[data-target="#newPatientModal"]').hide();
-
-                // Trigger date focus or maybe location/date fetch
-                 $('#appointment_date').focus();
+                $('#appointment_date').focus();
             }
         });
 
         // --- Check Existing Patient Button ---
-        // **** THIS IS THE FIX ****
         $('#check-patient').on('click', function() {
             var patientId = $('#patient_id').val();
             if (!patientId) {
@@ -460,29 +528,25 @@
                 success: function(response) {
                     if (response.patient) {
                         $('#patient_name').val(response.patient.name);
-                        $('#patient_email').val(response.patient.email || ''); // Handle null email
+                        $('#patient_email').val(response.patient.email || '');
                         $('#patient-details').show();
-                         // Hide the Check/New buttons as patient is found
                         $('#check-patient').hide();
                         $('#newPatientModal').closest('div').find('button[data-target="#newPatientModal"]').hide();
-
                     } else {
-                         // Should ideally not happen if patient exists, but handle just in case
                          alert('Patient details could not be retrieved.');
                     }
                 },
                 error: function(xhr) {
                     if (xhr.status === 404) {
                         alert('Patient not found. Please check the patient ID or register as a New Walk-In Patient.');
-                         $('#patient_id').focus(); // Focus back on the ID field
+                         $('#patient_id').focus();
                     } else {
                         alert('An error occurred checking the patient ID. Please try again.');
                     }
-                     // Keep Check/New buttons visible
                      $('#check-patient').show();
                      $('#newPatientModal').closest('div').find('button[data-target="#newPatientModal"]').show();
-                     $('#patient-details').hide(); // Hide details section
-                     $('#patient_name').val(''); // Clear name/email
+                     $('#patient-details').hide();
+                     $('#patient_name').val('');
                      $('#patient_email').val('');
 
                 }
@@ -498,13 +562,13 @@
             var name = $('#new-patient-name').val();
             var phone = $('#new-patient-phone').val();
             var email = $('#new-patient-email').val();
-            var button = $(this); // Reference the button
+            var button = $(this);
 
             if (!name || !phone) {
                 alert('Name and phone are required');
                 return;
             }
-            button.prop('disabled', true).text('Registering...'); // Disable button
+            button.prop('disabled', true).text('Registering...');
 
             $.ajax({
                 url: '{{ route('admin.book-appointment.walk-in-patient') }}',
@@ -513,11 +577,9 @@
                 success: function(response) {
                     if (response.success) {
                         $('#newPatientModal').modal('hide');
-                        // Clear modal fields for next time
                         $('#new-patient-name, #new-patient-phone, #new-patient-email').val('');
 
                         $('#patient_id').val(response.patient_id);
-                        // Trigger the check patient button click to populate fields
                         $('#check-patient').click();
                         alert(response.message);
                     } else {
@@ -528,7 +590,7 @@
                     alert('Failed to register patient: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Please try again.'));
                 },
                 complete: function() {
-                     button.prop('disabled', false).text('Register Patient'); // Re-enable button
+                     button.prop('disabled', false).text('Register Patient');
                 }
             });
         });
@@ -540,12 +602,12 @@
             const locationSelect = $('#clinic_id');
             const doctorSelect = $('#doctor_id');
 
-            // Reset dependent dropdowns
-            updateSelectPicker(locationSelect, [], 'Loading Locations...', true); // Show loading, keep disabled
+            // Reset Locations and Doctors
+            updateSelectPicker(locationSelect, [], 'Loading Locations...', true);
             updateSelectPicker(doctorSelect, [], 'Select Location First', true);
 
             if (!date) {
-                updateSelectPicker(locationSelect, [], 'Select Date/Time First', true); // Reset text if date cleared
+                updateSelectPicker(locationSelect, [], 'Select Date/Time First', true);
                 return;
             }
 
@@ -556,9 +618,9 @@
                 data: { _token: '{{ csrf_token() }}', date: date },
                 success: function(response) {
                     if (response.locations && response.locations.length > 0) {
-                        updateSelectPicker(locationSelect, response.locations, 'Select Available Location', false); // Enable
+                        updateSelectPicker(locationSelect, response.locations, 'Select Available Location', false);
                     } else {
-                         updateSelectPicker(locationSelect, [], 'No Locations Available', true); // Keep disabled
+                         updateSelectPicker(locationSelect, [], 'No Locations Available', true);
                     }
                 },
                 error: function(xhr) {
@@ -575,10 +637,10 @@
             var date = $('#appointment_date').val();
             const doctorSelect = $('#doctor_id');
 
-            updateSelectPicker(doctorSelect, [], 'Loading Doctors...', true); // Show loading, keep disabled
+            updateSelectPicker(doctorSelect, [], 'Loading Doctors...', true);
 
             if (!clinicId || !date) {
-                 updateSelectPicker(doctorSelect, [], 'Select Location First', true); // Reset text
+                 updateSelectPicker(doctorSelect, [], 'Select Location First', true);
                 return;
             }
 
@@ -590,13 +652,14 @@
                     _token: '{{ csrf_token() }}',
                     date: date,
                     clinic_id: clinicId,
-                    duration: $('#service_duration').val() // Send duration
+                    // Send duration from the visible number input
+                    duration: $('#service_duration').val() 
                 },
                 success: function(response) {
                     if (response.doctors && response.doctors.length > 0) {
-                         updateSelectPicker(doctorSelect, response.doctors, 'Select Available Doctor', false); // Enable
+                         updateSelectPicker(doctorSelect, response.doctors, 'Select Available Doctor', false);
                     } else {
-                        updateSelectPicker(doctorSelect, [], 'No Doctors Available', true); // Keep disabled
+                        updateSelectPicker(doctorSelect, [], 'No Doctors Available', true);
                     }
                 },
                 error: function(xhr) {
@@ -608,61 +671,33 @@
         });
 
         // --- Service, Duration, and Price Logic ---
-        function updatePrice() {
-            var selectedService = $('#service_id option:selected');
-            if (!selectedService.length || !selectedService.val()) {
-                $('#service_price_display').text('₦0.00');
-                $('#service_price').val('0');
-                return;
-            }
+        
+        // 1. Service dropdown change
+        $('#service_id').on('change', updatePrice);
 
-            var basePrice = parseFloat(selectedService.data('price'));
-            var selectedDuration = parseInt($('#service_duration').val());
-            // Use a default base duration if not provided, e.g., 30 minutes
-            var baseDuration = parseInt(selectedService.data('duration')) || 30;
+        // 2. Duration input change (for custom time)
+        $('#service_duration').on('input', updatePrice);
 
-            if (isNaN(basePrice) || isNaN(selectedDuration) || isNaN(baseDuration) || baseDuration <= 0) {
-                $('#service_price_display').text('₦0.00'); // Or show an error/base price
-                $('#service_price').val(basePrice.toFixed(2)); // Default to base price on error?
-                console.error("Price calculation error: Invalid data", { basePrice, selectedDuration, baseDuration });
-                return;
-            }
-
-            var calculatedPrice = basePrice * (selectedDuration / baseDuration);
-            $('#service_price_display').text('₦' + calculatedPrice.toFixed(2));
-            $('#service_price').val(calculatedPrice.toFixed(2));
-        }
-
-        // Handle service selection
-        $('#service_id').on('change', function() {
-             // Maybe reset duration to default for the service?
-             // const defaultDuration = $(this).find('option:selected').data('duration') || 30;
-             // $('#service_duration').val(defaultDuration);
-             // $('.time-duration-option').removeClass('active');
-             // $(`.time-duration-option[data-duration="${defaultDuration}"]`).addClass('active');
-            updatePrice();
-        });
-
-        // Handle duration selection
+        // 3. Quick duration buttons click
         $(document).on('click', '.time-duration-option', function(e) {
             e.preventDefault();
+            // Remove active from all buttons
             $('.time-duration-option').removeClass('active');
+            // Add active to the clicked button
             $(this).addClass('active');
+            
             var duration = $(this).data('duration');
-            $('#service_duration').val(duration);
+            $('#service_duration').val(duration); // Set the number input value
             updatePrice();
-             // IMPORTANT: Re-fetch doctors if duration changes, as conflicts depend on it
-             $('#clinic_id').trigger('change');
         });
 
-        // --- Reset Form Functionality ---
-        window.resetForm = function() { // Make it globally accessible if needed, or keep local
-            $('#book-appointment-form')[0].reset(); // Reset native form elements
 
-            // Reset Bootstrap Select pickers
+        // --- Reset Form Functionality ---
+        window.resetForm = function() {
+            $('#book-appointment-form')[0].reset();
+
             $('#clinic_id, #doctor_id, #service_id').val('').selectpicker('refresh');
 
-            // Reset patient details visibility and buttons
             $('#patient-details').hide();
             $('#patient_name').val('');
             $('#patient_email').val('');
@@ -670,44 +705,46 @@
             $('#newPatientModal').closest('div').find('button[data-target="#newPatientModal"]').show();
 
 
-            // Reset duration buttons and hidden input
             $('.time-duration-option').removeClass('active');
             $('.time-duration-option[data-duration="30"]').addClass('active');
             $('#service_duration').val('30');
 
-            // Reset price display
             updatePrice();
 
-            // Reset and disable location/doctor dropdowns
             updateSelectPicker($('#clinic_id'), [], 'Select Date/Time First', true);
             updateSelectPicker($('#doctor_id'), [], 'Select Location First', true);
 
-             // Clear search field and results
             $('#patient_search').val('');
             $('#patient-search-results').hide();
         }
 
         // --- Initial Page Load Setup ---
-        // Set default duration option as active
+        // Ensure 30 mins is the absolute default on load
+        
+        // 1. Clean all active states
+        $('.time-duration-option').removeClass('active');
+        
+        // 2. Set 30 mins as the active button in JavaScript
         $('.time-duration-option[data-duration="30"]').addClass('active');
-        $('#service_duration').val('30'); // Ensure hidden input matches
+        
+        // 3. Set the duration input value
+        $('#service_duration').val('30');
 
         // Initialize Location/Doctor dropdowns as disabled
         updateSelectPicker($('#clinic_id'), [], 'Select Date/Time First', true);
         updateSelectPicker($('#doctor_id'), [], 'Select Location First', true);
 
-         // If a service is already selected (e.g., from validation error), calculate the initial price
+         // Initial price update if a service is already selected (e.g., via old input)
          if ($('#service_id').val()) {
-            updatePrice(); // Use updatePrice which reads current duration
+            updatePrice();
          } else {
-             updatePrice(); // Calculate initial price (likely ₦0.00)
+             // Or run once to set the initial price to zero
+             updatePrice();
          }
 
 
-        // Auto-check patient if pre-populated data is present (from redirect)
         @if(isset($patientData) && !empty($patientData['user_id']))
             $('#patient_id').val('{{ $patientData['user_id'] }}');
-            // Trigger check to populate name/email and hide buttons
             $('#check-patient').click();
         @endif
 

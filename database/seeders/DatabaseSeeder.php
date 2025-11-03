@@ -29,6 +29,10 @@ class DatabaseSeeder extends Seeder
             DrugCategoriesTableSeeder::class,
             DrugMgTableSeeder::class,
             DrugsTableSeeder::class,
+            MedicationTypeSeeder::class,
+            MedicationDosageSeeder::class,
+            MedicationSeeder::class,
+            TestAppointmentWithMedicationsSeeder::class,
             TestPharmacistSeeder::class,
         ]);
     }

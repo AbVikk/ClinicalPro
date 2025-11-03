@@ -40,13 +40,23 @@
             <div class="col-md-12">
                 <div class="card patients-list">
                     <div class="header">
-                        <h2><strong>My</strong> Patients</h2>
-                        <small>Patients you have appointments with</small>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h2><strong>My</strong> Patients</h2>
+                                <small>Patients you have appointments with</small>
+                            </div>
+                            <div class="input-group" style="width: 300px;">
+                                <input type="text" class="form-control" placeholder="Search patients..." id="patientSearch">
+                                <span class="input-group-addon">
+                                    <i class="zmdi zmdi-search"></i>
+                                </span>
+                            </div>
+                        </div>
                     </div>
                     <div class="body">
                         @if($patients->count() > 0)
                             <div class="table-responsive">
-                                <table class="table m-b-0 table-hover">
+                                <table class="table m-b-0 table-hover" id="patients-table">
                                     <thead>
                                         <tr>                                       
                                             <th>Media</th>
@@ -57,7 +67,7 @@
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody id="patientsTableBody">
                                         @foreach($patients as $patient)
                                         <tr>
                                             <td>
@@ -93,7 +103,7 @@
                                             </td>
                                             <td>{{ $patient->appointmentsAsPatient->count() }}</td>
                                             <td>
-                                                <span class="badge badge-{{ $patient->status == 'verified' ? 'success' : 'warning' }}">
+                                                <span class="badge badge-{{ $patient->status == 'verified' ? 'success' : 'warning' }} data-status="{{ $patient->status }}">
                                                     {{ ucfirst($patient->status ?? 'pending') }}
                                                 </span>
                                             </td>
@@ -103,9 +113,7 @@
                                                         Actions
                                                     </button>
                                                     <div class="dropdown-menu">
-                                                        <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $patient->id) }}">
-                                                            <i class="zmdi zmdi-account"></i> View Profile
-                                                        </a>
+                                                        
                                                         <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $patient->id) }}">
                                                             <i class="zmdi zmdi-calendar"></i> View Appointment History
                                                         </a>
@@ -123,7 +131,7 @@
                             
                             <!-- Pagination -->
                             <div class="pagination-container">
-                                {{ $patients->links() }}
+                                {{ $patients->appends(['search' => request('search')])->links() }}
                             </div>
                         @else
                             <div class="text-center py-5">
@@ -145,5 +153,23 @@
 
 <!-- Custom Js -->
 <script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script>
+
+<!-- Live Search Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Search functionality
+    $('#patientSearch').on('keyup', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        $('#patientsTableBody tr').each(function() {
+            const rowText = $(this).text().toLowerCase();
+            if (rowText.indexOf(searchTerm) === -1) {
+                $(this).hide();
+            } else {
+                $(this).show();
+            }
+        });
+    });
+});
+</script>
 </body>
 </html>

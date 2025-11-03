@@ -15,6 +15,7 @@ class Medication extends Model
         'type',
         'dosage',
         'duration',
+        'use_pattern',
         'instructions',
     ];
 

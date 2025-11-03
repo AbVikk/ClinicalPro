@@ -54,7 +54,7 @@
                             <div class="mt-2">
                                 <h6 class="text-uppercase">Total Payments</h6>
                                 <h4 class="text-info">
-                                    {{ $payments->count() }}
+                                    {{ $payments->whereIn('status', ['completed', 'paid'])->count() }}
                                 </h4>
                             </div>
                         </div>
