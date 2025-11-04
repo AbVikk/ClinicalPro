@@ -908,64 +908,433 @@
         </div>
     </div>
 </aside>
+<style>
+    /* 1. Ensure the AI button floats and is clearly visible */
+    #ai-assistant-launcher {
+        position: fixed;
+        bottom: 20px;
+        right: 20px; 
+        z-index: 1000; 
+        cursor: pointer;
+        padding: 10px 15px;
+        background: #9c27b0; /* Distinct color (Purple) for the AI */
+        color: white;
+        border-radius: 50px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        font-weight: bold;
+        transition: transform 0.3s;
+    }
+    #ai-assistant-launcher:hover {
+        transform: scale(1.05);
+    }
+    
+    /* 2. Chat Window Container */
+    #ai-chat-window {
+        position: fixed;
+        bottom: 75px;
+        right: 20px;
+        width: 350px;
+        height: 450px;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+        display: none; /* Starts hidden */
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    /* 3. Chat Messages Styling */
+    #ai-chat-body {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 15px;
+        background-color: #f8f9fa; 
+        /* Use list-unstyled for consistency with your theme */
+    }
+    .ai-chat-message-list { 
+        list-style: none; 
+        padding: 0; 
+        margin: 0;
+    }
+    .chat-bubble-ai { 
+        background-color: #e9ecef; 
+        padding: 8px; 
+        border-radius: 15px 15px 15px 0; 
+        display: inline-block;
+        white-space: pre-wrap; /* Allows formatting from AI response */
+    }
+    .chat-bubble-user { 
+        background-color: #d1e7ff; 
+        padding: 8px; 
+        border-radius: 15px 15px 0 15px; 
+        display: inline-block;
+    }
+    .chat-row-user { text-align: right; margin-bottom: 10px; }
+    .chat-row-ai { text-align: left; margin-bottom: 10px; }
 
-<div class="chat-launcher"></div>
-<div class="chat-wrapper">
-    <div class="card">
-        <div class="header">
-            <ul class="list-unstyled team-info margin-0">
-                <li class="m-r-15"><h2>Dr. Team</h2></li>
-                <li>
-                    <img src="{{ asset('assets/images/xs/avatar2.jpg') }}" alt="Avatar">
-                </li>
-                <li>
-                    <img src="{{ asset('assets/images/xs/avatar3.jpg') }}" alt="Avatar">
-                </li>
-                <li>
-                    <img src="{{ asset('assets/images/xs/avatar4.jpg') }}" alt="Avatar">
-                </li>
-                <li>
-                    <img src="{{ asset('assets/images/xs/avatar6.jpg') }}" alt="Avatar">
-                </li>
-                <li>
-                    <a href="javascript:void(0);" title="Add Member"><i class="zmdi zmdi-plus-circle"></i></a>
-                </li>
-            </ul>                       
+    /* 4. Input Area Styling */
+    #ai-chat-input-area {
+        display: flex;
+        padding: 10px;
+        border-top: 1px solid #ddd;
+        align-items: flex-end;
+    }
+    #ai-chat-input {
+        flex-grow: 1;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        margin-right: 5px;
+        font-family: inherit;
+        resize: none; 
+        overflow-y: auto; 
+        max-height: 100px; 
+        box-sizing: border-box;
+        line-height: 1.5;
+    }
+    #ai-chat-send-btn-icon {
+        color: white;
+        background: #28a745; /* Green */
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        line-height: 1;
+    }
+    #ai-typing-indicator .chat-bubble-ai {
+        display: inline-flex; /* Use flex to align dots */
+        align-items: center;
+        padding: 10px 12px;
+    }
+    .typing-dot {
+        height: 8px;
+        width: 8px;
+        background-color: #868e96; /* Muted color */
+        border-radius: 50%;
+        margin: 0 2px;
+        animation: typing-bounce 1.4s infinite both;
+    }
+    /* Stagger the animation */
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typing-bounce {
+        0%, 80%, 100% { transform: scale(0); }
+        40% { transform: scale(1.0); }
+    }
+</style>
+<!-- Make sure CSRF token is available -->
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<div id="ai-assistant-launcher">
+    🤖
+</div>
+
+<div id="ai-chat-window">
+    <div class="card m-b-0">
+        <div class="header p-t-15 p-b-15">
+            <h5 class="m-b-0">🤖 AI Scheduler Assistant</h5>
         </div>
-        <div class="body">
-            <div class="chat-widget">
-            <ul class="chat-scroll-list clearfix">
-                <li class="left float-left">
-                    <img src="{{ asset('assets/images/xs/avatar3.jpg') }}" class="rounded-circle" alt="">
-                    <div class="chat-info">
-                        <a class="name" href="#">Alexander</a>
-                        <span class="datetime">6:12</span>                            
-                        <span class="message">Hello, John </span>
-                    </div>
-                </li>
-                <li class="right">
-                    <div class="chat-info"><span class="datetime">6:15</span> <span class="message">Hi, Alexander<br> How are you!</span> </div>
-                </li>
-                <li class="right">
-                    <div class="chat-info"><span class="datetime">6:16</span> <span class="message">There are many variations of passages of Lorem Ipsum available</span> </div>
-                </li>
-                <li class="left float-left"> <img src="{{ asset('assets/images/xs/avatar2.jpg') }}" class="rounded-circle" alt="">
-                    <div class="chat-info"> <a class="name" href="#">Elizabeth</a> <span class="datetime">6:25</span> <span class="message">Hi, Alexander,<br> John <br> What are you doing?</span> </div>
-                </li>
-                <li class="left float-left"> <img src="{{ asset('assets/images/xs/avatar1.jpg') }}" class="rounded-circle" alt="">
-                    <div class="chat-info"> <a class="name" href="#">Michael</a> <span class="datetime">6:28</span> <span class="message">I would love to join the team.</span> </div>
-                </li>
-                    <li class="right">
-                    <div class="chat-info"><span class="datetime">7:02</span> <span class="message">Hello, <br>Michael</span> </div>
-                </li>
-            </ul>
+        <div class="body p-0">
+            <div id="ai-chat-body" class="chat-widget">
+                <ul class="ai-chat-message-list">
+                    <li class="chat-row-ai">
+                        <div class="chat-info">
+                            <span class="chat-bubble-ai">Hello! I'm your ClinicalPro AI Assistant. Ask me to find an available doctor for a specific specialty, date, and time!</span>
+                        </div>
+                    </li>
+                </ul>
             </div>
-            <div class="input-group p-t-15">
-                <input type="text" class="form-control" placeholder="Enter text here...">
-                <span class="input-group-addon">
-                    <i class="zmdi zmdi-mail-send"></i>
+            <div id="ai-chat-input-area">
+                <label for="ai-file-input" class="input-group-addon" id="ai-attach-btn">
+                    <i class="zmdi zmdi-attachment-alt" style="cursor: pointer;"></i>
+                </label>
+                
+                <input type="file" id="ai-file-input" accept="image/jpeg,image/png,image/webp" style="display: none;">
+
+                <textarea id="ai-chat-input" 
+                          placeholder="Add a message or upload an image..." 
+                          rows="1"></textarea>
+                
+                <span id="ai-chat-send-btn" class="input-group-addon">
+                    <i class="zmdi zmdi-mail-send" id="ai-chat-send-btn-icon"></i>
                 </span>
+            </div>
+
+            <div id="ai-file-preview-area" style="display: none; padding: 5px 10px; background: #f0f0f0;">
+                <small>Attached: <span id="ai-file-name"></span> 
+                    <button id="ai-remove-file" style="border:none; background:none; color:red; cursor:pointer;">&times;</button>
+                </small>
             </div>
         </div>
     </div>
 </div>
+
+@push('page-scripts')
+ <script>
+    $(document).ready(function() {
+        // --- ALL OUR JQUERY SELECTORS ---
+        const chatWindow = $('#ai-chat-window');
+        const chatBodyList = $('#ai-chat-body ul'); 
+        const chatInput = $('#ai-chat-input');
+        const sendBtn = $('#ai-chat-send-btn');
+        const sendIcon = $('#ai-chat-send-btn-icon');
+        const csrfToken = $('meta[name="csrf-token"]').attr('content') || $('input[name="_token"]').val(); 
+        
+        const fileInput = $('#ai-file-input');
+        const attachBtn = $('#ai-attach-btn');
+        const filePreviewArea = $('#ai-file-preview-area');
+        const fileNameDisplay = $('#ai-file-name');
+        const removeFileBtn = $('#ai-remove-file');
+        const launcherBtn = $('#ai-assistant-launcher'); // The launcher button
+        
+        // --- STATE VARIABLES ---
+        let currentAiRequest = null;
+        let selectedFile = null;
+
+        const typingIndicatorHtml = `
+            <li class="chat-row-ai" id="ai-typing-indicator">
+                <div class="chat-info">
+                    <span class="chat-bubble-ai">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </span>
+                </div>
+            </li>
+        `;
+
+        // --- HELPER FUNCTIONS ---
+
+        function scrollToBottom() {
+            chatBodyList.parent().stop().animate({
+                scrollTop: chatBodyList.parent()[0].scrollHeight
+            }, 500);
+        }
+
+        function addUserMessage(text) {
+            const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const messageHtml = `
+                <li class="chat-row-user">
+                    <div class="chat-info">
+                        <span class="datetime">${time}</span>
+                        <span class="message chat-bubble-user">${text.replace(/\n/g, '<br>')}</span>
+                    </div>
+                </li>
+            `;
+            chatBodyList.append(messageHtml);
+            scrollToBottom();
+        }
+
+        function addAiMessage(text) {
+            const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const messageHtml = `
+                <li class="chat-row-ai">
+                    <div class="chat-info">
+                        <span class="datetime">${time}</span>
+                        <span class="message chat-bubble-ai">${text.replace(/\n/g, '<br>')}</span>
+                    </div>
+                </li>
+            `;
+            chatBodyList.append(messageHtml);
+            scrollToBottom();
+        }
+
+        function resetChatForm() {
+            sendIcon.removeClass('zmdi-stop').addClass('zmdi-mail-send');
+            sendBtn.prop('disabled', false);
+            chatInput.prop('disabled', false);
+            currentAiRequest = null;
+            chatInput.focus();
+        }
+
+        function startTypewriter(text) {
+            const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const messageHtml = `
+                <li class="chat-row-ai">
+                    <div class="chat-info">
+                        <span class="datetime">${time}</span>
+                        <span class="message chat-bubble-ai"></span>
+                    </div>
+                </li>
+            `;
+            chatBodyList.append(messageHtml);
+
+            const targetElement = chatBodyList.find('li').last().find('.message');
+            let index = 0;
+            let speed = 30;
+
+            function type() {
+                if (index < text.length) {
+                    let char = text[index];
+                    if (char === '\n') {
+                        targetElement.append('<br>');
+                    } else {
+                        targetElement.append(char);
+                    }
+                    index++;
+                    scrollToBottom();
+                    setTimeout(type, speed);
+                } else {
+                    resetChatForm();
+                }
+            }
+            type();
+        }
+
+        function removeSelectedFile() {
+            selectedFile = null;
+            fileInput.val(null);
+            filePreviewArea.hide();
+        }
+
+        // --- MAIN SEND FUNCTION ---
+
+        function sendMessage() {
+            const userQuery = chatInput.val().trim();
+            
+            if (userQuery === '' && !selectedFile) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('query', userQuery);
+            
+            if (selectedFile) {
+                formData.append('image_upload', selectedFile);
+                addUserMessage(userQuery + ` (File: ${selectedFile.name})`);
+            } else {
+                addUserMessage(userQuery);
+            }
+
+            chatInput.val('');
+            chatInput.css('height', 'auto');
+            chatInput.css('overflow-y', 'hidden');
+            removeSelectedFile(); 
+            
+            chatBodyList.append(typingIndicatorHtml);
+            scrollToBottom();
+
+            sendBtn.prop('disabled', false); 
+            chatInput.prop('disabled', true);
+            sendIcon.removeClass('zmdi-mail-send').addClass('zmdi-stop');
+            
+            currentAiRequest = $.ajax({
+                url: '{{ route('api.ai.scheduling') }}', 
+                type: 'POST',
+                data: formData,
+                processData: false, 
+                contentType: false, 
+                dataType: 'json',
+                timeout: 60000,
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    $('#ai-typing-indicator').remove();
+                    if (response && response.response) {
+                        startTypewriter(response.response);
+                    } else {
+                        addAiMessage("❌ Error: Received empty response.");
+                        resetChatForm();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#ai-typing-indicator').remove();
+                    
+                    if (status === 'abort') {
+                        addAiMessage("Request cancelled.");
+                    } else {
+                        let errorMessage = "❌ Error: I couldn't connect. Please check logs.";
+                        if (xhr.status === 400 && xhr.responseJSON && xhr.responseJSON.error) {
+                             errorMessage = "❌ Error: " + xhr.responseJSON.error;
+                        } else if (xhr.status === 500) {
+                             errorMessage = "❌ Error: Server error. Please try again later.";
+                        } else if (status === 'timeout') {
+                             errorMessage = "❌ Error: Request timed out.";
+                        }
+                        addAiMessage(errorMessage);
+                    }
+                    resetChatForm();
+                },
+                complete: function(xhr, status) {
+                    currentAiRequest = null;
+                    // Form reset is now handled by startTypewriter() or error()
+                }
+            });
+        }
+
+        // --- ALL EVENT LISTENERS ---
+
+        // ************* THIS WAS THE MISSING PIECE *************
+        launcherBtn.on('click', function() {
+            chatWindow.toggle();
+            if (chatWindow.is(':visible')) {
+                scrollToBottom();
+                chatInput.focus();
+            }
+        });
+        // ******************************************************
+
+        // Send Button (Send or Stop)
+        sendBtn.on('click', function(e) {
+            e.preventDefault();
+            if (currentAiRequest) {
+                currentAiRequest.abort();
+            } else {
+                sendMessage();
+            }
+        });
+
+        // Enter Key
+        chatInput.on('keypress', function(e) {
+            if (e.which === 13 && !e.shiftKey) {
+                e.preventDefault();
+                if (!currentAiRequest) {
+                    sendMessage();
+                }
+            }
+        });
+        
+        // Auto-grow Textarea
+        chatInput.on('input', function() {
+            this.style.height = 'auto';
+            let newHeight = this.scrollHeight;
+            let maxHeight = 100;
+            
+            if (newHeight > maxHeight) {
+                this.style.height = maxHeight + 'px';
+                this.style.overflowY = 'auto';
+            } else {
+                this.style.height = newHeight + 'px';
+                this.style.overflowY = 'hidden';
+            }
+        });
+        
+        // File Input Change
+        fileInput.on('change', function() {
+            if (this.files && this.files[0]) {
+                selectedFile = this.files[0];
+                
+                if (selectedFile.size > 5 * 1024 * 1024) { // Max 5MB
+                    addAiMessage("❌ Error: File is too large (max 5MB).");
+                    removeSelectedFile();
+                    return;
+                }
+                
+                fileNameDisplay.text(selectedFile.name);
+                filePreviewArea.show();
+            }
+        });
+        
+        // Remove File Button
+        removeFileBtn.on('click', function() {
+            removeSelectedFile();
+        });
+        
+        // --- INITIAL RUN ---
+        scrollToBottom();
+    });
+</script>
+@endpush

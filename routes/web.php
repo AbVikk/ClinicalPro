@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Api\AiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -111,8 +112,26 @@ Route::middleware('guest')->group(function () {
     Route::post('/reset-password', [App\Http\Controllers\Auth\CustomPasswordResetController::class, 'resetPassword'])->name('password.update');
 });
 
+    Route::middleware('auth')->group(function () {
+
+        // You can prefix this with 'admin' if all your admin routes use /admin/ prefix:
+        Route::prefix('admin')->group(function () {
+            
+            // This is the AI AJAX route, correctly placed under the 'web' middleware 
+            // (which includes session/cookie auth and CSRF protection).
+            Route::post('ai/scheduling', [AiController::class, 'getSmartScheduling'])
+                ->name('api.ai.scheduling');
+
+                Route::post('ai/extract-note-details', [AiController::class, 'extractDetailsFromNote'])
+                ->name('api.ai.extract-notes');
+                
+        });
+    });
+
 // Payment verification route (must be outside auth middleware for Paystack callbacks)
 Route::get('/admin/wallet/topup/verify', [App\Http\Controllers\Admin\PaymentController::class, 'verifyPayment'])->name('admin.payment.verify');
 Route::get('/admin/wallet/test-webhook', function () {
     return view('admin.wallet.test_webhook');
 })->name('admin.wallet.test-webhook');
+
+

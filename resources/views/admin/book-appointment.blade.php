@@ -750,5 +750,6 @@
 
     }); // <-- End of jQuery ready function
 </script>
+@stack('page-scripts')
 </body>
 </html>

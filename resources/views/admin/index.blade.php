@@ -883,5 +883,6 @@
         // and remove the dropdown menu for that appointment
     });
 </script>
+@stack('page-scripts')
 </body>
 </html>
