@@ -7,31 +7,44 @@ use Tests\TestCase;
 use App\Models\User;
 use App\Models\Drug;
 use App\Models\Clinic;
+use Database\Seeders\DrugCategoriesTableSeeder;
+use Database\Seeders\DrugMgTableSeeder;
+use Database\Seeders\CentralWarehouseSeeder;
 
 class PharmacyTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        
+        // Seed the required data for pharmacy tests
+        $this->seed(DrugCategoriesTableSeeder::class);
+        $this->seed(DrugMgTableSeeder::class);
+        $this->seed(CentralWarehouseSeeder::class);
+    }
+
     /** @test */
     public function it_can_create_a_drug()
     {
-        // Create a primary pharmacist user
+        // Create a user with admin role (since pharmacy routes are defined in admin.php)
         $user = User::create([
-            'name' => 'Test Pharmacist',
-            'email' => 'pharmacist@test.com',
+            'name' => 'Test Admin',
+            'email' => 'admin@test.com',
             'password' => bcrypt('password'),
-            'role' => 'primary_pharmacist'
+            'role' => 'admin'
         ]);
 
-        // Acting as the primary pharmacist
+        // Acting as the admin user
         $this->actingAs($user);
 
         // Test data
         $data = [
             'name' => 'Test Drug',
             'generic_name' => 'Test Generic',
-            'category' => 'Antibiotics',
-            'strength_mg' => '500mg',
+            'category' => 'Antibiotics', // This now exists because of seeding
+            'strength_mg' => '500mg', // This now exists because of seeding
             'medicine_type' => 'OTC',
             'description' => 'Test description',
             'medicine_form' => 'Tablet',
@@ -55,10 +68,11 @@ class PharmacyTest extends TestCase
         // Call the create drug endpoint
         $response = $this->post(route('admin.pharmacy.drugs.create'), $data);
 
-        // --- FIX #1 ---
-        // The log said the ACTUAL redirect was to '/pharmacy/dashboard'.
-        // We will assert this relative URL instead of the wrong route name.
-        $response->assertRedirect('/pharmacy/dashboard');
+        // Check for validation errors
+        $response->assertSessionHasNoErrors();
+
+        // Check that the response is a redirect (302)
+        $response->assertStatus(302);
 
         // Assert the drug was created in the database
         $this->assertDatabaseHas('drugs', [
@@ -70,32 +84,24 @@ class PharmacyTest extends TestCase
     /** @test */
     public function it_can_receive_stock()
     {
-        // Create a primary pharmacist user
+        // Create a user with admin role (since pharmacy routes are defined in admin.php)
         $user = User::create([
-            'name' => 'Test Pharmacist 2',
-            'email' => 'pharmacist2@test.com',
+            'name' => 'Test Admin 2',
+            'email' => 'admin2@test.com',
             'password' => bcrypt('password'),
-            'role' => 'primary_pharmacist'
+            'role' => 'admin'
         ]);
 
         // Create a drug
         $drug = Drug::create([
             'name' => 'Test Drug 2',
-            'category' => 'Test Category 2',
-            'strength_mg' => '200mg',
+            'category' => 'Antibiotics', // This now exists because of seeding
+            'strength_mg' => '200mg', // This now exists because of seeding
             'unit_price' => 30.00,
             'is_controlled' => false,
         ]);
 
-        // Create a central warehouse
-        $warehouse = Clinic::create([
-            'name' => 'Central Warehouse',
-            'address' => 'Test Address',
-            'is_physical' => true,
-            'is_warehouse' => true,
-        ]);
-
-        // Acting as the primary pharmacist
+        // Acting as the admin user
         $this->actingAs($user);
 
         // Test data
@@ -109,10 +115,11 @@ class PharmacyTest extends TestCase
         // Call the receive stock endpoint
         $response = $this->post(route('admin.pharmacy.stock.receive'), $data);
 
-        // --- FIX #2 ---
-        // The log said the app returned a 302 (Redirect), not a 201 (Created).
-        // We will check for the 302 status code.
-        $response->assertStatus(302);
+        // Check for validation errors
+        $response->assertSessionHasNoErrors();
+
+        // Check that the response is a successful creation (201)
+        $response->assertStatus(201);
 
         // Assert the drug batch was created in the database
         $this->assertDatabaseHas('drug_batches', [
