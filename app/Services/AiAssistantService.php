@@ -63,7 +63,6 @@ class AiAssistantService
      */
     public function classifyIntent(string $naturalLanguageQuery, array $history = [])
     {
-        // --- YOUR WORKING CODE (Typos fixed) ---
         $systemPrompt = "You are an intent classifier for a clinic AI. Your ONLY job is to classify the user's *newest* query.
         
         Use the 'Chat History' for context, but only classify the *last* thing the user said.
@@ -119,7 +118,6 @@ class AiAssistantService
      */
     public function getStructuredSchedulingQuery(string $naturalLanguageQuery, array $contextData, array $history = [])
     {
-        // --- YOUR WORKING CODE (Typos fixed) ---
         $systemPrompt = "You are the ClinicalPro Smart Query Assistant. Your ONLY job is to translate a user's request into a clean, precise JSON object for a scheduling API.
         
         Available Specializations: " . implode(', ', $contextData['specializations']) . ". Current date is: " . now()->format('Y-m-d') . ".
@@ -161,7 +159,6 @@ class AiAssistantService
      */
     public function getStructuredReminderQuery(string $naturalLanguageQuery, array $history = [])
     {
-        // --- YOUR WORKING CODE (Typos fixed) ---
         $currentDate = Carbon::now()->format('Y-m-d');
         $systemPrompt = "You are the ClinicalPro Reminder Assistant. Your ONLY job is to translate a user's request into a clean, precise JSON object.
         
@@ -194,7 +191,6 @@ class AiAssistantService
 
     /**
      * Handles medical questions for doctors.
-     * --- THIS IS THE CORRECTED FUNCTION ---
      */
     public function getMedicalQueryResponse(string $naturalLanguageQuery, array $history = [], $file = null)
     {
@@ -216,30 +212,26 @@ class AiAssistantService
             $historyString = $this->buildHistoryPrompt($history);
             $fullTextPrompt = $systemPrompt . "\n\n" . $historyString . "\n\nUser question: " . $naturalLanguageQuery;
 
-            // --- THIS IS THE FINAL FIX ---
             if ($file) {
                 // 1. If there is a file, we build the $content array
                 $content = [];
-                $content[] = ['text' => $fullTextPrompt]; // Add the text
-                $content[] = [ // Add the image
+                $content[] = ['text' => $fullTextPrompt];
+                $content[] = [
                     'inline_data' => [
                         'mime_type' => $file->getMimeType(),
                         'data' => base64_encode(file_get_contents($file->getRealPath()))
                     ]
                 ];
                 
-                // 2. We switch to the vision model
                 $modelToUse = 'gemini-pro-vision';
                 
-                // 3. We send the $content *array* (the "box")
                 $response = $this->geminiClient->generativeModel($modelToUse)->generateContent($content);
 
             } else {
                 // 1. If there is NO file, we send a simple STRING
-                //    to your working 'gemini-flash-latest' model.
+                //    to the working 'gemini-flash-latest' model.
                 $response = $this->geminiClient->generativeModel($this->model)->generateContent($fullTextPrompt);
             }
-            // --- END OF FINAL FIX ---
             
             $responseText = $response->text();
             $responseText = str_replace(['**', '*'], '', $responseText);
@@ -257,7 +249,6 @@ class AiAssistantService
      */
     public function getStructuredScheduleInfoQuery(string $naturalLanguageQuery, array $history = [])
     {
-        // --- YOUR WORKING CODE (Typos fixed) ---
         $today = Carbon::now();
         $tomorrow = Carbon::now()->addDay();
         $friday = Carbon::now()->next(Carbon::FRIDAY);
@@ -311,7 +302,6 @@ class AiAssistantService
      */
     public function getStructuredAppointmentInfoQuery(string $naturalLanguageQuery, array $history = [])
     {
-        // --- YOUR WORKING CODE (Typos fixed) ---
         $today = Carbon::now();
         $tomorrow = Carbon::now()->addDay();
 
@@ -361,7 +351,6 @@ class AiAssistantService
      */
     public function getGeneralChatResponse(string $query, array $history = [])
     {
-        // --- YOUR WORKING CODE (Typos fixed) ---
         $systemPrompt = "You are ClinicalPro AI, a friendly, warm, and professional conversational assistant.
         The user is saying hi, thanks, or making simple small talk.
         
@@ -407,7 +396,6 @@ class AiAssistantService
      */
     public function getStructuredNoteData(string $noteText)
     {
-        // --- YOUR WORKING CODE (Typos fixed) ---
         $systemPrompt = "You are a clinical data extraction tool. Your ONLY job is to read the following doctor's note and extract key information.
         
         You MUST return ONLY a single, clean JSON object with the following keys:
