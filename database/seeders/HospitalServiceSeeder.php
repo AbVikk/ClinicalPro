@@ -173,6 +173,167 @@ class HospitalServiceSeeder extends Seeder
                 'price_currency' => 'NGN',
                 'description' => 'Psychology consultation session',
                 'is_active' => true
+            ],
+            // Additional hospital services
+            [
+                'service_name' => 'Emergency Care',
+                'service_type' => 'Emergency',
+                'price_amount' => 20000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Emergency medical care services',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Intensive Care',
+                'service_type' => 'Critical Care',
+                'price_amount' => 150000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Intensive care unit services',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Surgery Consultation',
+                'service_type' => 'Consultation',
+                'price_amount' => 15000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Pre-surgical consultation with specialist',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Post-Operative Care',
+                'service_type' => 'Treatment',
+                'price_amount' => 25000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Post-surgical care and monitoring',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Maternity Care',
+                'service_type' => 'Obstetrics',
+                'price_amount' => 50000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Prenatal and postnatal care services',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Labor and Delivery',
+                'service_type' => 'Obstetrics',
+                'price_amount' => 150000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Childbirth and delivery services',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Neonatal Care',
+                'service_type' => 'Pediatrics',
+                'price_amount' => 75000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Newborn care and treatment',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Dialysis',
+                'service_type' => 'Renal',
+                'price_amount' => 45000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Kidney dialysis treatment',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Chemotherapy',
+                'service_type' => 'Oncology',
+                'price_amount' => 120000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Cancer treatment therapy',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Radiation Therapy',
+                'service_type' => 'Oncology',
+                'price_amount' => 100000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Radiation treatment for cancer',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Physical Examination',
+                'service_type' => 'Preventive',
+                'price_amount' => 8000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Complete physical health examination',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Health Screening',
+                'service_type' => 'Preventive',
+                'price_amount' => 15000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Comprehensive health screening package',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Vaccination Package',
+                'service_type' => 'Preventive',
+                'price_amount' => 25000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Complete vaccination package',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Nutrition Consultation',
+                'service_type' => 'Consultation',
+                'price_amount' => 10000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Diet and nutrition expert consultation',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Cardiology Consultation',
+                'service_type' => 'Specialist',
+                'price_amount' => 20000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Heart specialist consultation',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Orthopedic Consultation',
+                'service_type' => 'Specialist',
+                'price_amount' => 18000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Bone and joint specialist consultation',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Neurology Consultation',
+                'service_type' => 'Specialist',
+                'price_amount' => 22000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Nervous system specialist consultation',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Dermatology Consultation',
+                'service_type' => 'Specialist',
+                'price_amount' => 15000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Skin specialist consultation',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'ENT Consultation',
+                'service_type' => 'Specialist',
+                'price_amount' => 16000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Ear, Nose, and Throat specialist consultation',
+                'is_active' => true
+            ],
+            [
+                'service_name' => 'Gynecology Consultation',
+                'service_type' => 'Specialist',
+                'price_amount' => 17000.00,
+                'price_currency' => 'NGN',
+                'description' => 'Women\'s health specialist consultation',
+                'is_active' => true
             ]
         ];
 

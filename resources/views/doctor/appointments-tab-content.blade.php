@@ -39,22 +39,30 @@
                     <td>
                         {{-- *** THIS IS THE NEW LOGIC FOR STATUS BADGES *** --}}
                         @php
-                            $statusClass = '';
-                            $statusText = ucfirst($appointment->status);
+                            $statusClass = 'badge-secondary'; // Default
+                            $statusText = ucfirst(str_replace('_', ' ', $appointment->status));
                             
-                            if ($appointment->status == 'confirmed') {
-                                $statusClass = 'badge-success';
-                            } elseif ($appointment->status == 'pending' || $appointment->status == 'new') {
+                            if ($appointment->status == 'pending' || $appointment->status == 'new') {
                                 $statusClass = 'badge-warning';
                                 $statusText = 'Request';
-                            } elseif ($appointment->status == 'cancelled') {
-                                $statusClass = 'badge-danger';
-                            } elseif ($appointment->status == 'completed') {
-                                $statusClass = 'badge-success'; // Or 'badge-primary'
-                            } elseif ($appointment->status == 'missed') { // <-- ADDED
-                                $statusClass = 'badge-danger'; // <-- Use red badge
-                            } elseif ($appointment->status == 'in_progress') {
+                            } elseif ($appointment->status == 'approved') { // Your new Admin status
                                 $statusClass = 'badge-info';
+                                $statusText = 'Awaiting Check-in';
+                            } elseif ($appointment->status == 'confirmed') { // Now means "Ready" for Virtual
+                                $statusClass = 'badge-success';
+                                $statusText = 'Ready (Virtual)';
+                            } elseif ($appointment->status == 'checked_in') { // Your new Nurse status
+                                $statusClass = 'badge-warning';
+                                $statusText = 'Awaiting Vitals';
+                            } elseif ($appointment->status == 'vitals_taken') { // Your new Doctor "Ready" status
+                                $statusClass = 'badge-success';
+                                $statusText = 'Ready for Doctor';
+                            } elseif ($appointment->status == 'in_progress') {
+                                $statusClass = 'badge-primary';
+                            } elseif ($appointment->status == 'completed') {
+                                $statusClass = 'badge-success';
+                            } elseif ($appointment->status == 'cancelled' || $appointment->status == 'missed' || $appointment->status == 'rejected') {
+                                $statusClass = 'badge-danger';
                             }
                         @endphp
                         
@@ -77,44 +85,56 @@
                                     </a>
                                 @endif
                                 
-                                @if($tab != 'cancelled' && $tab != 'completed' && $tab != 'missed')
-                                    <a class="dropdown-item" href="#">
-                                        <i class="zmdi zmdi-comment-alt-text"></i> Chat
-                                    </a>
-                                    
-                                    @if($tab == 'upcoming' && $appointment->status == 'confirmed' && $appointment->appointment_time > now())
-                                        @if($appointment->status != 'in_progress')
-                                            <a class="dropdown-item start-appointment" href="#" data-appointment-id="{{ $appointment->id }}">
-                                                <i class="zmdi zmdi-play"></i> Begin
-                                            </a>
-                                        @else
-                                            <a class="dropdown-item end-appointment" href="#" data-appointment-id="{{ $appointment->id }}">
-                                                <i class="zmdi zmdi-stop"></i> End
-                                            </a>
-                                        @endif
-                                    @elseif($tab == 'inprogress' && $appointment->status == 'in_progress')
-                                        <a class="dropdown-item" href="{{ route('doctor.appointments.details', $appointment->id) }}">
-                                            <i class="zmdi zmdi-file-text"></i> View Details
-                                        </a>
-                                        <a class="dropdown-item end-appointment" href="#" data-appointment-id="{{ $appointment->id }}">
-                                            <i class="zmdi zmdi-stop"></i> End
-                                        </a>
-                                    @elseif($appointment->status == 'in_progress')
-                                        <a class="dropdown-item" href="{{ route('doctor.appointments.details', $appointment->id) }}">
-                                            <i class="zmdi zmdi-file-text"></i> View Details
-                                        </a>
-                                        <a class="dropdown-item end-appointment" href="#" data-appointment-id="{{ $appointment->id }}">
-                                            <i class="zmdi zmdi-stop"></i> End
-                                        </a>
-                                    @endif
-                                @endif
-                                
+                                {{-- 1. View History (for past appointments) --}}
                                 @if($tab == 'completed' || $tab == 'missed' || $tab == 'cancelled')
                                     <a class="dropdown-item" href="{{ route('doctor.patients.appointment-history', $appointment->patient_id) }}">
                                         <i class="zmdi zmdi-time-restore"></i> View History
                                     </a>
                                 @endif
-                            
+
+                                {{-- 2. Chat (for all active appointments) --}}
+                                @if($tab == 'upcoming' || $tab == 'inprogress')
+                                    <a class="dropdown-item" href="#">
+                                        <i class="zmdi zmdi-comment-alt-text"></i> Chat
+                                    </a>
+                                @endif
+
+                                {{-- 3. THE VITALS GATE & START/END LOGIC --}}
+
+                                {{-- Case A: VIRTUAL & 'confirmed' (Ready to Start) --}}
+                                @if($appointment->type == 'telehealth' && $appointment->status == 'confirmed' && $tab == 'upcoming')
+                                     <a class="dropdown-item start-appointment" href="#" data-appointment-id="{{ $appointment->id }}">
+                                        <i class="zmdi zmdi-play"></i> Begin
+                                    </a>
+
+                                {{-- Case B: PHYSICAL & 'vitals_taken' (Ready to Start) --}}
+                                @elseif($appointment->type == 'in_person' && $appointment->status == 'vitals_taken' && $tab == 'upcoming')
+                                     <a class="dropdown-item start-appointment" href="#" data-appointment-id="{{ $appointment->id }}">
+                                        <i class="zmdi zmdi-play"></i> Begin
+                                    </a>
+
+                                {{-- Case C: PHYSICAL & 'checked_in' (Waiting for Vitals) --}}
+                                @elseif($appointment->type == 'in_person' && $appointment->status == 'checked_in' && $tab == 'upcoming')
+                                    <a class="dropdown-item" href="#" style="color: #ff9800; cursor: not-allowed;" onclick="return false;">
+                                        <i class="zmdi zmdi-time-wait"></i> Awaiting Vitals
+                                    </a>
+
+                                {{-- Case D: PHYSICAL & 'approved' (Waiting for Check-in) --}}
+                                @elseif($appointment->type == 'in_person' && $appointment->status == 'approved' && $tab == 'upcoming')
+                                    <a class="dropdown-item" href="#" style="color: #03a9f4; cursor: not-allowed;" onclick="return false;">
+                                        <i class="zmdi zmdi-time-wait"></i> Awaiting Check-in
+                                    </a>
+                                
+                                {{-- Case E: Already In Progress (Can View/End) --}}
+                                @elseif($appointment->status == 'in_progress')
+                                     <a class="dropdown-item" href="{{ route('doctor.appointments.details', $appointment->id) }}">
+                                        <i class="zmdi zmdi-file-text"></i> View Details
+                                    </a>
+                                    <a class="dropdown-item end-appointment" href="#" data-appointment-id="{{ $appointment->id }}">
+                                        <i class="zmdi zmdi-stop"></i> End
+                                    </a>
+                                @endif
+                                
                                 <a class="dropdown-item" href="#">
                                     <i class="zmdi zmdi-delete"></i> Delete
                                 </a>
@@ -127,8 +147,7 @@
         </table>
     </div>
     
-    <!-- Pagination -->
-    <div class="pagination-container">
+    <div classs="pagination-container">
         {{ $appointments->links() }}
     </div>
 @else
@@ -145,7 +164,7 @@
             <i class="zmdi zmdi-hourglass zmdi-hc-3x text-muted mb-3"></i>
             <h4>No In Progress Appointments</h4>
             <p class="text-muted">You don't have any appointments in progress.</p>
-        @elseif($tab == 'missed') {{-- <-- ADDED --}}
+        @elseif($tab == 'missed')
             <i class="zmdi zmdi-time-off zmdi-hc-3x text-muted mb-3"></i>
             <h4>No Missed Appointments</h4>
             <p class="text-muted">You don't have any missed appointments.</p>

@@ -14,29 +14,25 @@ use App\Models\DoctorSchedule;
 use App\Models\Clinic;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
+use App\Traits\ManagesAdminCache;
 
 class DoctorController extends Controller
 {
+    use ManagesAdminCache; // <-- 2. USE THE HELPER
+
     /**
      * Display a listing of the doctors.
      */
     public function index(Request $request)
     {
-        // Start with a base query
+        // (This function remains the same)
         $query = Doctor::with(['user', 'category', 'appointments.patient']);
-        
-        // Filter by category if provided
         if ($request->has('category_id')) {
             $query->where('category_id', $request->category_id);
         }
-        
-        // Filter by department if provided
         if ($request->has('department_id')) {
             $query->where('department_id', $request->department_id);
         }
-        
-        // Add search functionality
         $search = $request->get('search');
         if ($search) {
             $query->whereHas('user', function ($userQuery) use ($search) {
@@ -45,7 +41,6 @@ class DoctorController extends Controller
                           ->orWhere('phone', 'like', "%{$search}%");
             });
         }
-        
         $doctors = $query->get();
         return view('admin.doctor.doctors_lists', compact('doctors'));
     }
@@ -55,17 +50,14 @@ class DoctorController extends Controller
      */
     public function listHODs(Request $request)
     {
-        // Get all HODs with their departments
+        // (This function remains the same)
         $query = User::where('role', 'hod')
                      ->with(['doctor.department']);
-        
-        // Add search functionality
         $search = $request->get('search');
         if ($search) {
             $query->where('name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%");
         }
-        
         $hods = $query->get();
         return view('admin.doctor.hods_list', compact('hods'));
     }
@@ -75,29 +67,21 @@ class DoctorController extends Controller
      */
     public function assignDoctorRole(User $user)
     {
-        // Check if the user is an HOD
         if ($user->role !== 'hod') {
             return redirect()->back()->with('error', 'User is not an HOD.');
         }
 
         try {
-            // Update the user's role to doctor
-            $user->update([
-                'role' => 'doctor'
-            ]);
-
-            // Remove the user as department head if they were one
+            $user->update(['role' => 'doctor']);
             $department = Department::where('department_head_id', $user->id)->first();
             if ($department) {
-                $department->update([
-                    'department_head_id' => null
-                ]);
+                $department->update(['department_head_id' => null]);
             }
 
-            // --- THIS IS THE "WHISTLEBLOWER" ---
-            // The user's role changed, so the "available doctors" list might be wrong.
-            Cache::forget("admin_stats_available_doctors");
-            // --- END OF WHISTLEBLOWER ---
+            // --- 3. THIS IS THE UPGRADE ---
+            // Use our new helper function
+            $this->flushAdminStatsCache();
+            // --- END OF UPGRADE ---
 
             return redirect()->back()->with('success', $user->name . ' has been successfully assigned back to doctor role.');
         } catch (\Exception $e) {
@@ -110,6 +94,7 @@ class DoctorController extends Controller
      */
     public function create()
     {
+        // (This function remains the same)
         $departments = Department::all();
         $categories = Category::all();
         return view('admin.doctor.add_doctor', compact('departments', 'categories'));
@@ -120,13 +105,12 @@ class DoctorController extends Controller
      */
     public function store(Request $request)
     {
-        // Validation rules
+        // (This function remains the same)
         $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'phone' => 'nullable|string|max:20',
-            // ... (other validations)
             'license_number' => 'required|string|max:100',
             'specialization_id' => 'required|exists:categories,id',
             'department_id' => 'required|exists:departments,id',
@@ -134,23 +118,18 @@ class DoctorController extends Controller
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        // Log the request data
         \Log::info('Doctor store request data:', $request->all());
 
-        // Create user
         $user = User::create([
             'name' => $request->first_name . ' ' . $request->last_name,
             'email' => $request->email,
             'phone' => $request->phone,
             'password' => bcrypt($request->password),
             'role' => 'doctor',
-            // ... (other user fields)
         ]);
 
-        // Log the created user
         \Log::info('Created user:', $user->toArray());
 
-        // Handle profile image upload
         if ($request->hasFile('profile_image')) {
             $profileImage = $request->file('profile_image');
             $imageName = time() . '_' . $profileImage->getClientOriginalName();
@@ -159,7 +138,6 @@ class DoctorController extends Controller
             $user->save();
         }
 
-        // Create doctor record
         $doctor = Doctor::create([
             'user_id' => $user->id,
             'doctor_id' => 'DOC' . str_pad($user->id, 6, '0', STR_PAD_LEFT),
@@ -167,19 +145,15 @@ class DoctorController extends Controller
             'category_id' => $request->specialization_id,
             'department_id' => $request->department_id,
             'status' => $request->status ?? 'verified',
-            'availability' => json_encode([]), // Empty availability by default
+            'availability' => json_encode([]), 
         ]);
 
-        // Log the created doctor
         \Log::info('Created doctor:', $doctor->toArray());
 
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // A new user (a doctor) was created. Erase all the "whiteboard" answers!
-        Cache::forget("admin_stats_total_users");
-        Cache::forget("admin_stats_new_registrations_7d");
-        Cache::forget("admin_stats_prev_week_registrations");
-        Cache::forget("admin_stats_available_doctors");
-        // --- END OF WHISTLEBLOWER ---
+        // --- 3. THIS IS THE UPGRADE ---
+        // Use our new helper function
+        $this->flushAdminStatsCache();
+        // --- END OF UPGRADE ---
 
         return redirect()->route('admin.doctor.index')->with('success', 'Doctor added successfully.');
     }
@@ -189,31 +163,19 @@ class DoctorController extends Controller
      */
     public function dashboard()
     {
-        // Get today's date
+        // (This function remains the same)
         $today = now()->toDateString();
-        
-        // Get all doctors count
         $doctorsCount = Doctor::count();
-        
-        // Get today's appointments for all doctors
         $appointmentsCount = Appointment::whereDate('appointment_time', $today)->count();
-        
-        // Get all patients (users with role 'patient')
         $patientsCount = User::where('role', 'patient')->count();
-        
-        // Get this month's payments (disbursements)
         $disbursementsCount = Payment::whereMonth('created_at', now()->month)
                                         ->whereYear('created_at', now()->year)
                                         ->count();
-        
-        // Get today's appointments with patient and doctor information
         $todaysAppointments = Appointment::with(['patient', 'doctor'])
                                             ->whereDate('appointment_time', $today)
                                             ->orderBy('appointment_time')
                                             ->limit(5)
                                             ->get();
-        
-        // Pass data to the view
         return view('admin.doctor.index', compact(
             'doctorsCount',
             'appointmentsCount',
@@ -228,36 +190,21 @@ class DoctorController extends Controller
      */
     public function show(Doctor $doctor)
     {
+        // (This function remains the same)
         $doctor->load(['user', 'department', 'category', 'appointments.patient']);
-        
-        // Also load consultations for the new system
         $consultations = \App\Models\Consultation::with(['patient'])
             ->where('doctor_id', $doctor->user_id)
             ->orderBy('start_time', 'desc')
             ->get();
-            
-        // --- THIS IS THE NEW PART ---
-        // We are creating the $doctorSchedule variable
-        // by loading the doctor's schedules (and their clinics)
-        // and grouping them by the day of the week.
-        // This is the same logic your dashboard.blade.php expects.
         $doctorSchedule = $doctor->schedules()->with('clinic')->get()->groupBy('day_of_week');
-
-        // --- ADD THIS NEW LOGIC ---
-        $todayName = now()->format('l'); // This gets the full day name, e.g., "Thursday"
-        $todayKey = strtolower($todayName);  // This gets the key, e.g., "thursday"
-        
-        // This gets just today's schedule from the main list
+        $todayName = now()->format('l'); 
+        $todayKey = strtolower($todayName);  
         $todaysSchedule = $doctorSchedule->get($todayKey); 
-
-        // --- ADD THIS NEW QUERY ---
-        // Get all appointments for this doctor, for today
         $todaysAppointments = \App\Models\Appointment::with(['patient', 'consultation'])
             ->where('doctor_id', $doctor->user_id)
             ->whereDate('appointment_time', now())
             ->orderBy('appointment_time', 'asc')
             ->get();
-        // --- END OF NEW QUERY ---
         
         return view('admin.doctor.profile', compact(
             'doctor', 
@@ -265,7 +212,7 @@ class DoctorController extends Controller
             'doctorSchedule',
             'todayName',
             'todaysSchedule',
-            'todaysAppointments' // <-- Pass the new variable
+            'todaysAppointments' 
         ));
     }
 
@@ -274,6 +221,7 @@ class DoctorController extends Controller
      */
     public function edit(Doctor $doctor)
     {
+        // (This function remains the same)
         $doctor->load(['user', 'department', 'category']);
         $departments = Department::all();
         $categories = Category::all();
@@ -285,40 +233,32 @@ class DoctorController extends Controller
      */
     public function update(Request $request, Doctor $doctor)
     {
-        // If this is a status update (suspend/activate), handle it differently
         if ($request->has('status') && in_array($request->status, ['suspended', 'verified'])) {
-            // Just update the doctor's status
             $doctor->update([
                 'status' => $request->status,
             ]);
             
-            // --- THIS IS THE "WHISTLEBLOWER" ---
-            // A doctor's status changed, so the "available doctors" list is wrong.
-            Cache::forget("admin_stats_available_doctors");
-            // --- END OF WHISTLEBLOWER ---
+            // --- 3. THIS IS THE UPGRADE ---
+            $this->flushAdminStatsCache();
+            // --- END OF UPGRADE ---
 
             return redirect()->route('admin.doctor.index')->with('success', 'Doctor status updated successfully.');
         }
         
-        // Full update (when editing doctor details)
         $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $doctor->user_id,
-            // ... (other validations)
             'license_number' => 'required|string|max:100',
             'specialization_id' => 'required|exists:categories,id',
             'department_id' => 'required|exists:departments,id',
         ]);
 
-        // Update user
         $doctor->user->update([
             'name' => $request->first_name . ' ' . $request->last_name,
             'email' => $request->email,
-            // ... (other user fields)
         ]);
 
-        // Handle profile image upload
         if ($request->hasFile('profile_image')) {
             $profileImage = $request->file('profile_image');
             $imageName = time() . '_' . $profileImage->getClientOriginalName();
@@ -327,20 +267,16 @@ class DoctorController extends Controller
             $doctor->user->save();
         }
 
-        // Update doctor record
         $doctor->update([
             'license_number' => $request->license_number,
             'category_id' => $request->specialization_id,
             'department_id' => $request->department_id,
             'status' => $request->status,
-            // ... (other doctor fields)
         ]);
 
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // A doctor's details (like status) might have changed.
-        // It's safest to clear the "available doctors" list.
-        Cache::forget("admin_stats_available_doctors");
-        // --- END OF WHISTLEBLOWER ---
+        // --- 3. THIS IS THE UPGRADE ---
+        $this->flushAdminStatsCache();
+        // --- END OF UPGRADE ---
 
         return redirect()->route('admin.doctor.index')->with('success', 'Doctor updated successfully.');
     }
@@ -351,16 +287,11 @@ class DoctorController extends Controller
     public function destroy(Doctor $doctor)
     {
         try {
-            // Delete the user (this will cascade to the doctor record)
             $doctor->user->delete();
             
-            // --- THIS IS THE "WHISTLEBLOWER" ---
-            // A user (a doctor) was deleted. Erase all the "whiteboard" answers!
-            Cache::forget("admin_stats_total_users");
-            Cache::forget("admin_stats_new_registrations_7d");
-            Cache::forget("admin_stats_prev_week_registrations");
-            Cache::forget("admin_stats_available_doctors");
-            // --- END OF WHISTLEBLOWER ---
+            // --- 3. THIS IS THE UPGRADE ---
+            $this->flushAdminStatsCache();
+            // --- END OF UPGRADE ---
 
             return redirect()->route('admin.doctor.index')->with('success', 'Doctor deleted successfully.');
         } catch (\Exception $e) {
@@ -373,14 +304,10 @@ class DoctorController extends Controller
      */
     public function specializations()
     {
-        // Get all categories and departments separately since they're no longer related
+        // (This function remains the same)
         $categories = Category::all();
         $departments = Department::all();
-        
-        // Combine them into a single collection for the view
         $specializations = collect();
-        
-        // Add categories
         foreach ($categories as $category) {
             $specializations->push([
                 'id' => $category->id,
@@ -390,8 +317,6 @@ class DoctorController extends Controller
                 'type' => 'Category'
             ]);
         }
-        
-        // Add departments
         foreach ($departments as $department) {
             $specializations->push([
                 'id' => $department->id,
@@ -401,7 +326,6 @@ class DoctorController extends Controller
                 'type' => 'Department'
             ]);
         }
-        
         return view('admin.doctor.specialization.specializations', compact('specializations'));
     }
 
@@ -410,11 +334,11 @@ class DoctorController extends Controller
      */
     public function schedule()
     {
+        // (This function remains the same)
         $doctor = Auth::user()->doctor;
         if (!$doctor) {
             return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
         }
-        
         $schedules = $doctor->schedules;
         return view('admin.doctor.schedule', compact('doctor', 'schedules'));
     }
@@ -424,23 +348,21 @@ class DoctorController extends Controller
      */
     public function storeSchedule(Request $request)
     {
+        // (This function remains the same)
         $doctor = Auth::user()->doctor;
         if (!$doctor) {
             return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
         }
-        
         $request->validate([
             'day_of_week' => 'required|in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
         ]);
-
         $doctor->schedules()->create([
             'day_of_week' => $request->day_of_week,
             'start_time' => $request->start_time,
             'end_time' => $request->end_time,
         ]);
-
         return redirect()->route('admin.doctor.schedule')->with('success', 'Schedule added successfully.');
     }
 
@@ -449,25 +371,23 @@ class DoctorController extends Controller
      */
     public function updateSchedule(Request $request)
     {
+        // (This function remains the same)
         $doctor = Auth::user()->doctor;
         if (!$doctor) {
             return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
         }
-        
         $request->validate([
             'schedule_id' => 'required|exists:doctor_schedules,id',
             'day_of_week' => 'required|in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
         ]);
-
         $schedule = $doctor->schedules()->findOrFail($request->schedule_id);
         $schedule->update([
             'day_of_week' => $request->day_of_week,
             'start_time' => $request->start_time,
             'end_time' => $request->end_time,
         ]);
-
         return redirect()->route('admin.doctor.schedule')->with('success', 'Schedule updated successfully.');
     }
 
@@ -476,21 +396,15 @@ class DoctorController extends Controller
      */
     public function assignHOD(User $user)
     {
-        // Check if the user is a doctor
         if ($user->role !== 'doctor') {
             return redirect()->back()->with('error', 'User is not a doctor.');
         }
-
         try {
-            // Update the user's role to HOD
-            $user->update([
-                'role' => 'hod'
-            ]);
+            $user->update(['role' => 'hod']);
 
-            // --- THIS IS THE "WHISTLEBLOWER" ---
-            // The user's role changed, so the "available doctors" list might be wrong.
-            Cache::forget("admin_stats_available_doctors");
-            // --- END OF WHISTLEBLOWER ---
+            // --- 3. THIS IS THE UPGRADE ---
+            $this->flushAdminStatsCache();
+            // --- END OF UPGRADE ---
 
             return redirect()->back()->with('success', $user->name . ' has been successfully assigned as HOD.');
         } catch (\Exception $e) {

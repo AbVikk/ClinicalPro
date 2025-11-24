@@ -46,4 +46,18 @@ return [
     */
 
     'request_timeout' => env('OPENAI_REQUEST_TIMEOUT', 30),
+    
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP Client Options
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify additional options for the HTTP client used to make
+    | requests to the OpenAI API. This can help with SSL/TLS issues.
+    */
+    'http_client_options' => [
+        'timeout' => env('OPENAI_REQUEST_TIMEOUT', 30),
+        'connect_timeout' => 10,
+        'verify' => true, // Set to false only if you're having SSL certificate issues (not recommended for production)
+    ],
 ];

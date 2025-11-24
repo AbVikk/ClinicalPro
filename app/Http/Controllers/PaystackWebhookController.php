@@ -5,9 +5,17 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Models\Payment;
+use App\Services\PaymentService;
 
 class PaystackWebhookController extends Controller
 {
+    protected $paymentService;
+
+    public function __construct(PaymentService $paymentService)
+    {
+        $this->paymentService = $paymentService;
+    }
+
     /**
      * Handle Paystack webhook events
      *
@@ -76,7 +84,7 @@ class PaystackWebhookController extends Controller
             ]);
         } else {
             // Create new payment record
-            Payment::create([
+            $payment = Payment::create([
                 'user_id' => $data['metadata']['user_id'] ?? $data['metadata']['admin_id'] ?? null,
                 'amount' => $data['amount'] / 100, // Convert from kobo to NGN
                 'method' => 'card_online',
@@ -84,7 +92,18 @@ class PaystackWebhookController extends Controller
                 'reference' => $reference,
                 'transaction_date' => now(),
                 'clinic_id' => $data['metadata']['clinic_id'] ?? null,
+                'consultation_id' => $data['metadata']['consultation_id'] ?? null,
             ]);
+        }
+        
+        // If this payment is for a consultation, finalize the appointment
+        if ($payment->consultation_id) {
+            Log::info("Finalizing appointment for consultation: " . $payment->consultation_id);
+            try {
+                $this->paymentService->finalizeAppointment($payment);
+            } catch (\Exception $e) {
+                Log::error("Error finalizing appointment: " . $e->getMessage());
+            }
         }
         
         Log::info("✅ Payment confirmed via webhook: {$reference}");

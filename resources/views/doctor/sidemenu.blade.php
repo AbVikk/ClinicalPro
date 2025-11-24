@@ -195,7 +195,7 @@
                             @endif
                             <div class="detail">
                                 <h4>{{ Auth::user()->name ?? 'Dr. Charlotte' }}</h4>
-                                <small>{{ Auth::user()->doctor->category->name ?? 'Neurologist' }}</small>                        
+                                <small>{{ Auth::user()->doctor->specialization ?? 'Neurologist' }}</small>                        
                             </div>
                         </div>
                     </li>
@@ -268,7 +268,7 @@
                             @endif
                             <div class="detail">
                                 <h4>{{ Auth::user()->name ?? 'Dr. Charlotte' }}</h4>
-                                <small>{{ Auth::user()->doctor->category->name ?? 'Neurologist' }}</small>                        
+                                <small>{{ Auth::user()->doctor->specialization ?? 'Neurologist' }}</small>                        
                             </div>
                             <div class="row">
                                 <div class="col-12">
@@ -809,4 +809,3 @@
         </div>
     </div>
 </div>
-

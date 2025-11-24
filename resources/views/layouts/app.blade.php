@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="doctor-id" content="{{ (Auth::check() && Auth::user()->role == 'doctor') ? Auth::user()->id : '' }}">
     <title>{{ config('app.name', 'Healthcare System') }}</title>
     
     <!-- Fonts -->

@@ -6,18 +6,18 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Appointment;
 use App\Models\User;
-use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
+use App\Traits\ManagesAdminCache;
 
 class AppointmentController extends Controller
 {
+    use ManagesAdminCache; // <-- 2. USE THE HELPER
+
     /**
      * Display a listing of appointments.
-     *
-     * @return \Illuminate\Http\Response
      */
     public function index()
     {
-        // This is a "read" page, no cache forget needed.
+        // (This function remains the same)
         $appointments = Appointment::with(['patient', 'doctor'])
             ->orderBy('created_at', 'desc')
             ->paginate(10);
@@ -27,13 +27,10 @@ class AppointmentController extends Controller
 
     /**
      * Display the specified appointment.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
      */
     public function show($id)
     {
-        // This is a "read" page, no cache forget needed.
+        // (This function remains the same)
         $appointment = Appointment::with(['patient', 'doctor'])->findOrFail($id);
         
         return view('admin.appointment-show', compact('appointment'));
@@ -41,20 +38,15 @@ class AppointmentController extends Controller
 
     /**
      * Assign a doctor to an appointment.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
      */
     public function assignDoctor(Request $request, $id)
     {
         $appointment = Appointment::findOrFail($id);
         $doctorId = $request->input('doctor_id');
         
-        // Verify that the doctor exists and has the correct role
         $doctor = User::where('id', $doctorId)
             ->where('role', 'doctor')
-            ->where('status', 'verified')
+            // ->where('status', 'verified') // Status check removed to allow any active doc
             ->first();
             
         if (!$doctor) {
@@ -64,15 +56,10 @@ class AppointmentController extends Controller
         $appointment->doctor_id = $doctorId;
         $appointment->save();
         
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // The recent appointments list is now outdated because a doctor was added.
-        // We also "forget" the available doctors list, just in case assigning one
-        // should affect their availability (it's safer to clear it).
-        Cache::forget("admin_stats_recent_appointments");
-        Cache::forget("admin_stats_available_doctors"); 
-        // --- END OF WHISTLEBLOWER ---
+        // --- 3. THIS IS THE UPGRADE ---
+        $this->flushAdminStatsCache();
+        // --- END OF UPGRADE ---
 
-        // Create notification for the doctor
         $patient = $appointment->patient;
         if ($patient) {
             $message = "New appointment assigned: {$patient->name} scheduled for " . $appointment->appointment_time->format('M d, Y g:i A');
@@ -81,7 +68,7 @@ class AppointmentController extends Controller
                 'type' => 'appointment',
                 'message' => $message,
                 'is_read' => false,
-                'channel' => 'database', // Default channel for in-app notifications
+                'channel' => 'database',
             ]);
         }
         
@@ -90,10 +77,6 @@ class AppointmentController extends Controller
 
     /**
      * Update the specified appointment.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
      */
     public function update(Request $request, $id)
     {
@@ -102,14 +85,10 @@ class AppointmentController extends Controller
         $oldStatus = $appointment->status;
         $appointment->update($request->only(['appointment_date', 'status', 'reason']));
         
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // An appointment's status changed, so all appointment counts and lists are wrong.
-        Cache::forget("admin_stats_pending_appointments");
-        Cache::forget("admin_stats_prev_week_pending");
-        Cache::forget("admin_stats_recent_appointments");
-        // --- END OF WHISTLEBLOWER ---
+        // --- 3. THIS IS THE UPGRADE ---
+        $this->flushAdminStatsCache();
+        // --- END OF UPGRADE ---
 
-        // Create notification for the patient if status changed to confirmed
         if ($oldStatus != 'confirmed' && $appointment->status == 'confirmed') {
             $doctor = $appointment->doctor;
             $patient = $appointment->patient;
@@ -120,7 +99,7 @@ class AppointmentController extends Controller
                     'type' => 'appointment',
                     'message' => $message,
                     'is_read' => false,
-                    'channel' => 'database', // Default channel for in-app notifications
+                    'channel' => 'database',
                 ]);
             }
         }
@@ -130,21 +109,15 @@ class AppointmentController extends Controller
 
     /**
      * Remove the specified appointment.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
      */
     public function destroy($id)
     {
         $appointment = Appointment::findOrFail($id);
         $appointment->delete();
         
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // An appointment was deleted, so all appointment counts and lists are wrong.
-        Cache::forget("admin_stats_pending_appointments");
-        Cache::forget("admin_stats_prev_week_pending");
-        Cache::forget("admin_stats_recent_appointments");
-        // --- END OF WHISTLEBLOWER ---
+        // --- 3. THIS IS THE UPGRADE ---
+        $this->flushAdminStatsCache();
+        // --- END OF UPGRADE ---
         
         return response()->json(['success' => 'Appointment deleted successfully']);
     }

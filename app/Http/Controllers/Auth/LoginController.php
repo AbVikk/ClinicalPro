@@ -48,8 +48,8 @@ class LoginController extends Controller
                     return redirect('/admin/index');
                 case 'doctor':
                     return redirect('/doctor/dashboard');
-                case 'clinic_staff':
-                    return redirect('/clinic/dashboard');
+                case 'nurse':
+                    return redirect('/nurse/dashboard');
                 case 'patient':
                     return redirect('/patient/dashboard');
                 case 'donor':

@@ -464,7 +464,7 @@
 
             searchTimeout = setTimeout(function() {
                 $.ajax({
-                    url: '{{ route('admin.book-appointment.search-patients') }}',
+                    url: '{{ route("admin.book-appointment.search-patients") }}',
                     method: 'POST',
                     data: { _token: '{{ csrf_token() }}', search: searchTerm },
                     success: function(response) {
@@ -522,7 +522,7 @@
                 return;
             }
             $.ajax({
-                url: '{{ route('admin.book-appointment.patient-info') }}',
+                url: '{{ route("admin.book-appointment.patient-info") }}',
                 method: 'POST',
                 data: { _token: '{{ csrf_token() }}', patient_id: patientId },
                 success: function(response) {
@@ -571,7 +571,7 @@
             button.prop('disabled', true).text('Registering...');
 
             $.ajax({
-                url: '{{ route('admin.book-appointment.walk-in-patient') }}',
+                url: '{{ route("admin.book-appointment.walk-in-patient") }}',
                 method: 'POST',
                 data: { _token: '{{ csrf_token() }}', name: name, phone: phone, email: email },
                 success: function(response) {
@@ -613,7 +613,7 @@
 
             // AJAX Call 1: Get Available Locations
             $.ajax({
-                url: '{{ route('admin.book-appointment.available-locations') }}',
+                url: '{{ route("admin.book-appointment.available-locations") }}',
                 method: 'POST',
                 data: { _token: '{{ csrf_token() }}', date: date },
                 success: function(response) {
@@ -646,7 +646,7 @@
 
             // AJAX Call 2: Get Available Doctors
             $.ajax({
-                url: '{{ route('admin.book-appointment.available-doctors') }}',
+                url: '{{ route("admin.book-appointment.available-doctors") }}',
                 method: 'POST',
                 data: {
                     _token: '{{ csrf_token() }}',

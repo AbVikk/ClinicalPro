@@ -19,13 +19,24 @@ class Appointment extends Model
         'notes',
         'reason',
         'appointment_reason_id',
+        'consultation_id', // <-- You added this (Correct!)
+        'payment_id',      // <-- THIS IS THE NEW FIX (Bug A)
     ];
 
     protected $casts = [
         'appointment_time' => 'datetime',
     ];
 
-    // Relationships
+    /**
+     * Accessor for appointment_date to maintain backward compatibility
+     */
+    public function getAppointmentDateAttribute()
+    {
+        return $this->appointment_time;
+    }
+
+    // ... (All other relationships are fine) ...
+    
     public function doctor()
     {
         return $this->belongsTo(User::class, 'doctor_id');
@@ -46,7 +57,6 @@ class Appointment extends Model
         return $this->belongsTo(AppointmentReason::class);
     }
 
-    // EMR relationships
     public function appointmentDetail()
     {
         return $this->hasOne(AppointmentDetail::class);

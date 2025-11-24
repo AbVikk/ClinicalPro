@@ -23,9 +23,48 @@ use App\Models\LeaveRequest;
 use Illuminate\Support\Facades\DB; 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage; 
+use \App\Traits\ManagesDoctorCache;
 
 class DashboardController extends Controller
 {
+    /**
+     * Helper to get all cache keys for a specific doctor.
+     * This is our "whistleblower" list.
+     */
+    private function getDoctorCacheKeys($doctorId)
+    {
+        return [
+            "doctor_{$doctorId}_todays_appointments",
+            "doctor_{$doctorId}_upcoming_appointments",
+            "doctor_{$doctorId}_pending_tasks",
+            "doctor_{$doctorId}_recent_prescriptions",
+            "doctor_{$doctorId}_patient_visits_chart",
+            "doctor_{$doctorId}_last_month_visits",
+            "doctor_{$doctorId}_last_year_total",
+            "doctor_{$doctorId}_total_appointments",
+            "doctor_{$doctorId}_online_consultations",
+            "doctor_{$doctorId}_cancelled_appointments",
+            "doctor_{$doctorId}_total_patients",
+            "doctor_{$doctorId}_follow_ups",
+            "doctor_{$doctorId}_schedule",
+            "doctor_{$doctorId}_top_patients",
+            // AJAX counts
+            "doctor_{$doctorId}_total_request_and_notification_count",
+            "doctor_{$doctorId}_notification_count"
+        ];
+    }
+    
+    /**
+     * Helper to flush all cache keys for a doctor.
+     */
+    private function flushDoctorCache($doctorId)
+    {
+        $keys = $this->getDoctorCacheKeys($doctorId);
+        foreach ($keys as $key) {
+            Cache::forget($key);
+        }
+    }
+
     // Helper method to create a notification
     private function createNotification($userId, $type, $message)
     {
@@ -37,19 +76,21 @@ class DashboardController extends Controller
             'channel' => 'database', 
         ]);
 
-        // --- FIX: Erase notification cache keys immediately after creation (The Whistleblower) ---
-        Cache::forget("doctor_{$userId}_notifications");
-        Cache::forget("doctor_{$userId}_notification_count");
-        Cache::forget("doctor_{$userId}_request_count");
+        // --- FIX: Erase this doctor's cache ---
+        $this->flushDoctorCache($userId);
         // --- END FIX ---
     }
     
     // Method to mark all notifications as read
     public function markNotificationsAsRead(Request $request)
     {
+        $doctorId = Auth::id();
         Auth::user()->notifications()->update(['is_read' => true]);
-        Cache::forget("doctor_".Auth::id()."_notifications");
-        Cache::forget("doctor_".Auth::id()."_notification_count");
+        
+        // --- FIX ---
+        $this->flushDoctorCache($doctorId);
+        // --- END FIX ---
+        
         return response()->json(['success' => true]);
     }
     
@@ -57,21 +98,24 @@ class DashboardController extends Controller
     public function markNotificationAsRead(Request $request, $notificationId)
     {
         $notification = Auth::user()->notifications()->find($notificationId);
+        $doctorId = Auth::id();
         
         if ($notification) {
             $notification->update(['is_read' => true]);
-            Cache::forget("doctor_".Auth::id()."_notifications");
-            Cache::forget("doctor_".Auth::id()."_notification_count");
+            
+            // --- FIX ---
+            $this->flushDoctorCache($doctorId);
+            // --- END FIX ---
+            
             return response()->json(['success' => true]);
         }
         
         return response()->json(['success' => false, 'message' => 'Notification not found'], 404);
     }
     
-    // Helper method to get unread notifications for the authenticated user
+    // Helper method to get unread notifications (uncached for page load)
     private function getUnreadNotifications()
     {
-        // This is the only place it is uncached for the initial page load
         return Auth::user()->notifications()
             ->where('is_read', false)
             ->orderBy('created_at', 'desc')
@@ -92,18 +136,16 @@ class DashboardController extends Controller
     {
         $doctorId = Auth::id();
             return Appointment::where('doctor_id', $doctorId)
-                ->whereIn('status', ['pending', 'new', 'scheduled']) // Pending/New are typically used for requests
+                ->whereIn('status', ['pending', 'new'])
                 ->count();
     }
     
-    // --- FIX: Helper method to gather and save Vitals ---
+    // --- (Helper methods for saveVitals, saveClinicalNotes, etc. remain unchanged) ---
     private function saveVitals(Request $request, $appointmentId, $doctorId) {
         $vitalsData = $request->only(['blood_pressure', 'temperature', 'pulse', 'respiratory_rate', 'spo2', 'height', 'weight', 'waist', 'bsa', 'bmi']);
-        // Filter out null or empty values
         $vitalsData = array_filter($vitalsData, function($value) {
             return !is_null($value) && $value !== '';
         });
-
         if (!empty($vitalsData)) {
             $vitalsData['doctor_id'] = $doctorId; 
             Vitals::updateOrCreate(
@@ -112,11 +154,8 @@ class DashboardController extends Controller
             );
         }
     }
-
-    // --- FIX: Helper method to gather and save Clinical Notes ---
     private function saveClinicalNotes(Request $request, $appointmentId, $doctorId) {
-        $clinicalData = $request->only(['clinical_notes', 'skin_allergy']);
-        
+         $clinicalData = $request->only(['clinical_notes', 'skin_allergy']);
         if (isset($clinicalData['clinical_notes']) || isset($clinicalData['skin_allergy'])) {
              ClinicalNote::updateOrCreate(
                 ['appointment_id' => $appointmentId],
@@ -129,19 +168,11 @@ class DashboardController extends Controller
             );
         }
     }
-
-    // --- FIX: Helper method to gather and save Medications ---
     private function saveMedications(Request $request, $appointmentId) {
-        // 1. Delete all existing medications for this appointment first
         Medication::where('appointment_id', $appointmentId)->delete();
-        
         if ($request->medications) {
             foreach ($request->medications as $medicationData) {
-                
-                // Check for the presence of the medication name
                 $medName = $medicationData['name'] ?? null; 
-                
-                // We only create a record if a name actually exists
                 if (!empty($medName)) { 
                     Medication::create([
                         'appointment_id' => $appointmentId,
@@ -149,34 +180,25 @@ class DashboardController extends Controller
                         'type' => $medicationData['type'] ?? null,
                         'dosage' => $medicationData['dosage'] ?? null,
                         'duration' => $medicationData['duration'] ?? null,
-                        
                         'use_pattern' => $medicationData['use_pattern'] ?? null, 
-                        
                         'instructions' => $medicationData['instructions'] ?? null,
                     ]);
                 }
             }
         }
     }
-
-    // --- FIX: Helper method to gather and save Lab Tests ---
     private function saveLabTests(Request $request, $appointmentId, $doctorId) {
         $labTests = $request->lab_tests ?? [];
         $existingTestNames = [];
-        
         $allTests = LabTest::where('appointment_id', $appointmentId)->get()->keyBy('test_name');
-
         foreach ($labTests as $testData) {
             $testName = $testData['name'] ?? null;
             $filePath = $testData['file_path'] ?? null;
-
             if ($testName) {
                 $test = $allTests->get($testName);
-
                 if (isset($testData['file']) && $testData['file'] instanceof \Illuminate\Http\UploadedFile) {
                     $filePath = $testData['file']->store('lab_tests', 'public');
                 }
-                
                 $test = LabTest::updateOrCreate(
                     ['appointment_id' => $appointmentId, 'test_name' => $testName],
                     [
@@ -184,11 +206,9 @@ class DashboardController extends Controller
                         'file_path' => $filePath
                     ]
                 );
-
                 $existingTestNames[] = $testName;
             }
         }
-        
         LabTest::where('appointment_id', $appointmentId)
             ->whereNotIn('test_name', $existingTestNames)
             ->delete();
@@ -196,47 +216,41 @@ class DashboardController extends Controller
     
     public function index()
     {
-        // Get today's date
         $today = Carbon::today();
-        
-        // Get tomorrow's date
         $tomorrow = Carbon::tomorrow();
-        
-        // Get the authenticated doctor's ID
         $doctorId = Auth::user()->id;
         
-        // --- NEW: Auto-Update Missed Appointments ---
         Appointment::where('doctor_id', $doctorId)
-            ->whereIn('status', ['confirmed', 'pending'])
+            ->whereIn('status', ['confirmed', 'pending', 'approved', 'checked_in', 'vitals_taken'])
             ->where('appointment_time', '<', now())
             ->update(['status' => 'missed']);
-        // --- END: Auto-Update Missed Appointments ---
 
-        // Get notification/request counts (now from cache)
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-
-        // Set a "cache time" in seconds. 3600 = 1 hour.
-        $cacheTime = 3600; 
+        $cacheTime = 3600; // 1 hour
         
-        // 1. Wrap the query in Cache::remember
+        // 1. Get Today's Appointments
         $todaysAppointments = Cache::remember("doctor_{$doctorId}_todays_appointments", $cacheTime, function () use ($doctorId, $today) {
             return Appointment::with(['patient', 'consultation'])
                 ->where('doctor_id', $doctorId)
                 ->whereDate('appointment_time', $today)
-                ->whereIn('status', ['pending', 'confirmed', 'in_progress'])
+                ->whereIn('status', [
+                    'pending', 'confirmed', 'in_progress', 'approved', 'checked_in', 'vitals_taken'
+                ])
                 ->orderBy('appointment_time')
                 ->get();
         });
-        
         $todaysAppointmentsCount = $todaysAppointments->count();
 
+        // 2. Get Upcoming Appointments
         $upcomingAppointments = Cache::remember("doctor_{$doctorId}_upcoming_appointments", $cacheTime, function () use ($doctorId, $tomorrow) {
             return Appointment::with(['patient', 'consultation'])
                 ->where('doctor_id', $doctorId)
                 ->where('appointment_time', '>=', $tomorrow)
-                ->where('status', 'confirmed')
+                ->whereIn('status', [
+                    'pending', 'confirmed', 'approved', 'checked_in', 'vitals_taken'
+                ])
                 ->orderBy('appointment_time')
                 ->limit(5)
                 ->get();
@@ -251,7 +265,6 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get();
         });
-        
         $recentPrescriptions = Cache::remember("doctor_{$doctorId}_recent_prescriptions", $cacheTime, function () use ($doctorId) {
             return Prescription::with(['patient', 'items.drug'])
                 ->where('doctor_id', $doctorId)
@@ -259,10 +272,7 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get();
         });
-        
-        // --- DATA FOR 'STATS' TAB ---
         $currentYear = Carbon::now()->year;
-
         $patientVisits = Cache::remember("doctor_{$doctorId}_patient_visits_chart", $cacheTime, function () use ($doctorId, $currentYear) {
             $visits = [];
             for ($month = 1; $month <= 12; $month++) {
@@ -274,13 +284,9 @@ class DashboardController extends Controller
             }
             return $visits;
         });
-        
         $totalYearlyVisits = array_sum($patientVisits);
-        
         $avgDailyVisits = $totalYearlyVisits > 0 ? round($totalYearlyVisits / 365, 1) : 0;
-        
         $lastMonth = Carbon::now()->subMonth();
-
         $lastMonthVisits = Cache::remember("doctor_{$doctorId}_last_month_visits", $cacheTime, function () use ($doctorId, $lastMonth) {
             return Appointment::where('doctor_id', $doctorId)
                 ->whereYear('appointment_time', $lastMonth->year)
@@ -288,62 +294,45 @@ class DashboardController extends Controller
                 ->where('status', 'completed')
                 ->count();
         });
-        
         $monthlyChange = $patientVisits[Carbon::now()->month - 1] - $lastMonthVisits;
-        
         $lastYearTotal = Cache::remember("doctor_{$doctorId}_last_year_total", $cacheTime, function () use ($doctorId, $currentYear) {
             return Appointment::where('doctor_id', $doctorId)
                 ->whereYear('appointment_time', $currentYear - 1)
                 ->where('status', 'completed')
                 ->count();
         });
-        
         $yearlyTrend = $lastYearTotal > 0 ? round((($totalYearlyVisits - $lastYearTotal) / $lastYearTotal) * 100, 1) : 0;
-        
-        // Simulated data should NOT be cached, as it will just show the same "random" number.
-        $satisfactionData = []; // Simulated
-        for ($month = 1; $month <= 12; $month++) { $satisfactionData[] = rand(35, 50) / 10; }
+        $satisfactionData = []; for ($month = 1; $month <= 12; $month++) { $satisfactionData[] = rand(35, 50) / 10; }
         $currentRating = end($satisfactionData);
         $previousRating = $satisfactionData[count($satisfactionData) - 2] ?? $currentRating;
         $ratingChange = round($currentRating - $previousRating, 1);
         $totalReviews = rand(1000, 1500);
         $reviewsChange = rand(100, 200);
         $recommendationPercentage = rand(85, 95);
-
-        // --- DATA FOR NEW WIDGETS & CARDS ---
         $totalAppointmentsCount = Cache::remember("doctor_{$doctorId}_total_appointments", $cacheTime, function () use ($doctorId) {
             return Appointment::where('doctor_id', $doctorId)->count();
         });
-        
-        // FIX 1: Filter by status to show only CURRENT/PENDING/ACTIVE virtual consultations
         $onlineConsultationsCount = Cache::remember("doctor_{$doctorId}_online_consultations", $cacheTime, function () use ($doctorId) {
             return Consultation::where('doctor_id', $doctorId)
                 ->where('delivery_channel', 'virtual')
-                // Only include sessions that are scheduled or currently active
                 ->whereIn('status', ['scheduled', 'started']) 
                 ->count();
         });
-
         $cancelledAppointmentsCount = Cache::remember("doctor_{$doctorId}_cancelled_appointments", $cacheTime, function () use ($doctorId) {
             return Appointment::where('doctor_id', $doctorId)
                 ->where('status', 'cancelled')
                 ->count();
         });
-
         $totalPatientsCount = Cache::remember("doctor_{$doctorId}_total_patients", $cacheTime, function () use ($doctorId) {
             return Appointment::where('doctor_id', $doctorId)
                 ->where('status', 'completed')
                 ->distinct('patient_id')
                 ->count('patient_id');
         });
-
-        $videoConsultationsCount = $onlineConsultationsCount; // Re-using variable
-        
-        // Placeholders for stats you may not be tracking yet
+        $videoConsultationsCount = $onlineConsultationsCount;
         $rescheduledCount = 0; 
         $preVisitBookingsCount = 0; 
         $walkinBookingsCount = 0; 
-
         $followUpsCount = Cache::remember("doctor_{$doctorId}_follow_ups", $cacheTime, function () use ($doctorId) {
             return AppointmentDetail::whereHas('appointment', function($q) use ($doctorId){
                     $q->where('doctor_id', $doctorId);
@@ -351,17 +340,13 @@ class DashboardController extends Controller
                 ->whereNotNull('follow_up_date')
                 ->count();
         });
-        
-        // This is the data for the "My Availability" card
         $doctorSchedule = Cache::remember("doctor_{$doctorId}_schedule", $cacheTime, function () use ($doctorId) {
             return DoctorSchedule::where('doctor_id', $doctorId)
-                ->with('clinic') // <-- Eager load the clinic name
+                ->with('clinic') 
                 ->orderByRaw("FIELD(day_of_week, 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')")
                 ->get()
-                ->groupBy('day_of_week'); // Group by day for easy display
+                ->groupBy('day_of_week');
         });
-
-        // This is the data for the "Top Patients" card
         $topPatients = Cache::remember("doctor_{$doctorId}_top_patients", $cacheTime, function () use ($doctorId) {
             return User::where('role', 'patient')
                 ->whereHas('appointmentsAsPatient', function ($query) use ($doctorId) {
@@ -374,17 +359,12 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get();
         });
-        
-        // --- Return ALL variables to the view ---
         return view('doctor.dashboard', compact(
-            // Original Tab Data
             'notifications', 'notificationCount', 'requestCount',
             'todaysAppointmentsCount', 'todaysAppointments', 'upcomingAppointments',
             'pendingTasks', 'recentPrescriptions',
             'patientVisits', 'avgDailyVisits', 'totalYearlyVisits', 'monthlyChange', 'yearlyTrend',
             'satisfactionData', 'currentRating', 'ratingChange', 'totalReviews', 'reviewsChange', 'recommendationPercentage',
-            
-            // New Widgets & Cards Data
             'totalAppointmentsCount', 'onlineConsultationsCount', 'cancelledAppointmentsCount',
             'totalPatientsCount', 'videoConsultationsCount', 'rescheduledCount', 
             'preVisitBookingsCount', 'walkinBookingsCount', 'followUpsCount',
@@ -392,58 +372,48 @@ class DashboardController extends Controller
         ));
     }
 
+
     /**
      * Display the requests page for the doctor
      */
     public function requests()
     {
-        // Get the authenticated doctor's ID
-        $doctorId = Auth::user()->id;
+        $doctorId = Auth::id();
         
-        // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
         
-        // Get all new appointments for this doctor (status = 'pending' for new requests)
-        // This page is for *live* requests, so we probably should NOT cache it.
-        $requests = Appointment::with(['patient.patient', 'appointmentReason'])
+        $requests = Appointment::with(['patient', 'appointmentReason'])
             ->where('doctor_id', $doctorId)
-            ->where('status', 'pending') // Changed from 'confirmed' to 'pending'
+            ->where('status', 'pending')
             ->orderBy('created_at', 'desc')
             ->get();
         
         return view('doctor.requests', compact('requests', 'notifications', 'notificationCount', 'requestCount'));
     }
 
+    /**
+     * Display the appointments page
+     */
     public function appointments(Request $request)
     {
-        // Get the authenticated doctor's ID
-        $doctorId = Auth::user()->id;
-        
-        // Get unread notifications
+        $doctorId = Auth::id();
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
         
-        // Get filter parameters
         $search = $request->get('search');
-        $filter = $request->get('filter', 'all'); // all, chat, direct
-        $tab = $request->get('tab', 'upcoming'); // upcoming, inprogress, cancelled, completed, missed
+        $filter = $request->get('filter', 'all'); 
+        $tab = $request->get('tab', 'upcoming'); 
         
-        // As we discussed, we will NOT cache this simple list page.
-
-        // Check if this is an AJAX request for a specific tab
         if ($request->ajax() || $request->get('ajax')) {
-            // We'll use getAppointmentsForTab, which we will also update
             return $this->getAppointmentsForTab($doctorId, $tab, $search, $filter);
         }
         
-        // Build the base query for appointments
-        $baseQuery = Appointment::with(['patient', 'appointmentReason', 'consultation']) // Eager load patient
+        $baseQuery = Appointment::with(['patient', 'appointmentReason', 'consultation']) 
             ->where('doctor_id', $doctorId);
             
-        // Apply search filter (keep existing)
         if ($search) {
             $baseQuery->where(function($q) use ($search) {
                 $q->whereHas('patient', function ($q) use ($search) {
@@ -453,20 +423,19 @@ class DashboardController extends Controller
             });
         }
         
-        // Apply type filter (keep existing)
         if ($filter !== 'all') {
             $baseQuery->where('type', $filter);
         }
         
-        // Clone the base query for each tab
         $upcomingQuery = clone $baseQuery;
         $inProgressQuery = clone $baseQuery;
         $cancelledQuery = clone $baseQuery;
         $completedQuery = clone $baseQuery;
         $missedQuery = clone $baseQuery; 
         
-        // Apply status filters for each tab
-        $upcomingQuery->where('status', 'confirmed')
+        $upcomingQuery->whereIn('status', [
+                            'confirmed', 'approved', 'checked_in', 'vitals_taken'
+                        ])
                       ->where('appointment_time', '>', now());
         
         $inProgressQuery->where('status', 'in_progress');
@@ -474,7 +443,6 @@ class DashboardController extends Controller
         $completedQuery->where('status', 'completed');
         $missedQuery->where('status', 'missed'); 
         
-        // Get paginated results for the active tab
         $perPage = 10;
         switch ($tab) {
             case 'inprogress':
@@ -495,7 +463,6 @@ class DashboardController extends Controller
                 break;
         }
         
-        // Get counts for all tabs (without pagination)
         $upcomingCount = $upcomingQuery->count();
         $inProgressCount = $inProgressQuery->count();
         $cancelledCount = $cancelledQuery->count();
@@ -504,27 +471,20 @@ class DashboardController extends Controller
         
         return view('doctor.appointments', compact(
             'appointments',
-            'upcomingCount', 
-            'inProgressCount',
-            'cancelledCount', 
-            'completedCount',
-            'missedCount', 
-            'search',
-            'filter',
-            'tab',
-            'notifications',
-            'notificationCount',
-            'requestCount'
+            'upcomingCount', 'inProgressCount', 'cancelledCount', 'completedCount', 'missedCount', 
+            'search', 'filter', 'tab',
+            'notifications', 'notificationCount', 'requestCount'
         ));
     }
     
+    /**
+     * AJAX function to get tab content
+     */
     private function getAppointmentsForTab($doctorId, $tab, $search, $filter)
     {
-        // Build the base query for appointments
-        $baseQuery = Appointment::with(['patient', 'appointmentReason', 'consultation']) // Eager load patient
+        $baseQuery = Appointment::with(['patient', 'appointmentReason', 'consultation'])
             ->where('doctor_id', $doctorId);
             
-        // Apply search filter (keep existing)
         if ($search) {
             $baseQuery->where(function($q) use ($search) {
                 $q->whereHas('patient', function ($q) use ($search) {
@@ -534,12 +494,10 @@ class DashboardController extends Controller
             });
         }
         
-        // Apply type filter (keep existing)
         if ($filter !== 'all' && $filter) {
             $baseQuery->where('type', $filter);
         }
         
-        // Apply status filter based on tab
         switch ($tab) {
             case 'inprogress':
                 $baseQuery->where('status', 'in_progress');
@@ -555,12 +513,13 @@ class DashboardController extends Controller
                 break;
             case 'upcoming':
             default:
-                $baseQuery->where('status', 'confirmed')
+                $baseQuery->whereIn('status', [
+                            'confirmed', 'approved', 'checked_in', 'vitals_taken'
+                          ])
                           ->where('appointment_time', '>', now());
                 break;
         }
         
-        // Get appointments based on tab
         $perPage = 10;
         switch ($tab) {
             case 'inprogress':
@@ -577,7 +536,6 @@ class DashboardController extends Controller
                 break;
         }
         
-        // Return JSON response with rendered view
         $view = view('doctor.appointments-tab-content', compact('appointments', 'tab'))->render();
         
         return response()->json([
@@ -590,77 +548,68 @@ class DashboardController extends Controller
     /**
      * Accept an appointment request
      */
-    public function acceptRequest(Request $request, $appointmentId)
+    public function acceptRequest(Request $request, Appointment $appointment)
     {
-        // Find the appointment by ID
-        $appointment = Appointment::find($appointmentId);
-        
-        // If appointment not found, return error
-        if (!$appointment) {
-            return response()->json(['success' => false, 'message' => 'Appointment not found'], 404);
-        }
-        
-        // Verify the appointment belongs to the authenticated doctor
-        if ($appointment->doctor_id !== Auth::user()->id) {
+        $doctorId = Auth::user()->id;
+        if ($appointment->doctor_id !== $doctorId) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         
         try {
-            // Determine the appointment time
             $appointmentTime = $request->appointment_time ?? $appointment->appointment_time;
             
-            // If the appointment time is in the past, set it to 1 hour from now
             if (strtotime($appointmentTime) <= time()) {
                 $appointmentTime = now()->addHour();
             }
+
+            $newStatus = 'confirmed';
+            if ($appointment->type == 'in_person') {
+                $newStatus = 'approved'; 
+            }
             
-            // Update the appointment status to 'confirmed'
             $appointment->update([
-                'status' => 'confirmed',
+                'status' => $newStatus,
                 'appointment_time' => $appointmentTime
             ]);
+            
+            // event(new \App\Events\AdminAlert("New appointment approved, waiting for check-in."));
 
-            $doctorId = Auth::user()->id;
-            Cache::forget("doctor_{$doctorId}_todays_appointments");
-            Cache::forget("doctor_{$doctorId}_request_count");
-            Cache::forget("doctor_{$doctorId}_pending_tasks");
-            Cache::forget("doctor_{$doctorId}_upcoming_appointments");
+            // --- FIX ---
+            $this->flushDoctorCache($doctorId);
+            // --- END FIX ---
             
             return response()->json([
                 'success' => true,
-                'message' => 'Appointment accepted successfully',
+                'message' => 'Appointment approved successfully',
                 'appointment_time' => $appointment->appointment_time
             ]);
         } catch (\Exception $e) {
+            Log::error('Error in acceptRequest: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Error accepting appointment: ' . $e->getMessage()], 500);
         }
     }
+
 
     /**
      * Reject an appointment request
      */
     public function rejectRequest(Request $request, Appointment $appointment)
     {
-        // Verify the appointment belongs to the authenticated doctor
-        if ($appointment->doctor_id !== Auth::user()->id) {
+        $doctorId = Auth::user()->id;
+        if ($appointment->doctor_id !== $doctorId) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-        
         try {
-            // Update the appointment status to 'cancelled'
             $appointment->update([
                 'status' => 'cancelled',
                 'cancel_reason' => $request->cancel_reason,
                 'cancel_type' => $request->cancel_type
             ]);
 
-            // Erase the answers that just changed
-            $doctorId = Auth::user()->id;
-            Cache::forget("doctor_{$doctorId}_todays_appointments");
-            Cache::forget("doctor_{$doctorId}_cancelled_appointments");
-            Cache::forget("doctor_{$doctorId}_request_count");
-            Cache::forget("doctor_{$doctorId}_pending_tasks");
-            
+            // --- FIX ---
+            $this->flushDoctorCache($doctorId);
+            // --- END FIX ---
+
             return response()->json([
                 'success' => true,
                 'message' => 'Appointment rejected successfully'
@@ -675,27 +624,32 @@ class DashboardController extends Controller
      */
     public function startAppointment(Request $request, Appointment $appointment)
     {
-        // Verify the appointment belongs to the authenticated doctor
-        if ($appointment->doctor_id !== Auth::user()->id) {
+        $doctorId = Auth::user()->id;
+        if ($appointment->doctor_id !== $doctorId) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         
         try {
-            // Update the appointment status to 'in_progress'
             $appointment->update([
                 'status' => 'in_progress',
                 'started_at' => now()
             ]);
-            
-            // Create appointment details record if it doesn't exist
             AppointmentDetail::firstOrCreate([
                 'appointment_id' => $appointment->id
             ]);
+            try {
+                $doctorProfile = Auth::user()->doctorProfile; 
+                if ($doctorProfile) {
+                    $doctorProfile->live_status = 'In Appointment';
+                    $doctorProfile->save();
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to update live_status on startAppointment: ' . $e->getMessage());
+            }
 
-            // --- THIS IS THE NEW PART (The "Walkie-Talkie") ---
-            $doctorId = Auth::user()->id;
-            Cache::forget("doctor_{$doctorId}_todays_appointments");
-            Cache::forget("doctor_{$doctorId}_upcoming_appointments"); // It's no longer "upcoming"
+            // --- FIX ---
+            $this->flushDoctorCache($doctorId);
+            // --- END FIX ---
             
             return response()->json([
                 'success' => true,
@@ -707,46 +661,27 @@ class DashboardController extends Controller
             return response()->json(['success' => false, 'message' => 'Error starting appointment: ' . $e->getMessage()], 500);
         }
     }
-
-    /**
-     * End an appointment session
-     */
+    
     public function endAppointment(Request $request, Appointment $appointment)
     {
-        // Verify the appointment belongs to the authenticated doctor
-        if ($appointment->doctor_id !== Auth::user()->id) {
-            if ($request->ajax()) {
-                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-            }
+        $doctorId = Auth::user()->id;
+        if ($appointment->doctor_id !== $doctorId) {
+            if ($request->ajax()) { return response()->json(['success' => false, 'message' => 'Unauthorized'], 403); }
             return redirect()->route('doctor.appointments')->with('error', 'Unauthorized access');
         }
-        
-        // Handle GET request - show a confirmation page
         if ($request->isMethod('get')) {
-            // Get unread notifications
             $notifications = $this->getUnreadNotifications();
             $notificationCount = $this->getNotificationCount();
             $requestCount = $this->getAppointmentRequestCount();
-            
-            // For direct access via GET, show confirmation page
             return view('doctor.confirm-end-appointment', compact('appointment', 'notifications', 'notificationCount', 'requestCount'));
         }
-        
-        // Handle POST request (AJAX or form submission)
-        // Validate the request
-        $request->validate([
-            'end_reason' => 'required|string|max:500'
-        ]);
-        
+        $request->validate(['end_reason' => 'required|string|max:500']);
         try {
-            // Update the appointment status to 'completed'
             $appointment->update([
                 'status' => 'completed',
                 'completed_at' => now(),
                 'end_reason' => $request->end_reason
             ]);
-            
-            // Update the consultation end_time if there's a linked consultation
             $payment = $appointment->payment;
             if ($payment && $payment->consultation_id) {
                 $consultation = Consultation::find($payment->consultation_id);
@@ -757,34 +692,20 @@ class DashboardController extends Controller
                     ]);
                 }
             }
-
-            // Erase ALL the answers from the "whiteboard"
-            $doctorId = Auth::user()->id;
-            // Clear all dashboard-related cache keys for this doctor
-            $cacheKeys = [
-                "doctor_{$doctorId}_todays_appointments",
-                "doctor_{$doctorId}_upcoming_appointments",
-                "doctor_{$doctorId}_pending_tasks",
-                "doctor_{$doctorId}_recent_prescriptions",
-                "doctor_{$doctorId}_patient_visits_chart",
-                "doctor_{$doctorId}_last_month_visits",
-                "doctor_{$doctorId}_last_year_total",
-                "doctor_{$doctorId}_total_appointments",
-                "doctor_{$doctorId}_online_consultations",
-                "doctor_{$doctorId}_cancelled_appointments",
-                "doctor_{$doctorId}_total_patients",
-                "doctor_{$doctorId}_follow_ups",
-                "doctor_{$doctorId}_schedule",
-                "doctor_{$doctorId}_top_patients",
-                "doctor_{$doctorId}_request_count"
-            ];
-            
-            // --- FIX FOR forgetMultiple (Cache Erase) ---
-            foreach ($cacheKeys as $key) {
-                Cache::forget($key);
+            try {
+                $doctorProfile = Auth::user()->doctorProfile; 
+                if ($doctorProfile) {
+                    $doctorProfile->live_status = 'Available';
+                    $doctorProfile->save();
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to update live_status on endAppointment: ' . $e->getMessage());
             }
-            // --- END OF FIX ---
-            
+
+            // --- FIX ---
+            $this->flushDoctorCache($doctorId);
+            // --- END FIX ---
+
             if ($request->ajax()) {
                 return response()->json([
                     'success' => true,
@@ -792,64 +713,39 @@ class DashboardController extends Controller
                     'status' => 'completed'
                 ]);
             }
-            
-            // For non-AJAX requests, redirect to dashboard with success message
             return redirect()->route('doctor.dashboard')->with('success', 'Appointment completed successfully');
         } catch (\Exception $e) {
-            if ($request->ajax()) {
-                return response()->json(['success' => false, 'message' => 'Error completing appointment: ' . $e->getMessage()], 500);
-            }
-            
-            // For non-AJAX requests, redirect back with error message
+            if ($request->ajax()) { return response()->json(['success' => false, 'message' => 'Error completing appointment: ' . $e->getMessage()], 500); }
             return redirect()->back()->with('error', 'Error completing appointment: ' . $e->getMessage());
         }
     }
-
-    /**
-     * Get the count of new requests for the authenticated doctor
-     */
     public function getRequestCount()
     {
-        // This is a helper, but we'll cache the count inside the helper itself
         $count = $this->getAppointmentRequestCount() + $this->getNotificationCount();
         return response()->json(['count' => $count]);
     }
-    
-    /**
-     * Display the specified patient profile for doctors.
-     */
     public function showPatient($id)
     {
         $doctorId = Auth::user()->id;
-        
-        // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-        
-        // Find the patient and verify they have appointments with this doctor
         $patient = User::where('role', 'patient')
             ->whereHas('appointmentsAsPatient', function ($query) use ($doctorId) {
                 $query->where('doctor_id', $doctorId);
             })
             ->findOrFail($id);
-            
-        // Get recent appointments for this patient with this doctor (limit 3)
         $recentAppointments = Appointment::where('patient_id', $patient->id)
             ->where('doctor_id', $doctorId)
             ->with(['appointmentReason'])
             ->orderBy('appointment_time', 'desc')
             ->limit(3)
             ->get();
-            
-        // Get all appointments for this patient with this doctor
         $allAppointments = Appointment::where('patient_id', $patient->id)
             ->where('doctor_id', $doctorId)
             ->with(['appointmentReason'])
             ->orderBy('appointment_time', 'desc')
             ->get();
-            
-        // Get next upcoming appointment (future appointments only)
         $nextAppointment = Appointment::where('patient_id', $patient->id)
             ->where('doctor_id', $doctorId)
             ->where('status', 'confirmed')
@@ -857,30 +753,19 @@ class DashboardController extends Controller
             ->with(['appointmentReason'])
             ->orderBy('appointment_time', 'asc')
             ->first();
-            
-        // Get prescriptions for this patient created by this doctor
         $patientPrescriptions = Prescription::where('patient_id', $patient->id)
             ->where('doctor_id', $doctorId)
             ->with(['items.drug'])
             ->orderBy('created_at', 'desc')
             ->get();
-        
         return view('doctor.patient-profile', compact('patient', 'recentAppointments', 'allAppointments', 'patientPrescriptions', 'nextAppointment', 'notifications', 'notificationCount', 'requestCount'));
     }
-    
-    /**
-     * Display a list of patients for the authenticated doctor.
-     */
     public function indexPatient(Request $request)
     {
         $doctorId = Auth::user()->id;
-        
-        // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-        
-        // Build the base query for patients
         $query = User::where('role', 'patient')
             ->whereHas('appointmentsAsPatient', function ($query) use ($doctorId) {
                 $query->where('doctor_id', $doctorId);
@@ -890,17 +775,10 @@ class DashboardController extends Controller
                     ->orderBy('appointment_time', 'desc');
             }])
             ->orderBy('name');
-            
-        // Get all results for client-side search, paginated results for regular page load
         if ($request->ajax()) {
-            // For AJAX requests, get all patients for client-side filtering
             $patients = $query->get();
         } else {
-            // For regular page loads, get paginated results
-            // Get search term from request
             $search = $request->get('search');
-            
-            // Apply search filter if provided
             if ($search) {
                 $query->where(function($q) use ($search) {
                     $q->where('name', 'LIKE', "%{$search}%")
@@ -908,165 +786,87 @@ class DashboardController extends Controller
                       ->orWhere('phone', 'LIKE', "%{$search}%");
                 });
             }
-            
             $patients = $query->paginate(20);
         }
-        
-        // If this is an AJAX request, return only the table content
         if ($request->ajax()) {
             return response()->view('doctor.patients-table', compact('patients'));
         }
-        
         return view('doctor.patients', compact('patients', 'notifications', 'notificationCount', 'requestCount'));
     }
-    
-
-    /**
-     * Display the appointment details page
-     */
     public function showAppointmentDetails(Appointment $appointment)
     {
-        // Verify the appointment belongs to the authenticated doctor
         if ($appointment->doctor_id !== Auth::user()->id) {
             return redirect()->route('doctor.appointments')->with('error', 'Unauthorized access');
         }
-        
-        // Verify the appointment is in progress
         if ($appointment->status !== 'in_progress') {
             return redirect()->route('doctor.appointments')->with('error', 'Appointment is not in progress');
         }
-        
-        // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-        
-        // Get or create appointment details
         $appointmentDetail = AppointmentDetail::firstOrCreate([
             'appointment_id' => $appointment->id
         ]);
-        
-        // Load related data through the appointment
         $appointment->load(['vitals', 'clinicalNote', 'medications', 'labTests', 'doctor', 'patient', 'appointmentReason', 'appointmentDetail', 'consultation.clinic']);
-        
-        // Get drug data for medication selection
         $drugs = \App\Models\Drug::orderBy('name')->get();
         $categories = \App\Models\DrugCategory::orderBy('name')->get();
         $dosages = \App\Models\DrugMg::orderBy('mg_value')->get();
-        
-        // Calculate number of visits for this patient with this doctor
         $noOfVisits = \App\Models\Appointment::where('patient_id', $appointment->patient_id)
             ->where('doctor_id', $appointment->doctor_id)
             ->where('status', 'completed')
             ->count();
-        
         return view('doctor.appointment-details', compact('appointment', 'appointmentDetail', 'drugs', 'categories', 'dosages', 'notifications', 'notificationCount', 'requestCount', 'noOfVisits'));
     }
-    
-    /**
-     * Save appointment details
-     */
     public function saveAppointmentDetails(Request $request, Appointment $appointment)
     {
-        // Verify the appointment belongs to the authenticated doctor
         $doctorId = Auth::user()->id;
-        
         if ($appointment->doctor_id !== $doctorId) {
-            if ($request->ajax()) {
-                return response()->json(['success' => false, 'message' => 'Unauthorized access'], 403);
-            }
+            if ($request->ajax()) { return response()->json(['success' => false, 'message' => 'Unauthorized access'], 403); }
             return redirect()->route('doctor.appointments')->with('error', 'Unauthorized access');
         }
-        
-        // Check if this is a partial update (section-specific save)
         $isPartialUpdate = (
-                          $request->has('complaints') || 
-                          $request->has('diagnosis') || 
-                          $request->has('medications') || 
-                          $request->has('lab_tests') || 
-                          $request->has('blood_group') ||
-                          $request->has('advice') ||
-                          $request->has('follow_up_date') ||
-                          $request->has('follow_up_time') ||
-                          $request->has('clinical_notes') ||
-                          $request->has('skin_allergy') ||
+                          $request->has('complaints') || $request->has('diagnosis') || $request->has('medications') || 
+                          $request->has('lab_tests') || $request->has('blood_group') || $request->has('advice') ||
+                          $request->has('follow_up_date') || $request->has('follow_up_time') ||
+                          $request->has('clinical_notes') || $request->has('skin_allergy') ||
                           $request->hasAny(['blood_pressure', 'temperature', 'pulse', 'respiratory_rate', 'spo2', 'height', 'weight', 'waist', 'bsa', 'bmi'])
         ) && !$request->has('is_full_update'); 
-
-        // Rerun validation
         $validatorRules = [
-            'blood_group' => 'nullable|string|max:10',
-            'advice' => 'nullable|string|max:1000',
-            'follow_up_date' => 'nullable|date',
-            'follow_up_time' => 'nullable|date_format:H:i',
-            // Vitals validation
-            'blood_pressure' => 'nullable|string|max:20',
-            'temperature' => 'nullable|string|max:10',
-            'pulse' => 'nullable|string|max:10',
-            'respiratory_rate' => 'nullable|string|max:10',
-            'spo2' => 'nullable|string|max:10',
-            'height' => 'nullable|string|max:10',
-            'weight' => 'nullable|string|max:10',
-            'waist' => 'nullable|string|max:10',
-            'bsa' => 'nullable|string|max:10',
-            'bmi' => 'nullable|string|max:10',
-            // Clinical notes
-            'clinical_notes' => 'nullable|string|max:1000',
-            'skin_allergy' => 'nullable|string|max:500',
-            // Medications validation (using basic checks for partial save)
-            'medications' => 'nullable|array',
-            'medications.*.name' => 'nullable|string|max:100',
-            'medications.*.type' => 'nullable|string|max:50',
-            'medications.*.dosage' => 'nullable|string|max:50',
-            'medications.*.duration' => 'nullable|string|max:50',
-            'medications.*.instructions' => 'nullable|string|max:200',
-            // Lab tests validation (using basic checks for partial save)
-            'lab_tests' => 'nullable|array',
-            'lab_tests.*.file' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048', 
+            'blood_group' => 'nullable|string|max:10', 'advice' => 'nullable|string|max:1000',
+            'follow_up_date' => 'nullable|date', 'follow_up_time' => 'nullable|date_format:H:i',
+            'blood_pressure' => 'nullable|string|max:20', 'temperature' => 'nullable|string|max:10',
+            'pulse' => 'nullable|string|max:10', 'respiratory_rate' => 'nullable|string|max:10',
+            'spo2' => 'nullable|string|max:10', 'height' => 'nullable|string|max:10',
+            'weight' => 'nullable|string|max:10', 'waist' => 'nullable|string|max:10',
+            'bsa' => 'nullable|string|max:10', 'bmi' => 'nullable|string|max:10',
+            'clinical_notes' => 'nullable|string|max:1000', 'skin_allergy' => 'nullable|string|max:500',
+            'medications' => 'nullable|array', 'medications.*.name' => 'nullable|string|max:100',
+            'medications.*.type' => 'nullable|string|max:50', 'medications.*.dosage' => 'nullable|string|max:50',
+            'medications.*.duration' => 'nullable|string|max:50', 'medications.*.instructions' => 'nullable|string|max:200',
+            'lab_tests' => 'nullable|array', 'lab_tests.*.file' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048', 
             'lab_tests.*.name' => 'nullable|string|max:100',
-            // Complaints and diagnosis validation
-            'complaints' => 'nullable|array',
-            'complaints.*' => 'nullable|string|max:200',
-            'diagnosis' => 'nullable|array',
-            'diagnosis.*' => 'nullable|string|max:200',
+            'complaints' => 'nullable|array', 'complaints.*' => 'nullable|string|max:200',
+            'diagnosis' => 'nullable|array', 'diagnosis.*' => 'nullable|string|max:200',
         ];
-        
         $validator = Validator::make($request->all(), $validatorRules);
-
         if ($validator->fails()) {
-            if ($request->ajax()) {
-                return response()->json(['success' => false, 'message' => 'Validation failed: ' . implode(', ', $validator->errors()->all())], 422);
-            }
+            if ($request->ajax()) { return response()->json(['success' => false, 'message' => 'Validation failed: ' . implode(', ', $validator->errors()->all())], 422); }
             return redirect()->back()->withErrors($validator)->withInput();
         }
-        
         try {
-            // Get or create appointment details
-            $appointmentDetail = AppointmentDetail::firstOrCreate([
-                'appointment_id' => $appointment->id
-            ]);
-            
-            // --- PARTIAL UPDATE LOGIC ---
+            $appointmentDetail = AppointmentDetail::firstOrCreate(['appointment_id' => $appointment->id]);
             if ($isPartialUpdate) {
-                
-                // 1. Save Vitals
                 $this->saveVitals($request, $appointment->id, $doctorId);
-
-                // 2. Save Clinical Notes (Skin Allergy/Notes)
                 $this->saveClinicalNotes($request, $appointment->id, $doctorId);
-
-                // 3. Save Medications
                 if ($request->has('medications')) {
                     $this->saveMedications($request, $appointment->id);
-                    Cache::forget("doctor_".Auth::id()."_recent_prescriptions");
+                    // --- FIX ---
+                    $this->flushDoctorCache($doctorId);
+                    // --- END FIX ---
                 }
-
-                // 4. Save Lab Tests
                 if ($request->has('lab_tests')) {
                     $this->saveLabTests($request, $appointment->id, $doctorId);
                 }
-
-                // 5. Save AppointmentDetail fields (Advice, Blood Group, Complaints, Diagnosis, Follow-up)
                 $updateDetailData = [];
                 if ($request->has('blood_group')) $updateDetailData['blood_group'] = $request->blood_group;
                 if ($request->has('advice')) $updateDetailData['advice'] = $request->advice;
@@ -1074,53 +874,31 @@ class DashboardController extends Controller
                 if ($request->has('follow_up_time')) $updateDetailData['follow_up_time'] = $request->follow_up_time;
                 if ($request->has('complaints')) $updateDetailData['complaints'] = $request->complaints;
                 if ($request->has('diagnosis')) $updateDetailData['diagnosis'] = $request->diagnosis;
-                
                 if (!empty($updateDetailData)) {
                     $appointmentDetail->update($updateDetailData);
                 }
-
                 if ($request->ajax()) {
                     return response()->json([
                         'success' => true,
                         'message' => 'Section data saved successfully.'
                     ]);
                 }
-                
                 return redirect()->back()->with('success', 'Section data saved successfully.');
             }
-            
-            // --- FULL UPDATE LOGIC (Save & End) ---
-            
-            // 1. Save Vitals
             $this->saveVitals($request, $appointment->id, $doctorId);
-
-            // 2. Save Clinical Notes (Skin Allergy/Notes)
             $this->saveClinicalNotes($request, $appointment->id, $doctorId);
-            
-            // 3. Save Medications
             $this->saveMedications($request, $appointment->id);
-            
-            // 4. Save Lab Tests
             $this->saveLabTests($request, $appointment->id, $doctorId);
-
-            // 5. Save AppointmentDetail fields (All fields)
             $appointmentDetail->update([
-                'blood_group' => $request->blood_group,
-                'advice' => $request->advice,
-                'follow_up_date' => $request->follow_up_date,
-                'follow_up_time' => $request->follow_up_time,
-                'complaints' => $request->complaints,
-                'diagnosis' => $request->diagnosis,
+                'blood_group' => $request->blood_group, 'advice' => $request->advice,
+                'follow_up_date' => $request->follow_up_date, 'follow_up_time' => $request->follow_up_time,
+                'complaints' => $request->complaints, 'diagnosis' => $request->diagnosis,
             ]);
-
-            // 6. Update the appointment status to 'completed'
             $appointment->update([
                 'status' => 'completed',
                 'completed_at' => now(),
                 'end_reason' => 'Session completed by doctor'
             ]);
-            
-            // 7. Update the consultation end_time
             $payment = $appointment->payment;
             if ($payment && $payment->consultation_id) {
                 $consultation = Consultation::find($payment->consultation_id);
@@ -1131,29 +909,19 @@ class DashboardController extends Controller
                     ]);
                 }
             }
-            
-            // 8. Clear Cache (FIXED loop)
-            $cacheKeys = [
-                "doctor_{$doctorId}_todays_appointments",
-                "doctor_{$doctorId}_upcoming_appointments",
-                "doctor_{$doctorId}_pending_tasks",
-                "doctor_{$doctorId}_recent_prescriptions",
-                "doctor_{$doctorId}_patient_visits_chart",
-                "doctor_{$doctorId}_last_month_visits",
-                "doctor_{$doctorId}_last_year_total",
-                "doctor_{$doctorId}_total_appointments",
-                "doctor_{$doctorId}_online_consultations",
-                "doctor_{$doctorId}_cancelled_appointments",
-                "doctor_{$doctorId}_total_patients",
-                "doctor_{$doctorId}_follow_ups",
-                "doctor_{$doctorId}_schedule",
-                "doctor_{$doctorId}_top_patients",
-                "doctor_{$doctorId}_request_count"
-            ];
-            
-            foreach ($cacheKeys as $key) {
-                Cache::forget($key);
+            try {
+                $doctorProfile = Auth::user()->doctorProfile; 
+                if ($doctorProfile) {
+                    $doctorProfile->live_status = 'Available';
+                    $doctorProfile->save();
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to update live_status on saveAppointmentDetails: ' . $e->getMessage());
             }
+
+            // --- FIX ---
+            $this->flushDoctorCache($doctorId);
+            // --- END FIX ---
             
             if ($request->ajax()) {
                 return response()->json([
@@ -1162,82 +930,43 @@ class DashboardController extends Controller
                     'redirect_url' => route('doctor.dashboard')
                 ]);
             }
-            
             return redirect()->route('doctor.dashboard')->with('success', 'Appointment details saved successfully and session completed.');
         } catch (\Exception $e) {
-            // FIX: Log and return the exception message
             Log::error('Error saving appointment details: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            
-            if ($request->ajax()) {
-                return response()->json(['success' => false, 'message' => 'Error saving appointment details: ' . $e->getMessage()], 500);
-            }
-            
+            if ($request->ajax()) { return response()->json(['success' => false, 'message' => 'Error saving appointment details: ' . $e->getMessage()], 500); }
             return redirect()->back()->with('error', 'Error saving appointment details: ' . $e->getMessage())->withInput();
         }
     }
-    
-    /**
-     * Display appointment history for a patient
-     */
     public function showAppointmentHistory($patientId)
     {
         $doctorId = Auth::user()->id;
-
-        // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-
-        // Find the patient
         $patient = User::where('role', 'patient')
             ->whereHas('appointmentsAsPatient', function ($query) use ($doctorId) {
                 $query->where('doctor_id', $doctorId);
             })
             ->findOrFail($patientId);
-
-        // --- THIS IS THE EFFICIENT QUERY ---
-        // Get all completed appointments and EAGER LOAD (with)
         $completedAppointments = Appointment::where('patient_id', $patient->id)
             ->where('doctor_id', $doctorId)
             ->where('status', 'completed')
             ->with([
-                'doctor', 
-                'patient', 
-                'appointmentReason', 
-                'vitals', 
-                'clinicalNote', 
-                'medications', 
-                'labTests', 
-                'appointmentDetail', 
-                'consultation.clinic'
+                'doctor', 'patient', 'appointmentReason', 'vitals', 
+                'clinicalNote', 'medications', 'labTests', 
+                'appointmentDetail', 'consultation.clinic'
             ])
             ->orderBy('appointment_time', 'desc')
             ->get();
-        // --- END OF EFFICIENT QUERY ---
-            
-        // Get total visit count (this is fast)
         $totalVisits = $completedAppointments->count();
-            
-        // If no completed appointments, redirect back
         if ($completedAppointments->isEmpty()) {
             return redirect()->back()->with('error', 'No completed appointments found for this patient.');
         }
-        
-        // Get the most recent completed appointment as the current one
         $currentAppointment = $completedAppointments->first();
-        
-        // Get appointment detail for the current appointment
         $currentAppointmentDetail = $currentAppointment->appointmentDetail ?? new AppointmentDetail();
-        
-        // Prepare appointments data for JavaScript
         $appointmentsData = [];
-        // --- THIS LOOP IS NOW FAST ---
         foreach ($completedAppointments as $appointment) {
-            
-            // We can just use the eager-loaded data
             $appointmentDetail = $appointment->appointmentDetail ?? new AppointmentDetail();
-
-            // Prepare lab tests data
             $labTestsData = [];
             if ($appointment->labTests) {
                 foreach ($appointment->labTests as $labTest) {
@@ -1248,14 +977,11 @@ class DashboardController extends Controller
                     ];
                 }
             }
-            
-            // --- NEW DISPLAY LOGIC ---
             $typeDisplay = 'General Visit';
             $locationDisplay = $appointment->location ?? 'N/A';
             $clinicDisplay = $appointment->clinic_location ?? 'N/A';
             $serviceDisplay = $appointment->appointmentReason?->name ?? $appointment->type ?? 'General Visit';
             $durationDisplay = 30; // Default
-
             if ($appointment->consultation) {
                 $typeDisplay = $appointment->consultation->delivery_channel == 'virtual' ? 'Virtual' : 'Physical';
                 if ($appointment->consultation->delivery_channel == 'virtual') {
@@ -1268,23 +994,17 @@ class DashboardController extends Controller
                 $serviceDisplay = $appointment->consultation->service_type;
                 $durationDisplay = $appointment->consultation->duration_minutes;
             }
-            // --- END NEW DISPLAY LOGIC ---
-
             $appointmentsData[] = [
                 'id' => $appointment->id,
                 'patient_name' => $appointment->patient?->name ?? 'Unknown Patient',
                 'patient_email' => $appointment->patient?->email ?? '',
                 'patient_phone' => $appointment->patient?->phone ?? '',
                 'doctor_name' => $appointment->doctor?->name ?? 'Unknown Doctor',
-                
-                // Updated fields:
                 'type_display' => $typeDisplay,
                 'clinic_display' => $clinicDisplay,
                 'location_display' => $locationDisplay,
                 'service_display' => $serviceDisplay,
                 'duration_display' => $durationDisplay,
-                
-                // Original fields:
                 'status' => $appointment->status,
                 'consultation_fee' => $appointment->consultation?->fee ?? $appointment->consultation_fee ?? 'N/A',
                 'appointment_time' => $appointment->appointment_time->toIso8601String(), // Send as ISO string for JS
@@ -1294,8 +1014,6 @@ class DashboardController extends Controller
                 'advice' => $appointmentDetail->advice,
                 'follow_up_date' => $appointmentDetail->follow_up_date ? Carbon::parse($appointmentDetail->follow_up_date)->format('Y-m-d') : null,
                 'follow_up_time' => $appointmentDetail->follow_up_time ? Carbon::parse($appointmentDetail->follow_up_time)->format('H:i') : null, // Format as HH:MM
-                
-                // Vitals
                 'blood_pressure' => $appointment->vitals?->blood_pressure ?? '',
                 'temperature' => $appointment->vitals?->temperature ?? '',
                 'pulse' => $appointment->vitals?->pulse ?? '',
@@ -1306,12 +1024,8 @@ class DashboardController extends Controller
                 'waist' => $appointment->vitals?->waist ?? '',
                 'bsa' => $appointment->vitals?->bsa ?? '',
                 'bmi' => $appointment->vitals?->bmi ?? '',
-                
-                // Tags
                 'complaints' => $appointmentDetail->complaints ?? [],
                 'diagnosis' => $appointmentDetail->diagnosis ?? [],
-                
-                // Lab Tests & Medications
                 'lab_tests' => $labTestsData,
                 'medications' => $appointment->medications->map(function($med) {
                     return [
@@ -1325,130 +1039,85 @@ class DashboardController extends Controller
                 })->toArray()
             ];
         }
-        // --- END OF FAST LOOP ---
-        
         return view('doctor.appointment-history', compact(
-            'patient', 
-            'completedAppointments', 
-            'currentAppointment', 
-            'currentAppointmentDetail', 
-            'totalVisits',
-            'notifications', 
-            'notificationCount', 
-            'requestCount',
+            'patient', 'completedAppointments', 'currentAppointment', 
+            'currentAppointmentDetail', 'totalVisits',
+            'notifications', 'notificationCount', 'requestCount',
             'appointmentsData'
         ));
     }
-
-    /**
-     * Check doctor's availability for a follow-up appointment time via AJAX.
-     */
     public function checkFollowUpAvailability(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'follow_up_date' => 'required|date_format:Y-m-d',
             'follow_up_time' => 'required|date_format:H:i',
         ]);
-
         if ($validator->fails()) {
             return response()->json(['available' => false, 'message' => $validator->errors()->first()], 422);
         }
-
         $doctorId = Auth::id();
         $followUpDate = $request->input('follow_up_date');
         $followUpTime = $request->input('follow_up_time') . ':00'; // Add seconds for comparison
-
         try {
             $selectedDateTime = Carbon::createFromFormat('Y-m-d H:i:s', $followUpDate . ' ' . $followUpTime);
         } catch (\Exception $e) {
             return response()->json(['available' => false, 'message' => 'Invalid date/time format.'], 400);
         }
-
         $dayOfWeek = strtolower($selectedDateTime->format('l'));
         $time = $selectedDateTime->format('H:i:s');
         $date = $selectedDateTime->format('Y-m-d');
-
-        // 1. Check Doctor's Schedule
         $isScheduled = DoctorSchedule::where('doctor_id', $doctorId)
             ->where('day_of_week', $dayOfWeek)
             ->where('start_date', '<=', $date)
             ->where('end_date', '>=', $date)
             ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $time)
-            ->where(DB::raw('CAST(end_time AS TIME)'), '>', $time) // Check if START time is within schedule
+            ->where(DB::raw('CAST(end_time AS TIME)'), '>', $time)
             ->exists();
-
         if (!$isScheduled) {
             return response()->json(['available' => false, 'message' => 'Doctor is not scheduled to work at this time.']);
         }
-
-        // 2. Check for Conflicting Consultations (assuming ~30 min duration for follow-up)
         $assumedDuration = 30;
         $followUpEnd = $selectedDateTime->copy()->addMinutes($assumedDuration);
-
         $hasConflict = Consultation::where('doctor_id', $doctorId)
             ->whereNotIn('status', ['completed', 'missed', 'cancelled'])
             ->where(function ($query) use ($selectedDateTime, $followUpEnd) {
-                $query->where('start_time', '<', $followUpEnd) // Existing starts before follow-up ends
-                      ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $selectedDateTime); // Existing ends after follow-up starts
+                $query->where('start_time', '<', $followUpEnd)
+                      ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $selectedDateTime);
             })
             ->exists();
-
         if ($hasConflict) {
             return response()->json(['available' => false, 'message' => 'Doctor has a conflicting appointment at this time.']);
         }
-
-        // If no schedule conflict and no appointment conflict
         return response()->json(['available' => true, 'message' => 'Time slot appears available.']);
     }
-    
-    /**
-     * Display the doctor's schedule management page
-     */
     public function schedule()
     {
         $doctorId = Auth::user()->id;
-
-        // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-
         $clinics = \App\Models\Clinic::where('is_physical', 1)->get();
-
-        // --- NEW: Prepare the list SPECIFICALLY for JavaScript ---
         $clinicsForJs = [];
-        // Add the 'virtual' option first
         $clinicsForJs[] = ['id' => 'virtual', 'name' => 'Virtual Session'];
-        // Loop through DB clinics and add them in the correct format
         foreach ($clinics as $clinic) {
             $clinicsForJs[] = ['id' => $clinic->id, 'name' => $clinic->name];
         }
-        // --- END OF NEW PART ---
-
-        // Get existing schedule data to populate the form
         $schedules = \App\Models\DoctorSchedule::where('doctor_id', $doctorId)->get();
-
-        // Group the schedules by day for the JavaScript
         $scheduleData = [];
         $mainSettings = [
-            'start_date' => '',
-            'end_date' => '',
-            'recurrence' => '',
+            'start_date' => '', 'end_date' => '', 'recurrence' => '',
         ];
-
         if ($schedules->isNotEmpty()) {
             $firstSchedule = $schedules->first();
             $mainSettings['start_date'] = $firstSchedule->start_date ? Carbon::parse($firstSchedule->start_date)->format('Y-m-d') : '';
             $mainSettings['end_date'] = $firstSchedule->end_date ? Carbon::parse($firstSchedule->end_date)->format('Y-m-d') : '';
             $mainSettings['recurrence'] = $firstSchedule->recurrence;
         }
-
         foreach ($schedules as $index => $schedule) {
             $day = $schedule->day_of_week;
             if (!isset($scheduleData[$day])) {
                 $scheduleData[$day] = [];
             }
-
             $scheduleData[$day][] = [
                 'id' => 'session-' . $index,
                 'sessionId' => $index,
@@ -1458,21 +1127,11 @@ class DashboardController extends Controller
                 'location' => $schedule->location,
             ];
         }
-
-        // Pass BOTH the original $clinics (for HTML) AND $clinicsForJs (for JS)
         return view('doctor.schedule', compact(
-            'notifications',
-            'notificationCount',
-            'requestCount',
-            'scheduleData',
-            'mainSettings',
-            'clinics', 
-            'clinicsForJs' 
+            'notifications', 'notificationCount', 'requestCount',
+            'scheduleData', 'mainSettings', 'clinics', 'clinicsForJs' 
         ));
     }
-    /**
-     * Save the doctor's schedule
-     */
     public function saveSchedule(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -1485,23 +1144,16 @@ class DashboardController extends Controller
             'sessions.*.*.start' => 'required',
             'sessions.*.*.end' => 'required',
         ]);
-
         if ($validator->fails()) {
             return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
         }
-
         $doctor = Auth::user();
         $data = $request->all();
-
         try {
-            // Step 1: Delete all old schedules for this doctor
             \App\Models\DoctorSchedule::where('doctor_id', $doctor->id)->delete();
-
-            // Step 2: Loop through the new schedule data and create entries
             foreach ($data['sessions'] as $day => $sessions) {
                 if (!empty($sessions)) {
                     foreach ($sessions as $session) {
-                        // Check if session has all required fields
                         if (isset($session['type']) && isset($session['start']) && isset($session['end']) && isset($session['location'])) {
                             \App\Models\DoctorSchedule::create([
                                 'doctor_id' => $doctor->id,
@@ -1518,75 +1170,46 @@ class DashboardController extends Controller
                     }
                 }
             }
-            
-            // --- WHISTLEBLOWER ---
-            Cache::forget("doctor_".Auth::id()."_schedule");
+
+            // --- FIX ---
+            $this->flushDoctorCache($doctor->id);
+            // --- END FIX ---
 
             return response()->json(['success' => true, 'message' => 'Schedule saved successfully!']);
-
         } catch (\Exception $e) {
             Log::error('Error saving schedule: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'An error occurred while saving.'], 500);
         }
     }
-    
-    /**
-     * Display the leaves page for the doctor
-     */
     public function leaves()
     {
         $doctorId = Auth::user()->id;
-        
-        // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-        
-        // Get all leave requests for this doctor, sorted by recent first
         $leaves = LeaveRequest::where('user_id', $doctorId)
             ->orderBy('created_at', 'desc')
             ->get();
-        
-        // Define leave types
         $leaveTypes = [
-            'Casual Leave',
-            'Sick Leave',
-            'Maternity Leave',
-            'Paternity Leave',
-            'Compensatory Leave',
-            'Emergency Leave',
-            'Bereavement Leave',
-            'Study/Exam Leave',
-            'Paid Leave',
-            'Unpaid Leave'
+            'Casual Leave', 'Sick Leave', 'Maternity Leave', 'Paternity Leave', 'Compensatory Leave',
+            'Emergency Leave', 'Bereavement Leave', 'Study/Exam Leave', 'Paid Leave', 'Unpaid Leave'
         ];
-        
         return view('doctor.leaves', compact('leaves', 'notifications', 'notificationCount', 'requestCount', 'leaveTypes'));
     }
-    
-    /**
-     * Store a new leave request
-     */
     public function storeLeave(Request $request)
     {
         try {
-            // Validate the request
             $validator = Validator::make($request->all(), [
                 'leave_types' => 'required|array|min:1',
                 'start_date' => 'required|date|before_or_equal:end_date',
                 'end_date' => 'required|date|after_or_equal:start_date',
                 'reason' => 'nullable|string|max:1000',
             ]);
-            
             if ($validator->fails()) {
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()
                 ], 422);
             }
-            
-            // Create a single leave request
             $leave = LeaveRequest::create([
                 'user_id' => Auth::user()->id,
                 'leave_type' => implode(',', $request->leave_types),
@@ -1595,151 +1218,78 @@ class DashboardController extends Controller
                 'reason' => $request->reason,
                 'status' => 'pending'
             ]);
-            
             return response()->json([
-                'success' => true,
-                'message' => 'Leave request submitted successfully',
-                'leave' => $leave
+                'success' => true, 'message' => 'Leave request submitted successfully', 'leave' => $leave
             ], 200);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error in storeLeave: ' . $e->getMessage());
             return response()->json([
-                'success' => false,
-                'message' => 'Failed to submit leave request: ' . $e->getMessage()
+                'success' => false, 'message' => 'Failed to submit leave request: ' . $e->getMessage()
             ], 500);
         }
     }
-    
-    /**
-     * Update a leave request
-     */
     public function updateLeave(Request $request, LeaveRequest $leave)
     {
-        try {
-            // Check if the leave belongs to the authenticated doctor
+         try {
             if ($leave->user_id != Auth::user()->id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized access'
-                ], 403);
+                return response()->json(['success' => false, 'message' => 'Unauthorized access'], 403);
             }
-            
-            // If we're just changing the status to cancelled
             if ($request->has('status') && $request->status == 'cancelled') {
-                // Check if the leave is not already approved
                 if ($leave->status == 'approved') {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Cannot cancel an approved leave request'
-                    ], 400);
+                    return response()->json(['success' => false, 'message' => 'Cannot cancel an approved leave request'], 400);
                 }
-                
-                // Update the leave request status
                 $leave->update(['status' => 'cancelled']);
-                
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Leave request cancelled successfully'
-                ]);
+                return response()->json(['success' => true, 'message' => 'Leave request cancelled successfully']);
             }
-            
-            // Validate the request for updating leave details
             $validator = Validator::make($request->all(), [
                 'leave_types' => 'required|array|min:1',
                 'start_date' => 'required|date|before_or_equal:end_date',
                 'end_date' => 'required|date|after_or_equal:start_date',
                 'reason' => 'nullable|string|max:1000',
             ]);
-            
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
             }
-            
-            // Update the leave request
             $leave->update([
                 'leave_type' => implode(',', $request->leave_types),
                 'start_date' => $request->start_date,
                 'end_date' => $request->end_date,
                 'reason' => $request->reason
             ]);
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Leave request updated successfully',
-                'leave' => $leave
-            ]);
+            return response()->json(['success' => true, 'message' => 'Leave request updated successfully', 'leave' => $leave]);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error in updateLeave: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update leave request: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to update leave request: ' . $e->getMessage()], 500);
         }
     }
-    
-    /**
-     * Delete a leave request
-     */
     public function deleteLeave(LeaveRequest $leave)
     {
         try {
-            // Check if the leave belongs to the authenticated doctor
             if ($leave->user_id != Auth::user()->id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized access'
-                ], 403);
+                return response()->json(['success' => false, 'message' => 'Unauthorized access'], 403);
             }
-            
-            // Check if the leave is not already approved
             if ($leave->status == 'approved') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot delete an approved leave request'
-                ], 400);
+                return response()->json(['success' => false, 'message' => 'Cannot delete an approved leave request'], 400);
             }
-            
-            // Delete the leave request
             $leave->delete();
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Leave request deleted successfully'
-            ]);
+            return response()->json(['success' => true, 'message' => 'Leave request deleted successfully']);
         } catch (\Exception $e) {
+            // --- THIS IS THE LINE I FIXED ---
             \Illuminate\Support\Facades\Log::error('Error in deleteLeave: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete leave request: ' . $e->getMessage()
-            ], 500);
+            // --- END OF FIX ---
+            return response()->json(['success' => false, 'message' => 'Failed to delete leave request: ' . $e->getMessage()], 500);
         }
     }
-
-    /**
-     * Display the prescriptions page for the doctor
-     */
     public function prescriptions(Request $request)
     {
         $doctorId = Auth::user()->id;
-        
-        // Get unread notifications
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-        
-        // Get search and filter parameters
         $search = $request->get('search');
-        $sort = $request->get('sort', 'new'); // new or old
-        
-        // Build the base query for prescriptions
+        $sort = $request->get('sort', 'new');
         $baseQuery = Prescription::with(['patient', 'items.drug'])
             ->where('doctor_id', $doctorId);
-            
-        // Apply search filter
         if ($search) {
             $baseQuery->where(function($q) use ($search) {
                 $q->whereHas('patient', function ($q) use ($search) {
@@ -1748,133 +1298,85 @@ class DashboardController extends Controller
                 ->orWhere('id', 'like', '%' . $search . '%');
             });
         }
-        
-        // Apply sorting
         if ($sort === 'old') {
             $baseQuery->orderBy('created_at', 'asc');
         } else {
             $baseQuery->orderBy('created_at', 'desc');
         }
-        
-        // Get paginated results
         $prescriptions = $baseQuery->paginate(10)->appends(request()->query());
-        
         return view('doctor.prescriptions', compact(
-            'prescriptions', 
-            'notifications', 
-            'notificationCount', 
-            'requestCount',
-            'search',
-            'sort'
+            'prescriptions', 'notifications', 'notificationCount', 'requestCount', 'search', 'sort'
         ));
     }
-    
-    /**
-     * Display the specified prescription
-     */
     public function showPrescription(Prescription $prescription)
     {
         if ($prescription->doctor_id !== Auth::user()->id) {
             return redirect()->route('doctor.prescriptions')->with('error', 'Unauthorized access');
         }
-        
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-        
         $prescription->load(['patient', 'items.drug', 'doctor']);
-        
         return view('doctor.prescription-show', compact(
-            'prescription', 
-            'notifications', 
-            'notificationCount', 
-            'requestCount'
+            'prescription', 'notifications', 'notificationCount', 'requestCount'
         ));
     }
-    
-    /**
-     * Delete the specified prescription
-     */
     public function deletePrescription(Prescription $prescription)
     {
-        try {
+         try {
             if ($prescription->doctor_id !== Auth::user()->id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized access'
-                ], 403);
+                return response()->json(['success' => false, 'message' => 'Unauthorized access'], 403);
             }
-            
             $prescription->delete();
 
-            // --- WHISTLEBLOWER ---
-            Cache::forget("doctor_".Auth::id()."_recent_prescriptions");
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Prescription deleted successfully'
-            ]);
+            // --- FIX ---
+            $this->flushDoctorCache(Auth::id());
+            // --- END FIX ---
+
+            return response()->json(['success' => true, 'message' => 'Prescription deleted successfully']);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error in deletePrescription: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete prescription: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to delete prescription: ' . $e->getMessage()], 500);
         }
     }
-    
-    /**
-     * Upload lab test result file
-     */
     public function uploadLabTestResult(Request $request, \App\Models\LabTest $labTest)
     {
         $doctorId = Auth::user()->id;
         if ($labTest->appointment->doctor_id !== $doctorId) {
             return response()->json(['success' => false, 'message' => 'Unauthorized access'], 403);
         }
-        
         $request->validate([
             'test_file' => 'required|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,txt|max:2048',
         ]);
-        
         try {
             $filePath = $request->file('test_file')->store('lab_tests', 'public');
-            
             $labTest->update(['file_path' => $filePath]);
-            
             return response()->json([
-                'success' => true,
-                'message' => 'Lab test result uploaded successfully',
-                'file_path' => $filePath
+                'success' => true, 'message' => 'Lab test result uploaded successfully', 'file_path' => $filePath
             ]);
         } catch (\Exception $e) {
             return response()->json([
-                'success' => false,
-                'message' => 'Error uploading lab test result: ' . $e->getMessage()
+                'success' => false, 'message' => 'Error uploading lab test result: ' . $e->getMessage()
             ], 500);
         }
     }
-
-    /**
-     * AJAX endpoint to get the count of new appointment requests.
-     */
     public function ajaxGetRequestCount()
     {
         $doctorId = Auth::id();
+        
         $totalCount = Cache::remember("doctor_{$doctorId}_total_request_and_notification_count", 30, function () {
+            // We must use Auth::id() inside the closure or pass $doctorId
             return $this->getAppointmentRequestCount() + $this->getNotificationCount(); 
         });
         
         return response()->json(['count' => $totalCount]);
     }
-
-    /**
-     * AJAX endpoint for notification dot
-     */
     public function ajaxGetNotificationCount()
     {
         $doctorId = Auth::id();
-        $count = Cache::remember("doctor_{$doctorId}_just_notification_count", 30, function () {
+
+        $count = Cache::remember("doctor_{$doctorId}_notification_count", 30, function () {
+            // We must use Auth::id() inside the closure or pass $doctorId
             return $this->getNotificationCount(); 
         });
         

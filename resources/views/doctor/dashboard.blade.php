@@ -5,6 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=Edge">
 <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
 <meta name="description" content="Doctor dashboard for patient management and appointments">
+<meta name="doctor-id" content="{{ (Auth::check() && Auth::user()->role == 'doctor') ? Auth::user()->id : '' }}">
 
 <title>ClinicalPro || Doctor Dashboard</title>
 <!-- Favicon -->
@@ -19,6 +20,7 @@
 
 <!-- Additional CSS for this page -->
 <link rel="stylesheet" href="{{ asset('assets/plugins/bootstrap-select/css/bootstrap-select.css') }}" />
+@vite('resources/css/app.css')
 </head>
 <body class="theme-cyan">
 <!-- Page Loader -->
@@ -632,6 +634,10 @@
 <!-- Additional Scripts for this page -->
 <script src="{{ asset('assets/bundles/datatablescripts.bundle.js') }}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.bundle.min.js"></script>
+
+@vite('resources/js/app.js')
+
+
 <script>
 $(document).ready(function() {
     // --- Initialize Charts ---

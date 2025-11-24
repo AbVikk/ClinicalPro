@@ -35,10 +35,18 @@ return [
         ],
     ],
 
+    // ✅ PAYSTACK CONFIGURATION
     'paystack' => [
         'public_key' => env('PAYSTACK_PUBLIC_KEY'),
         'secret_key' => env('PAYSTACK_SECRET_KEY'),
-        'secret' => env('PAYSTACK_SECRET_KEY'), // Added for webhook verification
+        'secret' => env('PAYSTACK_SECRET_KEY'), // Kept for package compatibility
+        'payment_url' => 'https://api.paystack.co',
+    ],
+
+    // ✅ GOOGLE GEMINI CONFIGURATION
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
     ],
 
 ];

@@ -10,6 +10,7 @@ use App\Models\Clinic;
 use Database\Seeders\DrugCategoriesTableSeeder;
 use Database\Seeders\DrugMgTableSeeder;
 use Database\Seeders\CentralWarehouseSeeder;
+use PHPUnit\Framework\Attributes\Test;
 
 class PharmacyTest extends TestCase
 {
@@ -25,10 +26,14 @@ class PharmacyTest extends TestCase
         $this->seed(CentralWarehouseSeeder::class);
     }
 
-    /** @test */
+    #[Test]
     public function it_can_create_a_drug()
     {
-        // Create a user with admin role (since pharmacy routes are defined in admin.php)
+        // Test that the database seeding worked
+        $this->assertDatabaseHas('drug_categories', ['name' => 'Antibiotics']);
+        $this->assertDatabaseHas('drug_mg', ['mg_value' => '500mg']);
+        
+        // Create a user with admin role (since pharmacy routes are defined in admin.php and require admin role)
         $user = User::create([
             'name' => 'Test Admin',
             'email' => 'admin@test.com',
@@ -36,11 +41,11 @@ class PharmacyTest extends TestCase
             'role' => 'admin'
         ]);
 
-        // Acting as the admin user
-        $this->actingAs($user);
+        // Acting as the admin user - make a simple request first to initialize state
+        $this->actingAs($user)->get('/admin/dashboard');
 
-        // Test data
-        $data = [
+        // Acting as the admin user
+        $response = $this->actingAs($user)->post('/admin/pharmacy/drugs/create', [
             'name' => 'Test Drug',
             'generic_name' => 'Test Generic',
             'category' => 'Antibiotics', // This now exists because of seeding
@@ -63,10 +68,7 @@ class PharmacyTest extends TestCase
             'tax_rate' => 5.0,
             'storage_conditions' => ['Room Temperature'],
             'is_active' => true,
-        ];
-
-        // Call the create drug endpoint
-        $response = $this->post(route('admin.pharmacy.drugs.create'), $data);
+        ]);
 
         // Check for validation errors
         $response->assertSessionHasNoErrors();
@@ -81,16 +83,19 @@ class PharmacyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function it_can_receive_stock()
     {
-        // Create a user with admin role (since pharmacy routes are defined in admin.php)
+        // Create a user with admin role (since pharmacy routes are defined in admin.php and require admin role)
         $user = User::create([
             'name' => 'Test Admin 2',
             'email' => 'admin2@test.com',
             'password' => bcrypt('password'),
             'role' => 'admin'
         ]);
+
+        // Acting as the admin user - make a simple request first to initialize state
+        $this->actingAs($user)->get('/admin/dashboard');
 
         // Create a drug
         $drug = Drug::create([
@@ -102,18 +107,12 @@ class PharmacyTest extends TestCase
         ]);
 
         // Acting as the admin user
-        $this->actingAs($user);
-
-        // Test data
-        $data = [
+        $response = $this->actingAs($user)->post('/admin/pharmacy/stock/receive', [
             'drug_id' => $drug->id,
             'supplier_id' => null,
             'received_quantity' => 100,
             'expiry_date' => '2026-12-31',
-        ];
-
-        // Call the receive stock endpoint
-        $response = $this->post(route('admin.pharmacy.stock.receive'), $data);
+        ]);
 
         // Check for validation errors
         $response->assertSessionHasNoErrors();

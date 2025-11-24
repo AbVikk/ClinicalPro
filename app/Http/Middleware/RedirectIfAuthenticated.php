@@ -36,6 +36,8 @@ class RedirectIfAuthenticated
                         return redirect('/patient/dashboard');
                     case 'donor':
                         return redirect('/donor/dashboard');
+                    case 'nurse':
+                        return redirect('/nurse/dashboard');
                     default:
                         return redirect('/admin/index');
                 }

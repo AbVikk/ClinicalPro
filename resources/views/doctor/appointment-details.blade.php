@@ -6,6 +6,8 @@
 <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
 <meta name="description" content="Doctor appointment details">
 
+<meta name="doctor-id" content="{{ (Auth::check() && Auth::user()->role == 'doctor') ? Auth::user()->id : '' }}">
+
 <title>ClinicalPro || Appointment Details</title>
 <link rel="icon" href="{{ asset('assets/favicon.ico') }}" type="image/x-icon">
 
@@ -409,7 +411,7 @@
                             </div>
                             <div class="form-group">
                                 <label>Blood Group</label>
-                                <input type="text" name="blood_group" value="{{ $appointmentDetail->blood_group ?? '' }}">
+                                <input type="text" name="blood_group" value="{{ $appointmentDetail->blood_group ?? '' }}" readonly>
                             </div>
                             <div class="form-group">
                                 <label>No of Visit</label>
@@ -422,67 +424,69 @@
                     </div>
                     
                     <div class="form-section">
-                        <h3 class="section-title">Vitals</h3>
+                        <h3 class="section-title">Vitals (from Nurse)</h3>
                         <div class="vitals-grid">
                             <div class="vital-item">
                                 <label>Blood Pressure (mmHg)</label>
-                                <input type="text" name="blood_pressure" placeholder="120/80" value="{{ $appointment->vitals->blood_pressure ?? '' }}">
+                                <input type="text" name="blood_pressure" placeholder="120/80" value="{{ $appointment->vitals->blood_pressure ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>Temperature (F)</label>
-                                <input type="text" name="temperature" placeholder="98.6" value="{{ $appointment->vitals->temperature ?? '' }}">
+                                <input type="text" name="temperature" placeholder="98.6" value="{{ $appointment->vitals->temperature ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>Pulse (bpm)</label>
-                                <input type="text" name="pulse" placeholder="72" value="{{ $appointment->vitals->pulse ?? '' }}">
+                                <input type="text" name="pulse" placeholder="72" value="{{ $appointment->vitals->pulse ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>Respiratory Rate (rpm)</label>
-                                <input type="text" name="respiratory_rate" placeholder="16" value="{{ $appointment->vitals->respiratory_rate ?? '' }}">
+                                <input type="text" name="respiratory_rate" placeholder="16" value="{{ $appointment->vitals->respiratory_rate ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>SPO2 (%)</label>
-                                <input type="text" name="spo2" placeholder="98" value="{{ $appointment->vitals->spo2 ?? '' }}">
+                                <input type="text" name="spo2" placeholder="98" value="{{ $appointment->vitals->spo2 ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>Height (cm)</label>
-                                <input type="text" name="height" placeholder="165" value="{{ $appointment->vitals->height ?? '' }}">
+                                <input type="text" name="height" placeholder="165" value="{{ $appointment->vitals->height ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>Weight (Kg)</label>
-                                <input type="text" name="weight" placeholder="60" value="{{ $appointment->vitals->weight ?? '' }}">
+                                <input type="text" name="weight" placeholder="60" value="{{ $appointment->vitals->weight ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>Waist (cm)</label>
-                                <input type="text" name="waist" placeholder="70" value="{{ $appointment->vitals->waist ?? '' }}">
+                                <input type="text" name="waist" placeholder="70" value="{{ $appointment->vitals->waist ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>BSA (M)</label>
-                                <input type="text" name="bsa" placeholder="1.7" value="{{ $appointment->vitals->bsa ?? '' }}">
+                                <input type="text" name="bsa" placeholder="1.7" value="{{ $appointment->vitals->bsa ?? '' }}" readonly>
                             </div>
                             <div class="vital-item">
                                 <label>BMI (kg/cm)</label>
-                                <input type="text" name="bmi" placeholder="22.0" value="{{ $appointment->vitals->bmi ?? '' }}">
+                                <input type="text" name="bmi" placeholder="22.0" value="{{ $appointment->vitals->bmi ?? '' }}" readonly>
                             </div>
                         </div>
-                        <button type="button" class="add-new-btn" id="save-vitals">
+                        {{-- <button type="button" class="add-new-btn" id="save-vitals">
                             <i class="zmdi zmdi-save"></i> Save
-                        </button>
+                        </button> --}}
                     </div>
                     
                     <div class="form-section">
-                        <h3 class="section-title">Previous Medical History</h3>
+                        <h3 class="section-title">Nurse's Note & Medical History</h3>
                         <div class="form-group full-width">
-                            <label>Clinical Notes</label>
-                            <textarea name="clinical_notes" placeholder="Enter clinical notes...">{{ $appointment->clinicalNote->note_text ?? '' }}</textarea>
+                            <label>Clinical Notes (from Nurse)</label>
+                            <textarea name="clinical_notes" placeholder="Enter clinical notes..." readonly>{{ $appointment->clinicalNote->note_text ?? '' }}</textarea>
                         </div>
                         <div class="form-group full-width">
                             <label>Skin Allergy</label>
-                            <textarea name="skin_allergy" placeholder="Enter any skin allergies...">{{ $appointment->clinicalNote->skin_allergy ?? '' }}</textarea>
+                            <textarea name="skin_allergy" placeholder="Enter any skin allergies..." readonly>{{ $appointment->clinicalNote->skin_allergy ?? '' }}</textarea>
                         </div>
+                        {{-- **FIX**: Removed the save button for this section
                         <button type="button" class="add-new-btn" id="save-clinical-notes">
                             <i class="zmdi zmdi-save"></i> Save
                         </button>
+                        --}}
                     </div>
                     
                     <div class="form-section">

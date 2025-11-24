@@ -1,4 +1,11 @@
 <?php return array (
+  'google-gemini-php/laravel' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Gemini\\Laravel\\ServiceProvider',
+    ),
+  ),
   'laravel/pail' => 
   array (
     'providers' => 
@@ -53,20 +60,6 @@
     'providers' => 
     array (
       0 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    ),
-  ),
-  'openai-php/laravel' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'OpenAI\\Laravel\\ServiceProvider',
-    ),
-  ),
-  'phiki/phiki' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'Phiki\\Adapters\\Laravel\\PhikiServiceProvider',
     ),
   ),
 );

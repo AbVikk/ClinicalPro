@@ -59,9 +59,9 @@ class RouteServiceProvider extends ServiceProvider
 
             // ✅ Clinic Routes
             Route::middleware(['web', 'auth', 'role:nurse'])
-                ->prefix('clinic')
-                ->name('clinic.')
-                ->group(base_path('routes/clinic.php'));
+                ->prefix('nurse')
+                ->name('nurse.')
+                ->group(base_path('routes/nurse.php'));
 
             // ✅ Donor Routes
             Route::middleware(['web', 'auth', 'role:donor'])

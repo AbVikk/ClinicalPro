@@ -44,6 +44,31 @@ We would like to extend our thanks to the following sponsors for funding Laravel
 - **[Redberry](https://redberry.international/laravel-development)**
 - **[Active Logic](https://activelogic.com)**
 
+## Real-time Alert System
+
+This healthcare system includes a real-time alert system that notifies doctors instantly when:
+
+1. A new appointment request is created
+2. A patient's vitals have been recorded by a nurse
+
+For setup instructions, see [WEBSOCKET_SETUP.md](WEBSOCKET_SETUP.md)
+
+To start both servers, run:
+
+```bash
+start-servers.bat
+```
+
+Or start them manually:
+
+```bash
+# Terminal 1
+php artisan serve
+
+# Terminal 2
+node websocket-server.js
+```
+
 ## Contributing
 
 Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).

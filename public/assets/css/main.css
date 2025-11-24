@@ -2999,6 +2999,12 @@ textarea.form-control:active {
     color: #fff
 }
 
+.badge-dark {
+    background-color: #000;
+    border-color: #000;
+    color: #fff
+}
+
 .pagination .page-item .page-link {
     border: 0;
     border-radius: 30px !important;

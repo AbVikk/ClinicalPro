@@ -20,32 +20,67 @@ class Payment extends Model
         'status',
         'reference',
         'transaction_date',
+        'metadata',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'transaction_date' => 'datetime',
+        'metadata' => 'array',
     ];
 
-    // Define the allowed methods
-    public const METHODS = [
-        'card_online',
-        'cash_in_clinic',
-        'bank_transfer',
-        'paystack'
-    ];
+    /*
+    |--------------------------------------------------------------------------
+    | ENUMS: The Rulebook
+    |--------------------------------------------------------------------------
+    | We define these here so we never make a typo in the database.
+    */
 
-    // Define the allowed statuses
-    public const STATUSES = [
-        'paid',
-        'failed',
-        'refunded',
-        'pending_cash_verification',
-        'pending',
-        'completed'
-    ];
+    // Payment Methods
+    public const METHOD_CARD_ONLINE = 'card_online';
+    public const METHOD_CASH = 'cash_in_clinic';
+    public const METHOD_BANK_TRANSFER = 'bank_transfer';
+    // 'paystack' is technically the gateway, but if you use it as a method name in DB:
+    public const METHOD_PAYSTACK = 'paystack'; 
 
-    // Relationships
+    // Payment Statuses
+    public const STATUS_PAID = 'paid';
+    public const STATUS_FAILED = 'failed';
+    public const STATUS_REFUNDED = 'refunded';
+    public const STATUS_PENDING_VERIFICATION = 'pending_cash_verification';
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_COMPLETED = 'completed';
+
+    /**
+     * Get the valid payment methods as a list.
+     */
+    public static function getMethods(): array
+    {
+        return [
+            self::METHOD_CARD_ONLINE,
+            self::METHOD_CASH,
+            self::METHOD_BANK_TRANSFER,
+            self::METHOD_PAYSTACK,
+        ];
+    }
+
+    /**
+     * Get the valid statuses as a list.
+     */
+    public static function getStatuses(): array
+    {
+        return [
+            self::STATUS_PAID,
+            self::STATUS_FAILED,
+            self::STATUS_REFUNDED,
+            self::STATUS_PENDING_VERIFICATION,
+            self::STATUS_PENDING,
+            self::STATUS_COMPLETED,
+        ];
+    }
+
+    // --- Relationships ---
+
     public function user()
     {
         return $this->belongsTo(User::class);

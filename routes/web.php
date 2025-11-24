@@ -3,7 +3,9 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use App\Http\Controllers\Api\AiController;
+use App\Http\Controllers\Api\AiController; // This is correct
+use App\Http\Controllers\Nurse\NurseController;
+use Illuminate\Support\Facades\Redis;
 
 /*
 |--------------------------------------------------------------------------
@@ -112,21 +114,24 @@ Route::middleware('guest')->group(function () {
     Route::post('/reset-password', [App\Http\Controllers\Auth\CustomPasswordResetController::class, 'resetPassword'])->name('password.update');
 });
 
-    Route::middleware('auth')->group(function () {
+Route::middleware('auth')->group(function () {
 
-        // You can prefix this with 'admin' if all your admin routes use /admin/ prefix:
-        Route::prefix('admin')->group(function () {
-            
-            // This is the AI AJAX route, correctly placed under the 'web' middleware 
-            // (which includes session/cookie auth and CSRF protection).
-            Route::post('ai/scheduling', [AiController::class, 'getSmartScheduling'])
-                ->name('api.ai.scheduling');
-
-                Route::post('ai/extract-note-details', [AiController::class, 'extractDetailsFromNote'])
-                ->name('api.ai.extract-notes');
-                
-        });
-    });
+    // Test route to check if authentication is working
+    Route::get('/test-auth', function (\Illuminate\Http\Request $request) {
+        $user = $request->user();
+        if ($user) {
+            return response()->json([
+                'authenticated' => true,
+                'user_id' => $user->id,
+                'user_role' => $user->role,
+                'route_url' => route($user->role . '.api.ai.chat-history')
+            ]);
+        } else {
+            return response()->json(['authenticated' => false]);
+        }
+    })->name('test.auth');
+    
+});
 
 // Payment verification route (must be outside auth middleware for Paystack callbacks)
 Route::get('/admin/wallet/topup/verify', [App\Http\Controllers\Admin\PaymentController::class, 'verifyPayment'])->name('admin.payment.verify');
@@ -135,3 +140,47 @@ Route::get('/admin/wallet/test-webhook', function () {
 })->name('admin.wallet.test-webhook');
 
 
+Route::get('/test-redis', function () {
+    try {
+        Redis::set('test-key', 'it works!');
+        $value = Redis::get('test-key');
+        return 'SUCCESS! Redis connected. Value: ' . $value;
+    } catch (\Exception $e) {
+        return 'ERROR: Could not connect to Redis. <br><br>' . $e->getMessage();
+    }
+});
+Route::get('/debug-gemini', function() {
+    return (new \App\Services\AiAssistantService)->checkConnection();
+});
+
+// Public nurse payment endpoints - these are accessed by Paystack callbacks
+Route::get('/nurse/payments/success', [App\Http\Controllers\Nurse\NurseController::class, 'paymentSuccess'])
+    ->name('nurse.payments.success.public');
+
+Route::get('/nurse/payments/failed', [App\Http\Controllers\Nurse\NurseController::class, 'paymentFailed'])
+    ->name('nurse.payments.failed.public');
+
+Route::get('/nurse/payments/pending', [App\Http\Controllers\Nurse\NurseController::class, 'paymentPending'])
+    ->name('nurse.payments.pending.public');
+
+// Test route to check nurse payments success page without authentication
+Route::get('/test-nurse-success', function() {
+    return view('nurse.payments.success');
+});
+
+// Debug route to test nurse payments success with reference
+Route::get('/debug-nurse-success', function() {
+    $reference = request()->get('reference');
+    $payment = $reference ? \App\Models\Payment::where('reference', $reference)->first() : null;
+    return view('nurse.payments.success', compact('payment'));
+});
+
+// Test route to check if nurse payments pending route is working
+Route::get('/test-nurse-pending-route', function() {
+    try {
+        $url = route('nurse.payments.pending', ['reference' => 'test123']);
+        return response()->json(['status' => 'success', 'url' => $url]);
+    } catch (\Exception $e) {
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()]);
+    }
+});

@@ -2,6 +2,27 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Doctor;
+use App\Http\Controllers\Api\AiController;
+
+/*
+|--------------------------------------------------------------------------
+| AI Chat API Routes
+|--------------------------------------------------------------------------
+*/
+// These routes are automatically prefixed with 'doctor.' by the RouteServiceProvider
+Route::prefix('ai')->name('api.ai.')->group(function () {
+    Route::post('/scheduling', [AiController::class, 'getSmartScheduling'])
+        ->name('scheduling');
+
+    Route::post('/extract-note-details', [AiController::class, 'extractDetailsFromNote'])
+        ->name('extract-notes');
+
+    Route::get('/chat-history', [AiController::class, 'getChatHistory'])
+        ->name('chat-history');
+
+    Route::delete('/chat-history/clear', [AiController::class, 'clearChatHistory'])
+        ->name('chat-history.clear');
+});
 
 // Doctor routes (middleware applied in RouteServiceProvider)
 Route::get('/dashboard', [Doctor\DashboardController::class, 'index'])->name('dashboard');

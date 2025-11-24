@@ -1,11 +1,33 @@
+
 <?php
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin;
+use App\Http\Controllers\Api\AiController;
 
 // Admin routes (middleware applied in RouteServiceProvider)
 Route::get('/test', function () {
     return response()->json(['message' => 'Admin test route working']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| AI Chat API Routes
+|--------------------------------------------------------------------------
+*/
+// These routes are automatically prefixed with 'admin.' by the RouteServiceProvider
+Route::prefix('ai')->name('api.ai.')->group(function () {
+    Route::post('/scheduling', [AiController::class, 'getSmartScheduling'])
+        ->name('scheduling');
+
+    Route::post('/extract-note-details', [AiController::class, 'extractDetailsFromNote'])
+        ->name('extract-notes');
+
+    Route::get('/chat-history', [AiController::class, 'getChatHistory'])
+        ->name('chat-history');
+
+    Route::delete('/chat-history/clear', [AiController::class, 'clearChatHistory'])
+        ->name('chat-history.clear');
 });
 
 Route::get('/index', [Admin\DashboardController::class, 'index'])->name('index');
