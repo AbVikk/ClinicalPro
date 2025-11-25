@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 return [
 
     /*
@@ -9,33 +7,35 @@ return [
     | Gemini API Key
     |--------------------------------------------------------------------------
     |
-    | Here you may specify your Gemini API Key and organization. This will be
-    | used to authenticate with the Gemini API - you can find your API key
-    | on Google AI Studio, at https://aistudio.google.com/app/apikey.
+    | This key is used to authenticate with Google's Generative AI.
+    |
     */
-
     'api_key' => env('GEMINI_API_KEY'),
 
     /*
     |--------------------------------------------------------------------------
-    | Gemini Base URL
+    | Base URL
+    |--------------------------------------------------------------------------
+    */
+    'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request Timeout (Seconds)
+    |--------------------------------------------------------------------------
+    */
+    'request_timeout' => (int) env('GEMINI_REQUEST_TIMEOUT', 30),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Models
     |--------------------------------------------------------------------------
     |
-    | If you need a specific base URL for the Gemini API, you can provide it here.
-    | Otherwise, leave empty to use the default value.
+    | We define the primary and fallback models here so we can change them
+    | without touching the code.
     */
-    'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),    /*
-    |--------------------------------------------------------------------------
-    | Request Timeout
-    |--------------------------------------------------------------------------
-    |
-    | The timeout may be used to specify the maximum number of seconds to wait
-    | for a response. By default, the client will time out after 30 seconds.
-    */
-
-    'request_timeout' => env('GEMINI_REQUEST_TIMEOUT', 30),
-
-    // NEW: Load models from env
-    'model' => env('GEMINI_MODEL', 'gemini-1.5-flash'),
-    'fallback_model' => env('GEMINI_FALLBACK_MODEL', 'gemini-1.5-pro'),
+    'models' => [
+        'primary' => env('GEMINI_MODEL', 'gemini-1.5-flash'),
+        'fallback' => env('GEMINI_FALLBACK_MODEL', 'gemini-1.5-pro'),
+    ],
 ];

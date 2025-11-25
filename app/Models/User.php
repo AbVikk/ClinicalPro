@@ -13,7 +13,6 @@ use Illuminate\Support\Carbon;
  * @property string|null $photo
  * @property int $appointments_as_patient_count
  */
-
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
@@ -28,15 +27,12 @@ class User extends Authenticatable
     const ROLE_PATIENT = 'patient';
     const ROLE_DONOR = 'donor';
     const ROLE_BILLING_STAFF = 'billing_staff';
+    
+    // Pharmacist Roles
     const ROLE_PHARMACIST_PRIMARY = 'primary_pharmacist';
     const ROLE_PHARMACIST_SENIOR = 'senior_pharmacist';
     const ROLE_PHARMACIST_CLINIC = 'clinic_pharmacist';
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'name',
         'email',
@@ -52,25 +48,15 @@ class User extends Authenticatable
         'state',
         'zip_code',
         'country',
-        'photo', // Add photo field
-        'department_id', // Now fillable
+        'photo', 
+        'department_id',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -83,68 +69,56 @@ class User extends Authenticatable
     // Accessor for age_gender
     public function getAgeGenderAttribute()
     {
-        if ($this->date_of_birth && $this->gender) {
-            $age = Carbon::parse($this->date_of_birth)->age;
-            return $age . ' / ' . ucfirst($this->gender);
-        } elseif ($this->date_of_birth) {
-            $age = Carbon::parse($this->date_of_birth)->age;
-            return $age . ' / N/A';
-        } elseif ($this->gender) {
-            return 'N/A / ' . ucfirst($this->gender);
-        }
-        return 'N/A / N/A';
+        $age = $this->date_of_birth ? Carbon::parse($this->date_of_birth)->age : 'N/A';
+        $gender = $this->gender ? ucfirst($this->gender) : 'N/A';
+        return "{$age} / {$gender}";
     }
 
-    // Role checking methods
-    public function isAdmin()
-    {
-        return $this->role === self::ROLE_ADMIN;
-    }
+    // --- ROLE CHECKING METHODS ---
 
-    public function isHOD()
-    {
-        return $this->role === self::ROLE_HOD;
-    }
-
-    public function isMatron()
-    {
-        return $this->role === self::ROLE_MATRON;
-    }
-
-    public function isDoctor()
-    {
-        return $this->role === self::ROLE_DOCTOR;
-    }
-
-    public function isNurse()
-    {
-        return $this->role === self::ROLE_NURSE;
-    }
-
-    public function isPatient()
-    {
-        return $this->role === self::ROLE_PATIENT;
-    }
-
-    public function isDonor()
-    {
-        return $this->role === self::ROLE_DONOR;
+    public function isAdmin() { return $this->role === self::ROLE_ADMIN; }
+    public function isHOD() { return $this->role === self::ROLE_HOD; }
+    public function isMatron() { return $this->role === self::ROLE_MATRON; }
+    public function isDoctor() { return $this->role === self::ROLE_DOCTOR; }
+    public function isNurse() { return $this->role === self::ROLE_NURSE; }
+    public function isPatient() { return $this->role === self::ROLE_PATIENT; }
+    public function isDonor() { return $this->role === self::ROLE_DONOR; }
+    
+    // Helper for Pharmacy Middleware
+    public function isPharmacist() {
+        return in_array($this->role, [
+            self::ROLE_PHARMACIST_PRIMARY,
+            self::ROLE_PHARMACIST_SENIOR,
+            self::ROLE_PHARMACIST_CLINIC
+        ]);
     }
 
     /**
      * Check if the user has a specific role.
+     * Supports: 'admin', 'admin|doctor', or ['admin', 'doctor']
+     * * @param string|array $roles
+     * @return bool
      */
-    public function hasRole(string $role): bool
+    public function hasRole($roles): bool
     {
-        // This helper method needs to support multi-role checking via pipe delimiter if used
-        if (str_contains($role, '|')) {
-            $roles = explode('|', $role);
+        if (is_string($roles)) {
+            // Handle pipe-separated strings like "admin|doctor"
+            if (str_contains($roles, '|')) {
+                $roles = explode('|', $roles);
+            } else {
+                return $this->role === $roles;
+            }
+        }
+
+        if (is_array($roles)) {
             return in_array($this->role, $roles);
         }
-        return $this->role === $role;
+
+        return false;
     }
 
-    // Relationships
+    // --- RELATIONSHIPS ---
+
     public function appointmentsAsDoctor()
     {
         return $this->hasMany(Appointment::class, 'doctor_id');
@@ -185,39 +159,32 @@ class User extends Authenticatable
         return $this->hasOne(Doctor::class);
     }
 
-    // Prescription relationships for patients
     public function prescriptions()
     {
         return $this->hasMany(Prescription::class, 'patient_id');
     }
 
-    // Medical history relationship
     public function medicalHistories()
     {
-        // For patients, this links to their medical history
         return $this->hasMany(MedicalHistory::class, 'patient_id');
     }
 
-    // EMR relationships for patient data across appointments
+    // EMR relationships (Through Appointments)
     public function vitals()
     {
-        // Vitals through appointments
         return $this->hasManyThrough(Vitals::class, Appointment::class, 'patient_id', 'appointment_id');
     }
 
     public function clinicalNotes()
     {
-        // Clinical notes through appointments
         return $this->hasManyThrough(ClinicalNote::class, Appointment::class, 'patient_id', 'appointment_id');
     }
 
     public function medications()
     {
-        // Medications through appointments
         return $this->hasManyThrough(Medication::class, Appointment::class, 'patient_id', 'appointment_id');
     }
 
-    // New relationships for the updated database structure
     public function clinic()
     {
         return $this->belongsTo(Clinic::class);
@@ -233,31 +200,26 @@ class User extends Authenticatable
         return $this->belongsTo(Category::class);
     }
 
-    // Doctor-specific relationships
     public function doctorProfile()
     {
         return $this->hasOne(Doctor::class);
     }
 
-    // Pharmacy relationships
     public function pharmacyOrders()
     {
         return $this->hasMany(PharmacyOrder::class, 'ordered_by');
     }
 
-    // Attendance relationships
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
     }
 
-    // Leave request relationships
     public function leaveRequests()
     {
         return $this->hasMany(LeaveRequest::class);
     }
 
-    // Invitation relationships
     public function sentInvitations()
     {
         return $this->hasMany(Invitation::class, 'invited_by');

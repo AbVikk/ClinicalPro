@@ -2,47 +2,38 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Log;
+
 class WebSocketClient
 {
-    private $host;
-    private $port;
-    
-    public function __construct($host = '127.0.0.1', $port = 6001)
-    {
-        $this->host = $host;
-        $this->port = $port;
-    }
-    
     /**
-     * Send a message to a specific channel
+     * Send a message to a specific Redis channel.
+     * The Node.js WebSocket server is listening (psubscribe *) 
+     * and will forward this to the browser.
      *
-     * @param string $channel
-     * @param string $event
-     * @param array $data
+     * @param string $channel  The private channel name (e.g., 'doctor-alerts.5')
+     * @param string $event    The event name (e.g., 'DoctorAlertEvent')
+     * @param array $data      The payload data
      * @return bool
      */
     public function sendToChannel($channel, $event, $data)
     {
-        // In a real implementation, we would connect to the WebSocket server
-        // and send the message directly. For now, we'll simulate this by
-        // writing to a file that our Node.js server can read.
-        
-        $message = [
-            'channel' => $channel,
-            'event' => $event,
-            'data' => $data,
-            'timestamp' => time()
-        ];
-        
-        // Write message to a queue file
-        $queueDir = __DIR__ . '/../../storage/app/websocket_queue';
-        if (!file_exists($queueDir)) {
-            mkdir($queueDir, 0755, true);
+        try {
+            // Prepare the payload exactly how websocket-server.js expects it
+            $payload = json_encode([
+                'event' => $event,
+                'data' => $data
+            ]);
+
+            // Publish directly to Redis
+            Redis::publish($channel, $payload);
+            
+            return true;
+            
+        } catch (\Exception $e) {
+            Log::error("[WebSocketClient] Failed to publish to Redis: " . $e->getMessage());
+            return false;
         }
-        
-        $filename = $queueDir . '/' . uniqid() . '.json';
-        file_put_contents($filename, json_encode($message));
-        
-        return true;
     }
 }

@@ -8,13 +8,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use App\Models\User;
 use App\Models\Appointment;
-use App\Models\Doctor;
-use App\Models\DoctorSchedule;
 use App\Models\Vitals;
 use App\Models\AppointmentDetail;
 use App\Models\ClinicalNote;
 use App\Models\Service;
-use App\Models\Clinic;
 use App\Models\Consultation;
 use App\Models\Payment;
 use App\Models\Notification;
@@ -23,11 +20,11 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Http; 
-use Illuminate\Support\Facades\DB;
 use App\Services\AppointmentQueryService;
 use App\Services\PaymentService;
 use App\Services\AppointmentBookingService;
+use App\Mail\WelcomeEmail;
+use Illuminate\Support\Facades\Mail;
 
 class NurseController extends Controller
 {
@@ -518,7 +515,7 @@ class NurseController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'amount' => 'required|numeric|min:1', // Changed from min:100 to min:1
+            'amount' => 'required|numeric|min:1',
             'consultation_id' => 'required|exists:consultations,id',
         ]);
 
@@ -528,13 +525,17 @@ class NurseController extends Controller
 
         $consultation = Consultation::findOrFail($request->consultation_id);
 
-        // Metadata tells the system a NURSE did this
+        // --- CRITICAL FIX FOR REDIRECTION ---
+        // We explicitly mark this as 'nurse' initiated so the PaymentController
+        // knows to redirect back to the nurse dashboard, not the admin one.
         $metadata = [
             'consultation_id' => $consultation->id,
             'patient_id'      => $consultation->patient_id,
             'clinic_id'       => Auth::user()->clinic_id ?? 1,
-            'role_initiator'  => 'nurse'
+            'role_initiator'  => 'nurse', // <--- THIS IS THE KEY
+            'redirect_route'  => 'nurse.payments.success.public' // Double safety
         ];
+        // ------------------------------------
 
         // Call Shared Service
         $result = $this->paymentService->initializePaymentTransaction(
@@ -550,7 +551,6 @@ class NurseController extends Controller
                 $payment->update(['metadata' => $metadata]);
             }
             
-            // Return only the reference, not the authorization URL
             return response()->json([
                 'status' => true,
                 'reference' => $result['data']['reference']

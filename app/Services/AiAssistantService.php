@@ -5,7 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Auth; // Critical for role checks
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 
@@ -13,8 +13,9 @@ class AiAssistantService
 {
     protected $apiKey;
     protected $baseUrl;
+    protected $primaryModel;
     
-    // Model Priority List
+    // Model Priority List (Fallback if config model fails)
     protected $modelCandidates = [
         'gemini-2.5-flash',
         'gemini-2.5-pro',
@@ -25,46 +26,84 @@ class AiAssistantService
 
     public function __construct()
     {
-        $this->apiKey = env('GEMINI_API_KEY');
-        $this->baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+        $this->apiKey = config('gemini.api_key');
+        
+        // --- CRITICAL FIX ---
+        // We use rtrim() to remove any trailing slash ('/') from the URL.
+        // This prevents the "404 Not Found" error caused by double slashes (e.g. /v1beta//models).
+        $this->baseUrl = rtrim(config('gemini.base_url'), '/');
+        // --------------------
+        
+        $this->primaryModel = config('gemini.models.primary');
     }
 
     // --- INTERNAL ENGINE ---
 
     private function getValidModel()
     {
-        return Cache::remember('valid_gemini_model_v3', 3600, function () {
+        // Cache the valid model to avoid repeated discovery calls
+        return Cache::remember('valid_gemini_model_v5', 3600, function () {
+            
+            // 1. Try the configured primary model first
+            if ($this->checkModelExists($this->primaryModel)) {
+                return $this->primaryModel;
+            }
+
+            // 2. Discovery Loop
             try {
-                $response = Http::get("{$this->baseUrl}/models?key={$this->apiKey}");
+                $response = Http::timeout(10)->get("{$this->baseUrl}/models?key={$this->apiKey}");
+                
                 if ($response->successful()) {
                     $models = $response->json()['models'] ?? [];
+                    
+                    // Try our candidates in order
                     foreach ($this->modelCandidates as $pref) {
                         foreach ($models as $m) {
-                            if (str_ends_with($m['name'], $pref) && in_array('generateContent', $m['supportedGenerationMethods'] ?? [])) {
+                            // Check if model name ends with our preference (handles 'models/' prefix)
+                            if (str_ends_with($m['name'], $pref) && 
+                                in_array('generateContent', $m['supportedGenerationMethods'] ?? [])) {
                                 return $m['name']; 
                             }
                         }
                     }
+                    
+                    // Fallback: Just grab the first one that supports content generation
                     foreach ($models as $m) {
-                        if (in_array('generateContent', $m['supportedGenerationMethods'] ?? [])) return $m['name'];
+                        if (in_array('generateContent', $m['supportedGenerationMethods'] ?? [])) {
+                            return $m['name'];
+                        }
                     }
                 }
             } catch (\Exception $e) {
-                Log::error("Gemini Discovery Failed: " . $e->getMessage());
+                Log::error("[AiAssistantService] Discovery Failed: " . $e->getMessage());
             }
+            
+            // Absolute Fallback
             return 'models/gemini-pro';
         });
+    }
+
+    private function checkModelExists($modelName)
+    {
+        // Simple check logic could go here, for now we trust the list or the catch block
+        return !empty($modelName);
     }
 
     protected function safeGenerate($prompt, $images = [])
     {
         $modelName = $this->getValidModel();
-        if (strpos($modelName, 'models/') === false) $modelName = 'models/' . $modelName;
+        
+        // Ensure prefix
+        if (strpos($modelName, 'models/') === false) {
+            $modelName = 'models/' . $modelName;
+        }
 
         $url = "{$this->baseUrl}/{$modelName}:generateContent?key={$this->apiKey}";
         
         $parts = [];
-        if (!empty($prompt)) $parts[] = ['text' => $prompt];
+        if (!empty($prompt)) {
+            $parts[] = ['text' => $prompt];
+        }
 
         foreach ($images as $image) {
             if ($image instanceof UploadedFile) {
@@ -83,8 +122,7 @@ class AiAssistantService
                 'temperature' => 0.3, 
                 'maxOutputTokens' => 2000
             ],
-            // CRITICAL FIX: Disable Safety Filters for Medical Context
-            // This prevents "No Response" when asking about drugs/diseases.
+            // Safety: Allow medical context (Important for healthcare apps)
             'safetySettings' => [
                 ['category' => 'HARM_CATEGORY_HARASSMENT', 'threshold' => 'BLOCK_NONE'],
                 ['category' => 'HARM_CATEGORY_HATE_SPEECH', 'threshold' => 'BLOCK_NONE'],
@@ -93,43 +131,41 @@ class AiAssistantService
             ]
         ];
 
-        // Retry logic for handling API overload
-        $maxRetries = 5; // Increased retries
-        $retryDelay = 2; // Increased delay
+        $maxRetries = 3; 
+        $retryDelay = 2; 
         
         for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
             try {
                 $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                    ->timeout(60)
+                    ->timeout(config('gemini.request_timeout', 30)) 
                     ->post($url, $payload);
 
                 if ($response->successful()) {
                     return $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? "No response generated.";
                 }
                 
-                // Check if it's an overload error that we should retry
                 $responseBody = $response->json();
+                
+                // Handle Overload
                 if (isset($responseBody['error']['status']) && 
-                    ($responseBody['error']['status'] === 'UNAVAILABLE' || 
-                     $responseBody['error']['status'] === 'RESOURCE_EXHAUSTED')) {
+                    in_array($responseBody['error']['status'], ['UNAVAILABLE', 'RESOURCE_EXHAUSTED'])) {
+                    
                     if ($attempt < $maxRetries) {
-                        // Wait before retrying with exponential backoff
-                        sleep($retryDelay * pow(2, $attempt - 1));
+                        sleep($retryDelay * $attempt); // Simple exponential backoff
                         continue;
                     }
                 }
                 
-                Log::error("Gemini API Error: " . $response->body());
+                Log::error("[AiAssistantService] API Error: " . $response->body());
                 return "I'm having trouble accessing the medical database. (Error: " . $response->status() . ")";
 
             } catch (\Exception $e) {
                 if ($attempt < $maxRetries) {
-                    // Wait before retrying with exponential backoff
-                    sleep($retryDelay * pow(2, $attempt - 1));
+                    sleep($retryDelay * $attempt);
                     continue;
                 }
-                Log::error("Gemini API Exception: " . $e->getMessage());
-                return "Connection error. Please check your internet.";
+                Log::error("[AiAssistantService] Exception: " . $e->getMessage());
+                return "Connection error. Please check your internet connection.";
             }
         }
         
@@ -173,14 +209,10 @@ class AiAssistantService
         return $json['intent'] ?? 'general_chat';
     }
 
-    /**
-     * MEDICAL EXPERT MODE
-     * Checks Auth::user() role to enable Professional Mode.
-     */
     public function getMedicalQueryResponse(string $q, array $h = [], array $files = []) {
         $user = Auth::user();
         $role = $user ? strtolower($user->role) : 'patient';
-        $isMedicalPro = in_array($role, ['doctor', 'nurse', 'admin', 'hod', 'pharmacist']);
+        $isMedicalPro = in_array($role, ['doctor', 'nurse', 'admin', 'hod', 'pharmacist', 'primary_pharmacist', 'senior_pharmacist']);
 
         if ($isMedicalPro) {
             $persona = "You are a Clinical Decision Support System (CDSS).
@@ -195,7 +227,6 @@ class AiAssistantService
         $fullPrompt = "{$persona}\n\n" . $this->buildHistoryPrompt($h) . "\nQuery: $q";
         $result = $this->safeGenerate($fullPrompt, $files);
         
-        // Provide fallback responses for common medical queries when API is overloaded
         if (strpos($result, 'overloaded') !== false || strpos($result, 'trouble accessing') !== false) {
             $fallback = $this->getFallbackMedicalResponse($q);
             if ($fallback) {
@@ -206,63 +237,28 @@ class AiAssistantService
         return $result;
     }
     
-    /**
-     * Provides fallback responses for common medical queries when API is unavailable
-     *
-     * @param string $query The user's medical query
-     * @return string|null Fallback response or null if no fallback available
-     */
     private function getFallbackMedicalResponse(string $query) {
         $query = strtolower($query);
         
-        // Common headache remedies
         if (strpos($query, 'headache') !== false || strpos($query, 'migraine') !== false) {
             return "For headache relief, common over-the-counter options include:\n\n" .
-                   "1. Paracetamol (500-1000mg every 4-6 hours as needed)\n" .
-                   "2. Ibuprofen (200-400mg every 6-8 hours as needed)\n" .
-                   "3. Aspirin (325-650mg every 4 hours as needed)\n\n" .
-                   "Important notes:\n" .
-                   "- Follow dosage instructions on the package\n" .
-                   "- Do not exceed recommended doses\n" .
-                   "- Consult a doctor if headaches persist or worsen\n" .
-                   "- Avoid if allergic to any of these medications\n\n" .
-                   "⚠️ This is general information only. Always consult with a healthcare professional before administering any medication.";
-        }
-        
-        // Common fever reducers
-        if (strpos($query, 'fever') !== false) {
-            return "For fever reduction, common options include:\n\n" .
                    "1. Paracetamol (500-1000mg every 4-6 hours as needed)\n" .
                    "2. Ibuprofen (200-400mg every 6-8 hours as needed)\n\n" .
                    "Important notes:\n" .
                    "- Follow dosage instructions on the package\n" .
                    "- Do not exceed recommended doses\n" .
-                   "- Consult a doctor if fever persists for more than 3 days\n" .
-                   "- Seek immediate medical attention for high fever (above 103°F/39.4°C)\n\n" .
-                   "⚠️ This is general information only. Always consult with a healthcare professional before administering any medication.";
+                   "- Consult a doctor if headaches persist\n";
         }
         
-        // Common cold remedies
-        if (strpos($query, 'cold') !== false || strpos($query, 'flu') !== false) {
-            return "For common cold/flu symptoms, general supportive care includes:\n\n" .
-                   "1. Rest and adequate sleep\n" .
-                   "2. Stay hydrated (water, herbal teas, broths)\n" .
-                   "3. Warm salt water gargles for sore throat\n" .
-                   "4. Steam inhalation for nasal congestion\n" .
-                   "5. Over-the-counter options:\n" .
-                   "   - Paracetamol/Ibuprofen for fever and aches\n" .
-                   "   - Decongestants for nasal stuffiness\n" .
-                   "   - Cough suppressants for dry cough\n\n" .
-                   "⚠️ Seek medical attention if:\n" .
-                   "- Difficulty breathing\n" .
-                   "- High fever\n" .
-                   "- Symptoms worsen after a week\n\n" .
-                   "⚠️ This is general information only. Always consult with a healthcare professional before administering any medication.";
+        if (strpos($query, 'fever') !== false) {
+            return "For fever reduction, common options include:\n\n" .
+                   "1. Paracetamol (500-1000mg every 4-6 hours as needed)\n" .
+                   "2. Ibuprofen (200-400mg every 6-8 hours as needed)\n\n" .
+                   "Important notes:\n" .
+                   "- Consult a doctor if fever persists > 3 days\n";
         }
         
-        // Add more fallback responses for common conditions as needed
-        
-        return null; // No fallback available for this query
+        return null; 
     }
 
     public function getStructuredSchedulingQuery(string $q, array $context, array $h = []) {
@@ -301,7 +297,6 @@ class AiAssistantService
         return $this->safeGenerate("Receptionist. User wants appt at {$date}. Found: [{$list}]. Write concise response.");
     }
 
-    // --- UTILS ---
     public function getStructuredReminderQuery(string $q, array $h = []) {
         $res = $this->safeGenerate("Extract reminder JSON: {\"intent\":\"create_reminder\", \"scheduled_at\":\"Y-m-d H:i:s\", \"message\":\"\"}. Date: ".now()->format('Y-m-d')."\nUser: $q");
         return json_decode($this->cleanJsonResponse($res), true);
@@ -326,13 +321,6 @@ class AiAssistantService
         return json_decode($this->cleanJsonResponse($res), true);
     }
     
-    /**
-     * Summarizes patient medical records using AI
-     *
-     * @param string $patientName The name of the patient
-     * @param string $recordsText The text containing patient medical records
-     * @return string The summarized patient records
-     */
     public function summarizePatientRecords(string $patientName, string $recordsText): string
     {
         $prompt = "Please summarize the following medical records for patient {$patientName}.
@@ -345,23 +333,11 @@ class AiAssistantService
         return $this->safeGenerate($prompt);
     }
     
-    /**
-     * Extracts structured patient summary query information
-     *
-     * @param string $q The user query
-     * @param array $h The conversation history
-     * @return array|null The structured patient summary data
-     */
     public function getStructuredPatientSummaryQuery(string $q, array $h = []) {
         $res = $this->safeGenerate("Extract patient summary JSON: {\"intent\":\"summarize_patient\", \"patient_name\":\"\"}. Date: ".now()->format('Y-m-d')."\nUser: $q");
         return json_decode($this->cleanJsonResponse($res), true);
     }
     
-    /**
-     * Check if the Gemini API connection is working
-     *
-     * @return string Connection status message
-     */
     public function checkConnection() {
         try {
             $modelName = $this->getValidModel();
