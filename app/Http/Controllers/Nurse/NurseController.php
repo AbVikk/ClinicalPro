@@ -20,11 +20,11 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\WelcomeEmail;
 use App\Services\AppointmentQueryService;
 use App\Services\PaymentService;
 use App\Services\AppointmentBookingService;
-use App\Mail\WelcomeEmail;
-use Illuminate\Support\Facades\Mail;
 
 class NurseController extends Controller
 {
@@ -407,20 +407,41 @@ class NurseController extends Controller
             'email' => 'nullable|email|max:255|unique:users,email',
         ]);
 
+        // 1. Generate Password
+        $rawPassword = Str::random(10);
+
+        // 2. Create User
         $patient = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'phone' => $validated['phone'],
-            'password' => Hash::make(Str::random(10)),
+            'password' => Hash::make($rawPassword),
             'role' => 'patient',
             'user_id' => 'PID' . (User::max('id') + 1),
             'status' => 'active', 
+            'email_verified_at' => now(), // Auto-verify walk-ins
         ]);
+
+        // 3. Create Patient Profile
+        // Check if relationship exists before creating to prevent errors if model structure varies
+        if(method_exists($patient, 'patient')) {
+            $patient->patient()->create(['user_id' => $patient->id]);
+        }
+
+        // 4. Send Welcome Email (Queued)
+        if ($validated['email']) {
+            try {
+                Mail::to($patient->email)->send(new WelcomeEmail($patient, $rawPassword));
+            } catch (\Exception $e) {
+                Log::error("Failed to send walk-in welcome email: " . $e->getMessage());
+            }
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Walk-in patient registered successfully!',
+            'message' => 'Walk-in patient registered! Password sent to email.',
             'patient_id' => $patient->user_id,
+            'temp_password' => $rawPassword // Optional: return to frontend for immediate display
         ]);
     }
     
@@ -525,17 +546,14 @@ class NurseController extends Controller
 
         $consultation = Consultation::findOrFail($request->consultation_id);
 
-        // --- CRITICAL FIX FOR REDIRECTION ---
-        // We explicitly mark this as 'nurse' initiated so the PaymentController
-        // knows to redirect back to the nurse dashboard, not the admin one.
+        // Metadata tells the system a NURSE did this
         $metadata = [
             'consultation_id' => $consultation->id,
             'patient_id'      => $consultation->patient_id,
             'clinic_id'       => Auth::user()->clinic_id ?? 1,
-            'role_initiator'  => 'nurse', // <--- THIS IS THE KEY
-            'redirect_route'  => 'nurse.payments.success.public' // Double safety
+            'role_initiator'  => 'nurse',
+            'redirect_route'  => 'nurse.payments.success.public'
         ];
-        // ------------------------------------
 
         // Call Shared Service
         $result = $this->paymentService->initializePaymentTransaction(
@@ -551,6 +569,7 @@ class NurseController extends Controller
                 $payment->update(['metadata' => $metadata]);
             }
             
+            // Return only the reference
             return response()->json([
                 'status' => true,
                 'reference' => $result['data']['reference']
@@ -561,7 +580,6 @@ class NurseController extends Controller
     }
     
     // --- Payment Status Pages ---
-    // Admin/PaymentController redirects here if Role == Nurse
     
     public function paymentSuccess(Request $request)
     {
@@ -583,7 +601,7 @@ class NurseController extends Controller
         return view('nurse.payments.pending', compact('payment'));
     }
     
-    // CRUD for Payments (View/Edit/Delete)
+    // CRUD for Payments
     public function paymentShow(Payment $payment) {
         $payment->load('user', 'consultation.doctor', 'appointment.doctor');
         return view('nurse.payments.show', compact('payment'));
@@ -593,7 +611,7 @@ class NurseController extends Controller
         return view('nurse.payments.edit', compact('payment', 'patients'));
     }
     public function paymentUpdate(Request $request, Payment $payment) {
-        $data = $request->validate([ 'amount' => 'required|numeric' ]); // Simplified for brevity
+        $data = $request->validate([ 'amount' => 'required|numeric' ]); 
         $payment->update($data);
         return redirect()->route('nurse.payments.index')->with('success', 'Updated.');
     }

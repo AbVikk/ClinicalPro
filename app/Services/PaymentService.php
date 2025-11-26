@@ -31,9 +31,7 @@ class PaymentService
 
     public function initializePaymentTransaction(string $email, float $amount, array $metadata)
     {
-        // This acts as the "Traffic Cop". When Paystack finishes, it goes here.
-        // Ensure your Admin/PaymentController is set up to read the 'role_initiator' metadata
-        // and redirect nurses back to the nurse dashboard.
+        // Set the global callback URL. The PaymentController will decide where to go next.
         $metadata['callback_url'] = route('admin.payment.verify'); 
         
         try {
@@ -50,18 +48,19 @@ class PaymentService
                 return $response->json();
             }
             Log::error("[PaymentService] Init Failed: " . $response->body());
-            return ['status' => false, 'message' => 'Payment Gateway Error'];
+            return ['status' => false, 'message' => 'Payment Gateway Error: ' . $response->status()];
         } catch (\Exception $e) {
             Log::error("[PaymentService] Connection Error: " . $e->getMessage());
             return ['status' => false, 'message' => 'Connection Error'];
         }
     }
 
-    public function handleVerification(string $reference, array $metadata = [])
+    public function handleVerification(string $reference)
     {
         $existing = Payment::where('reference', $reference)->first();
+        
+        // Optimization: If already marked as paid, return immediately
         if ($existing && $existing->status === Payment::STATUS_PAID) {
-            Log::info("[PaymentService] Payment already verified: " . $reference);
             return $existing;
         }
 
@@ -77,7 +76,7 @@ class PaymentService
 
             $data = $response->json('data');
 
-            return DB::transaction(function () use ($data, $reference, $metadata) {
+            return DB::transaction(function () use ($data, $reference) {
                 $meta = $data['metadata'] ?? [];
                 
                 $payment = Payment::updateOrCreate(
@@ -90,14 +89,11 @@ class PaymentService
                         'user_id'          => $meta['patient_id'] ?? Auth::id(),
                         'consultation_id'  => $meta['consultation_id'] ?? null,
                         'clinic_id'        => $meta['clinic_id'] ?? 1,
-                        'metadata'         => $meta, // Store the metadata from Paystack response
+                        'metadata'         => $meta, // CRITICAL: Save metadata so Controller can read role_initiator
                     ]
                 );
 
-                Log::info("[PaymentService] Payment updated/created: " . $payment->id . " with reference: " . $reference);
-
                 if (!empty($payment->consultation_id)) {
-                    Log::info("[PaymentService] Finalizing appointment for consultation: " . $payment->consultation_id);
                     $this->finalizeAppointment($payment);
                 }
                 
@@ -111,42 +107,28 @@ class PaymentService
         }
     }
 
-    /**
-     * Public method to finalize appointment - made public so it can be called from webhook controller
-     */
     public function finalizeAppointment(Payment $payment)
     {
         $consultation = Consultation::lockForUpdate()->find($payment->consultation_id);
         
-        if (!$consultation) {
-            Log::warning("[PaymentService] Consultation not found for payment: " . $payment->id);
-            return;
-        }
+        if (!$consultation) return;
 
-        Log::info("[PaymentService] Processing consultation: " . $consultation->id . " with current status: " . $consultation->status);
-
-        // 1. Consultation becomes 'scheduled' (This means "Paid & Queued")
+        // 1. Update Consultation
         if ($consultation->status !== 'scheduled') {
             $consultation->update(['status' => 'scheduled']);
-            Log::info("[PaymentService] Consultation status updated to scheduled: " . $consultation->id);
         }
 
-        // 2. Create/Update Appointment
+        // 2. Create/Update Appointment via Booking Service
         $appt = $this->bookingService->createAppointmentRecord($consultation, $payment);
-        Log::info("[PaymentService] Appointment created/updated: " . $appt->id);
         
-        // 3. CRITICAL FIX: Status is 'pending' (Waiting for Doctor Acceptance)
-        // It was 'confirmed' before. Now it adheres to your rule.
+        // 3. Set Status to Pending (Waiting for Doctor)
         $appt->update(['status' => 'pending']);
-        Log::info("[PaymentService] Appointment status updated to pending: " . $appt->id);
         
-        // 4. Create Empty Details
+        // 4. Create Details
         AppointmentDetail::firstOrCreate(['appointment_id' => $appt->id]);
-        Log::info("[PaymentService] Appointment details created for: " . $appt->id);
         
-        // 5. Notify Doctor
+        // 5. Notify
         $this->sendConfirmationNotification($appt);
-        Log::info("[PaymentService] Notification sent for appointment: " . $appt->id);
     }
     
     protected function handleFailedPayment(string $reference)
@@ -154,9 +136,8 @@ class PaymentService
         $payment = Payment::where('reference', $reference)->first();
         if ($payment) {
             $payment->update(['status' => Payment::STATUS_FAILED]);
-            Log::warning("[PaymentService] Payment marked as failed: " . $reference);
         }
-        return null;
+        return $payment;
     }
     
     protected function sendConfirmationNotification(Appointment $appt) {
@@ -164,7 +145,13 @@ class PaymentService
             $doctor = User::find($appt->doctor_id);
             if ($doctor) {
                 $msg = "Action Required: New paid appointment with " . ($appt->patient->name ?? 'Patient');
-                Notification::create(['user_id' => $doctor->id, 'type' => 'appointment', 'message' => $msg, 'is_read' => false, 'channel' => 'database']);
+                Notification::create([
+                    'user_id' => $doctor->id, 
+                    'type' => 'appointment', 
+                    'message' => $msg, 
+                    'is_read' => false, 
+                    'channel' => 'database'
+                ]);
                 try { event(new DoctorAlert($doctor->id, $msg)); } catch (\Exception $e) {}
             }
         } catch (\Exception $e) {

@@ -56,7 +56,7 @@
                     </a>
                 </li>                
                 <li class="nav-item">
-                    <a class="nav-link btn btn-white btn-round" href="{{ route('register') }}">SIGN UP</a>
+                    <a class="nav-link btn btn-white btn-round" href="{{ route('register.initial') }}">SIGN UP</a>
                 </li>
             </ul>
         </div>

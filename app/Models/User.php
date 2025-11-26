@@ -20,8 +20,8 @@ class User extends Authenticatable
 
     // Define user roles
     const ROLE_ADMIN = 'admin';
-    const ROLE_HOD = 'hod';             // Head of Department
-    const ROLE_MATRON = 'matron';       // Matron
+    const ROLE_HOD = 'hod';
+    const ROLE_MATRON = 'matron';
     const ROLE_DOCTOR = 'doctor';
     const ROLE_NURSE = 'nurse';
     const ROLE_PATIENT = 'patient';
@@ -33,6 +33,11 @@ class User extends Authenticatable
     const ROLE_PHARMACIST_SENIOR = 'senior_pharmacist';
     const ROLE_PHARMACIST_CLINIC = 'clinic_pharmacist';
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
     protected $fillable = [
         'name',
         'email',
@@ -50,13 +55,24 @@ class User extends Authenticatable
         'country',
         'photo', 
         'department_id',
+        'email_verified_at',
     ];
 
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [

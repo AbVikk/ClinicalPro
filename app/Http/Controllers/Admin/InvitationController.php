@@ -6,15 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Invitation;
 use App\Models\Category;
 use App\Models\Department;
+use App\Models\User;
+use App\Models\Doctor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-use App\Models\User;
-use App\Models\Doctor;
-use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+use App\Mail\InvitationEmail;
+use App\Mail\WelcomeEmail;
 
 class InvitationController extends Controller
 {
@@ -67,21 +71,36 @@ class InvitationController extends Controller
             'email' => $request->email,
             'role' => $request->role,
             'expires_at' => now()->addDays(7), // Expires in 7 days
+            'invited_by' => Auth::id(), // Track who sent it
         ]);
         
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // A new invitation was created, so the "pending invitations" count is wrong.
+        // --- WHISTLEBLOWER: Clear Cache ---
         Cache::forget("admin_stats_pending_invitations");
-        // --- END OF WHISTLEBLOWER ---
         
-        // Generate the registration URL
+        // Generate the SIGNED registration URL (Required for security)
         $registrationUrl = URL::temporarySignedRoute(
             'invitations.register',
             now()->addDays(7),
             ['token' => $invitation->token]
         );
         
-        return redirect()->back()->with('success', 'Invitation created successfully!')->with('registration_url', $registrationUrl);
+        // --- SEND EMAIL ---
+        $message = 'Invitation created and email sent successfully!';
+        
+        try {
+            $email = new InvitationEmail($invitation);
+            // CRITICAL: Override the URL with the SIGNED version
+            $email->url = $registrationUrl; 
+            
+            Mail::to($request->email)->send($email);
+        } catch (\Exception $e) {
+            Log::error("Failed to send invitation email: " . $e->getMessage());
+            $message = 'Invitation created, but email failed. You can copy the link below.';
+        }
+        
+        return redirect()->back()
+            ->with('success', $message)
+            ->with('registration_url', $registrationUrl);
     }
     
     /**
@@ -134,12 +153,10 @@ class InvitationController extends Controller
             $rules['license_number'] = 'required|string|unique:doctors_new,license_number';
             $rules['specialization_id'] = 'required|exists:categories,id';
             $rules['department_id'] = 'required|exists:departments,id';
-            // ... (other doctor rules)
         } else {
             // Default validation rules for other roles
             $rules['date_of_birth'] = 'required|date';
             $rules['gender'] = 'required|in:male,female,other';
-            // ... (other common rules)
         }
         
         // Validate the request
@@ -157,7 +174,6 @@ class InvitationController extends Controller
             $proofPath = $request->file('proof_of_identity')->store('proofs', 'public');
         }
         
-        // Create the user with the role from invitation
         // Map invitation role to user role
         $userRole = $invitation->role;
         if ($userRole === 'clinic_staff') {
@@ -178,50 +194,51 @@ class InvitationController extends Controller
             'zip_code' => $request->zip_code,
             'country' => $request->country,
             'photo' => $photoPath,
-            'status' => 'pending', // Default status
+            'status' => 'active', // Auto-activate invited users
+            'email_verified_at' => now(), // Auto-verify invited users
         ];
         
         // Generate user_id based on role
         $userData['user_id'] = $this->generateUserId($invitation->role);
         
+        // Create User
         $user = User::create($userData);
         
         // Create role-specific records if needed
         if ($invitation->role === 'doctor') {
             Doctor::create([
                 'user_id' => $user->id,
-                'doctor_id' => 'DOC' . str_pad($user->id, 6, '0', STR_PAD_LEFT), // Generate doctor ID
+                'doctor_id' => 'DOC' . str_pad($user->id, 6, '0', STR_PAD_LEFT),
                 'license_number' => $request->license_number,
                 'category_id' => $request->specialization_id,
                 'department_id' => $request->department_id,
-                // ... (other doctor fields)
                 'proof_of_identity' => $proofPath,
-                'status' => 'pending',
+                'status' => 'pending', // Doctors might still need license verification
             ]);
         }
         
         // Mark invitation as used
         $invitation->markAsUsed();
         
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // This is a big one! A user was created AND an invitation was used.
-        // We have to erase all the "whiteboard" answers this affects.
-        
-        // 1. An invitation was used
+        // --- WHISTLEBLOWER: Clear Cache ---
         Cache::forget("admin_stats_pending_invitations");
-        
-        // 2. A new user was created
         Cache::forget("admin_stats_total_users");
         Cache::forget("admin_stats_new_registrations_7d");
         Cache::forget("admin_stats_prev_week_registrations");
 
-        // 3. Check the *specific* role and clear those lists too
         if ($userRole === 'doctor') {
             Cache::forget("admin_stats_available_doctors");
         } else if ($userRole === 'patient') {
             Cache::forget("admin_stats_new_patients_list");
         }
-        // --- END OF WHISTLEBLOWER ---
+        
+        // --- SEND WELCOME EMAIL ---
+        try {
+            Mail::to($user->email)->send(new WelcomeEmail($user));
+        } catch (\Exception $e) {
+            // Don't block registration if welcome email fails
+            Log::error("Failed to send welcome email: " . $e->getMessage());
+        }
         
         // Log the user in
         Auth::login($user);
@@ -243,7 +260,7 @@ class InvitationController extends Controller
             case 'clinic_staff':
             case 'nurse':
             case 'matron':
-                return redirect()->route('clinic.dashboard');
+                return redirect()->route('nurse.dashboard'); // Ensure this route exists in your nurse/web routes
             case 'patient':
                 return redirect()->route('patient.dashboard');
             case 'donor':
@@ -264,7 +281,6 @@ class InvitationController extends Controller
      */
     private function generateUserId($role)
     {
-        // Map roles to prefixes
         $prefixes = [
             'admin' => 'ADM',
             'doctor' => 'DOC',
@@ -279,13 +295,11 @@ class InvitationController extends Controller
             'matron' => 'MAT'
         ];
         
-        $prefix = $prefixes[$role] ?? 'USR'; // Default prefix
+        $prefix = $prefixes[$role] ?? 'USR';
         
-        // Generate a unique user_id
         $uniqueId = strtoupper(uniqid());
         $userId = $prefix . substr($uniqueId, -6);
         
-        // Ensure the user_id is unique
         while (User::where('user_id', $userId)->exists()) {
             $uniqueId = strtoupper(uniqid());
             $userId = $prefix . substr($uniqueId, -6);
@@ -310,10 +324,8 @@ class InvitationController extends Controller
     {
         $invitation->delete();
         
-        // --- THIS IS THE "WHISTLEBLOWER" ---
-        // An invitation was deleted, so the "pending invitations" count is wrong.
+        // Clear cache
         Cache::forget("admin_stats_pending_invitations");
-        // --- END OF WHISTLEBLOWER ---
 
         return redirect()->back()->with('success', 'Invitation revoked successfully.');
     }

@@ -8,44 +8,36 @@ use App\Http\Controllers\Api\AiController;
 |--------------------------------------------------------------------------
 | Nurse Routes
 |--------------------------------------------------------------------------
+| Prefix: /nurse | Name: nurse. | Middleware: auth, role:nurse
 */
 
-// Test route to check if nurse routes are working
-Route::get('/test-success', function () {
-    return view('nurse.payments.success');
-})->name('test-success');
+// [Security Cleanup] - Commented out test route
+// Route::get('/test-success', function () { return view('nurse.payments.success'); })->name('test-success');
 
 /*
 |--------------------------------------------------------------------------
 | AI Chat API Routes
 |--------------------------------------------------------------------------
 */
-// These routes are automatically prefixed with 'nurse.' by the RouteServiceProvider
+// We keep these here so the frontend JS (AiRoutes) can find nurse.api.ai...
 Route::prefix('ai')->name('api.ai.')->group(function () {
-    Route::post('/scheduling', [AiController::class, 'getSmartScheduling'])
-        ->name('scheduling');
-
-    Route::post('/extract-note-details', [AiController::class, 'extractDetailsFromNote'])
-        ->name('extract-notes');
-
-    Route::get('/chat-history', [AiController::class, 'getChatHistory'])
-        ->name('chat-history');
-
-    Route::delete('/chat-history/clear', [AiController::class, 'clearChatHistory'])
-        ->name('chat-history.clear');
+    Route::post('/scheduling', [AiController::class, 'getSmartScheduling'])->name('scheduling');
+    Route::post('/extract-note-details', [AiController::class, 'extractDetailsFromNote'])->name('extract-notes');
+    Route::get('/chat-history', [AiController::class, 'getChatHistory'])->name('chat-history');
+    Route::delete('/chat-history/clear', [AiController::class, 'clearChatHistory'])->name('chat-history.clear');
 });
 
-// --- Your Existing Routes ---
+// --- Dashboard ---
 Route::get('dashboard', [NurseController::class, 'dashboard'])->name('dashboard');
 Route::get('dashboard/clear-cache', [NurseController::class, 'clearDashboardCache'])->name('dashboard.clear-cache');
 Route::get('data/queue', [NurseController::class, 'ajaxGetQueue'])->name('ajax.queue');
 Route::get('data/doctors', [NurseController::class, 'ajaxGetDoctorStatus'])->name('ajax.doctors');
-Route::post('appointment/{appointment}/save-vitals', [NurseController::class, 'saveVitals'])->name('vitals.save');
 
-// Patients route
+// --- Patient Management ---
+Route::post('appointment/{appointment}/save-vitals', [NurseController::class, 'saveVitals'])->name('vitals.save');
 Route::get('patients', [NurseController::class, 'patientsIndex'])->name('patients.index');
 
-// --- **NEW** BOOK APPOINTMENT ROUTES ---
+// --- Booking ---
 Route::get('/book-appointment', [NurseController::class, 'bookAppointment'])->name('book-appointment');
 Route::post('/book-appointment/patient-info', [NurseController::class, 'getPatientInfo'])->name('book-appointment.patient-info');
 Route::post('/book-appointment/available-doctors', [NurseController::class, 'getAvailableDoctors'])->name('book-appointment.available-doctors');
@@ -55,8 +47,7 @@ Route::post('/book-appointment', [NurseController::class, 'storeAppointment'])->
 Route::post('/book-appointment/walk-in-patient', [NurseController::class, 'storeWalkInPatient'])->name('book-appointment.walk-in-patient');
 Route::post('/book-appointment/service-time-pricing', [NurseController::class, 'getServiceTimePricing'])->name('book-appointment.service-time-pricing');
 
-// --- **NEW** PAYMENT & INVOICE ROUTES ---
-// We can create a new controller for this later, but for now, the NurseController can handle it.
+// --- Payments & Invoice ---
 Route::get('/payments', [NurseController::class, 'paymentIndex'])->name('payments.index');
 Route::get('/payments/create', [NurseController::class, 'paymentCreate'])->name('payments.create');
 Route::post('/payments', [NurseController::class, 'paymentStore'])->name('payments.store');
@@ -66,18 +57,13 @@ Route::put('/payments/{payment}', [NurseController::class, 'paymentUpdate'])->na
 Route::delete('/payments/{payment}', [NurseController::class, 'paymentDestroy'])->name('payments.destroy');
 Route::get('/payments/invoice/{payment}', [NurseController::class, 'paymentInvoice'])->name('payments.invoice');
 
-// Appointment Payment Routes
+// --- Appointment Payment ---
 Route::get('/appointment/payment/initialize', [NurseController::class, 'showAppointmentPayment'])->name('appointment.payment.initialize');
 
-// Payment Status Pages
-// These routes need to be public as they are accessed by Paystack callbacks
-Route::get('/payments/success', [NurseController::class, 'paymentSuccess'])
-     ->name('payments.success');
-
-Route::get('/payments/failed', [NurseController::class, 'paymentFailed'])
-     ->name('payments.failed');
-
-Route::get('/payments/pending', [NurseController::class, 'paymentPending'])
-     ->name('payments.pending');
+// --- Public Payment Status Pages ---
+// (Accessed by Paystack callbacks)
+Route::get('/payments/success', [NurseController::class, 'paymentSuccess'])->name('payments.success');
+Route::get('/payments/failed', [NurseController::class, 'paymentFailed'])->name('payments.failed');
+Route::get('/payments/pending', [NurseController::class, 'paymentPending'])->name('payments.pending');
 
 Route::post('/payments/paystack/initialize', [NurseController::class, 'initializePaystack'])->name('payments.paystack.initialize');

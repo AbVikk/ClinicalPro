@@ -97,7 +97,7 @@
                             </small>
                         </div>
                         <div id="countdownTimer" class="text-center" style="display: none; margin-top: 10px;">
-                            <small>OTP expires in <span id="countdown">300</span> seconds</small>
+                            <small>OTP expires in <span id="countdown">{{ $remaining_seconds ?? 300 }}</span> seconds</small>
                         </div>
                     </div>
                     <div class="footer text-center">
@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('.otp-input').focus();
     
     // Start OTP expiration countdown
-    startOtpCountdown(300); // 5 minutes = 300 seconds
+    startOtpCountdown({{ $remaining_seconds ?? 300 }}); // Use actual remaining time or default to 300 seconds
     
     // Handle OTP input navigation
     const otpInputs = document.querySelectorAll('.otp-input');
@@ -241,27 +241,41 @@ document.addEventListener('DOMContentLoaded', function() {
         resendLink.style.display = 'none';
         countdownElement.style.display = 'inline';
         
-        // Submit via AJAX to restart registration process
-        fetch('{{ route('register.initial') }}', {
-            method: 'GET'
+        // Submit via AJAX to resend OTP
+        fetch('{{ route('register.resend') }}', {
+            method: 'POST',
+            body: new URLSearchParams({
+                '_token': document.querySelector('input[name="_token"]').value
+            }),
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+            }
         })
-        .then(response => {
-            showSuccess('Please check your email for a new OTP code.');
-            
-            // Start 60-second countdown
-            let seconds = 60;
-            timerElement.textContent = seconds;
-            
-            const countdown = setInterval(() => {
-                seconds--;
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showSuccess(data.message);
+                
+                // Start 60-second countdown
+                let seconds = 60;
                 timerElement.textContent = seconds;
                 
-                if (seconds <= 0) {
-                    clearInterval(countdown);
-                    resendLink.style.display = 'inline';
-                    countdownElement.style.display = 'none';
-                }
-            }, 1000);
+                const countdown = setInterval(() => {
+                    seconds--;
+                    timerElement.textContent = seconds;
+                    
+                    if (seconds <= 0) {
+                        clearInterval(countdown);
+                        resendLink.style.display = 'inline';
+                        countdownElement.style.display = 'none';
+                    }
+                }, 1000);
+            } else {
+                showError(data.message || 'Failed to resend OTP. Please try again.');
+                resendLink.style.display = 'inline';
+                countdownElement.style.display = 'none';
+            }
         })
         .catch(error => {
             showError('An error occurred. Please try again.');

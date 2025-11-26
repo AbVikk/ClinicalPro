@@ -116,48 +116,59 @@
 
 <script>
     document.getElementById('pay-button').addEventListener('click', function() {
-        // Show pending payment page while initializing
+        var payButton = this;
+        payButton.disabled = true;
+        payButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Initializing...';
+        
         // Get the payment details from the backend
-        fetch('{{ route('admin.appointment.payment.initialize') }}', {
+        fetch('{{ route('admin.payments.paystack.initialize') }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
             },
             body: JSON.stringify({
-                consultation_id: {{ $consultation->id }},
-                payment_id: {{ $payment->id }},
-                email: '{{ $patient->email }}'
+                email: '{{ $patient->email }}',
+                amount: {{ $payment->amount }}, // Send amount in Naira, controller will multiply
+                consultation_id: {{ $consultation->id }}
             })
         })
         .then(response => response.json())
         .then(data => {
-            if (data.error) {
-                alert('Payment initialization failed: ' + data.error);
-                return;
+            if (data.status === true && data.data && data.data.reference) {
+                // SUCCESS! We got a reference from Paystack via our server
+                // Now initialize Paystack payment with proper callbacks
+                var handler = PaystackPop.setup({
+                    key: '{{ $publicKey }}',
+                    email: '{{ $patient->email }}',
+                    amount: {{ $payment->amount * 100 }}, // Paystack expects amount in kobo
+                    ref: data.data.reference,
+                    callback: function(response) {
+                        // Redirect to verification endpoint
+                        window.location.href = '{{ route('admin.payment.verify') }}?reference=' + response.reference;
+                    },
+                    onClose: function() {
+                        // Re-enable the pay button if payment is cancelled
+                        payButton.disabled = false;
+                        payButton.textContent = 'Pay with Paystack';
+                    }
+                });
+                
+                handler.openIframe();
+            } else {
+                // Handle errors from our server or Paystack
+                console.error('Initialization failed:', data);
+                alert('Payment initialization failed: ' + (data.message || data.error || 'Please try again.'));
+                payButton.disabled = false;
+                payButton.textContent = 'Pay with Paystack';
             }
-            
-            // Initialize Paystack payment
-            var handler = PaystackPop.setup({
-                key: '{{ $publicKey }}',
-                email: '{{ $patient->email }}',
-                amount: {{ $payment->amount * 100 }}, // Paystack expects amount in kobo
-                ref: data.data.reference,
-                callback: function(response) {
-                    // Redirect to verification endpoint
-                    window.location.href = '{{ route('admin.payment.verify') }}?reference=' + response.reference;
-                },
-                onClose: function() {
-                    // Show pending page when payment is cancelled
-                    window.location.href = '{{ route('admin.payments.pending') }}';
-                }
-            });
-            
-            handler.openIframe();
         })
         .catch(error => {
             console.error('Error:', error);
             alert('An error occurred. Please try again.');
+            payButton.disabled = false;
+            payButton.textContent = 'Pay with Paystack';
         });
     });
 </script>

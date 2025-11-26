@@ -220,7 +220,7 @@
                     <li class="header">MAIN</li>
                     <li><a href="{{ url('/admin/index') }}"><i class="zmdi zmdi-home"></i><span>Dashboard</span></a></li>            
                     <li><a href="{{ url('/admin/book-appointment') }}"><i class="zmdi zmdi-calendar-check"></i><span>Appointment</span> </a></li>
-                    <li><a href="{{ url('/admin/checkin') }}"><i class="zmdi zmdi-account-add"></i><span>Patient Check-in</span> </a></li>
+                    <li><a href="{{ route('admin.checkin.index') }}"><i class="zmdi zmdi-account-add"></i><span>Patient Check-in</span> </a></li>
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-account-add"></i><span>Doctors</span> </a>
                         <ul class="ml-menu">
                             <li><a href="{{ route('admin.doctor.dashboard') }}">Doctors Dashboard</a></li>
@@ -260,7 +260,7 @@
                             <li><a href="{{ url('/admin/payments/create') }}">Add Payment</a></li>
                             <li><a href="{{ url('/admin/invoice') }}">Invoice</a></li>
                             <li><a href="{{ route('admin.payment.topup') }}">Wallet Top-Up</a></li>
-                            <li><a href="{{ route('admin.wallet.test-webhook') }}">Test Webhook</a></li>
+                            {{-- <li><a href="{{ route('admin.wallet.test-webhook') }}">Test Webhook</a></li> --}}
                         </ul>
                     </li>
                     <li class="header">PHARMACY</li>

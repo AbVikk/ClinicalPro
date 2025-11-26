@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth; 
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Mail; // Added
+use App\Mail\WelcomeEmail;           // Added
 use App\Services\AppointmentQueryService; 
 use App\Services\AppointmentBookingService; 
 use App\Traits\ManagesAdminCache;
@@ -132,13 +134,38 @@ class BookAppointmentController extends Controller
         ]);
         
         try {
-            $user = new User();
-            $user->name = $request->input('name');
-            $user->phone = $request->input('phone');
-            $user->email = $request->input('email');
-            $user->save();
+            // 1. Generate Password
+            $rawPassword = Str::random(10);
 
-            return redirect()->route('admin.book.appointment')->with('info', 'Patient created successfully! You can now proceed to booking.');
+            // 2. Create User
+            $user = User::create([
+                'name' => $request->input('name'),
+                'phone' => $request->input('phone'),
+                'email' => $request->input('email'),
+                'password' => Hash::make($rawPassword),
+                'role' => 'patient',
+                'status' => 'active',
+                'user_id' => 'PID' . (User::max('id') + 1),
+                'email_verified_at' => now(),
+            ]);
+
+            // 3. Create Profile
+            if(method_exists($user, 'patient')) {
+                $user->patient()->create(['user_id' => $user->id]);
+            }
+
+            // 4. Send Email
+            if ($request->input('email')) {
+                try {
+                    Mail::to($user->email)->send(new WelcomeEmail($user, $rawPassword));
+                } catch (\Exception $e) {
+                    Log::error("Failed to send admin walk-in email: " . $e->getMessage());
+                }
+            }
+
+            return redirect()->route('admin.book-appointment', ['patient_id' => $user->user_id])
+                           ->with('success', "Patient created! Credentials sent to email.");
+
         } catch (\Exception $e) {
             Log::error("[BookAppointmentController] Failed to store walk-in patient: " . $e->getMessage());
             return redirect()->back()->with('error', 'Error creating patient: ' . $e->getMessage())->withInput();

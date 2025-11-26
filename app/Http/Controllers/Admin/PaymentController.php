@@ -11,35 +11,94 @@ use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Http; 
 use Illuminate\Support\Facades\Log; 
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache; 
-use Illuminate\Support\Facades\DB;
 use App\Services\PaymentService;
 
 class PaymentController extends Controller
 {
-    protected $paystackBaseUrl = 'https://api.paystack.co';
     protected $paymentService;
 
-    /**
-     * =========================================================================
-     * REFRACTORED CONSTRUCTOR
-     * =========================================================================
-     * We inject the PaymentService here so the whole controller can use it.
-     */
     public function __construct(PaymentService $paymentService)
     {
         $this->paymentService = $paymentService;
     }
+
+    /**
+     * THE TRAFFIC COP: Verify Payment & Redirect based on Role
+     */
+    public function verifyPayment(Request $request)
+    {
+        $reference = $request->query('reference');
+        
+        Log::info("[PaymentController] Verifying reference: " . $reference);
+
+        if (!$reference) {
+            if (Auth::check() && Auth::user()->role === 'nurse') {
+                return redirect()->route('nurse.dashboard')->with('error', 'Payment reference missing.');
+            }
+            return redirect()->route('admin.index')->with('error', 'Payment reference not found.');
+        }
+
+        try {
+            // 1. Delegate to Service
+            $payment = $this->paymentService->handleVerification($reference);
+
+            if (!$payment) {
+                return $this->handleFailedRedirect($reference, 'Verification failed at gateway.');
+            }
+
+            // 2. Check Success Status
+            if ($payment->status === Payment::STATUS_PAID || $payment->status === Payment::STATUS_COMPLETED) {
+                
+                // 3. TRAFFIC CONTROL: Check who started this payment
+                $metadata = $payment->metadata ?? [];
+                $roleInitiator = $metadata['role_initiator'] ?? null;
+
+                // --- NURSE REDIRECTION ---
+                if ($roleInitiator === 'nurse') {
+                    return redirect()->route('nurse.payments.success.public', ['reference' => $payment->reference])
+                                   ->with('success', 'Payment verified successfully!');
+                }
+                
+                // --- PATIENT REDIRECTION ---
+                if ($roleInitiator === 'patient') {
+                    return redirect()->route('patient.dashboard')
+                                   ->with('success', 'Payment successful!');
+                }
+
+                // --- DEFAULT: ADMIN REDIRECTION ---
+                return view('admin.payments.success', ['payment' => $payment]);
+            } 
+            
+            return $this->handleFailedRedirect($reference, 'Payment was not successful.');
+
+        } catch (\Exception $e) {
+            Log::error("[PaymentController] Exception: " . $e->getMessage());
+            return $this->handleFailedRedirect($reference, 'Server error during verification.');
+        }
+    }
+
+    /**
+     * Helper to handle failed redirects based on who is logged in
+     */
+    private function handleFailedRedirect($reference, $message)
+    {
+        if (Auth::check() && Auth::user()->role === 'nurse') {
+            return redirect()->route('nurse.payments.failed.public', ['reference' => $reference])
+                           ->with('error', $message);
+        }
+
+        return view('admin.payments.failed', ['errorMessage' => $message]);
+    }
+
+    // --- OTHER METHODS (Standard CRUD) ---
 
     public function index()
     {
         $payments = Payment::with(['user', 'appointment', 'consultation'])
             ->orderBy('created_at', 'desc')
             ->paginate(10);
-            
         return view('admin.payments.index', compact('payments'));
     }
 
@@ -48,7 +107,6 @@ class PaymentController extends Controller
         $patients = User::where('role', 'patient')->get();
         $doctors = User::where('role', 'doctor')->get();
         $appointments = Appointment::with(['patient', 'doctor'])->get();
-        
         return view('admin.payments.create', compact('patients', 'doctors', 'appointments'));
     }
 
@@ -57,49 +115,18 @@ class PaymentController extends Controller
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,id',
             'amount' => 'required|numeric|min:0',
-            'method' => 'required|in:cash,cheque,credit_card,debit_card,netbanking,insurance,paystack,bank_transfer',
-            'status' => 'required|in:pending,completed,failed,refunded,paid,pending_cash_verification',
-            'reference' => 'nullable|string|max:255',
-            'transaction_date' => 'nullable|date',
+            'method' => 'required|string',
+            'status' => 'required|string',
         ]);
 
         if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
+            return redirect()->back()->withErrors($validator)->withInput();
         }
-        $methodMapping = [
-            'credit_card' => 'card_online',
-            'debit_card' => 'card_online',
-            'cash' => 'cash_in_clinic',
-            'cheque' => 'cash_in_clinic',
-        ];
-        $method = $request->input('method');
-        if (isset($methodMapping[$method])) {
-            $method = $methodMapping[$method];
-        }
-        $statusMapping = [
-            'completed' => 'paid',
-            'pending' => 'pending_cash_verification',
-        ];
-        $status = $request->status;
-        if (isset($statusMapping[$status])) {
-            $status = $statusMapping[$status];
-        }
-        $payment = Payment::create([
-            'user_id' => $request->user_id,
-            'amount' => $request->amount,
-            'method' => $method,
-            'status' => $status,
-            'reference' => $request->reference,
-            'transaction_date' => $request->transaction_date ?? now(),
-            'clinic_id' => Auth::user()->clinic_id ?? 1, 
-        ]);
-        if ($status === 'paid') {
-            Cache::forget("admin_stats_total_payments_month");
-        }
-        return redirect()->route('admin.payments.index')
-            ->with('success', 'Payment added successfully.');
+
+        Payment::create($request->all());
+        Cache::forget("admin_stats_total_payments_month");
+        
+        return redirect()->route('admin.payments.index')->with('success', 'Payment added.');
     }
 
     public function show(Payment $payment)
@@ -112,136 +139,27 @@ class PaymentController extends Controller
     {
         $patients = User::where('role', 'patient')->get();
         $doctors = User::where('role', 'doctor')->get();
-        $methodMapping = [
-            'card_online' => 'credit_card',
-            'cash_in_clinic' => 'cash',
-            'bank_transfer' => 'bank_transfer',
-        ];
-        $payment->method = $methodMapping[$payment->method] ?? $payment->method;
         return view('admin.payments.edit', compact('payment', 'patients', 'doctors'));
     }
 
     public function update(Request $request, Payment $payment)
     {
-         $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:users,id',
-            'amount' => 'required|numeric|min:0',
-            'method' => 'required|in:cash,cheque,credit_card,debit_card,netbanking,insurance,paystack,bank_transfer',
-            'status' => 'required|in:pending,completed,failed,refunded,paid,pending_cash_verification',
-            'reference' => 'nullable|string|max:255',
-            'transaction_date' => 'nullable|date',
-        ]);
-        if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
-        }
-        $methodMapping = [
-            'credit_card' => 'card_online',
-            'debit_card' => 'card_online',
-            'cash' => 'cash_in_clinic',
-            'cheque' => 'cash_in_clinic',
-        ];
-        $method = $request->input('method');
-        if (isset($methodMapping[$method])) {
-            $method = $methodMapping[$method];
-        }
-        $statusMapping = [
-            'completed' => 'paid',
-            'pending' => 'pending_cash_verification',
-        ];
-        $status = $request->status;
-        if (isset($statusMapping[$status])) {
-            $status = $statusMapping[$status];
-        }
-        $payment->update([
-            'user_id' => $request->user_id,
-            'amount' => $request->amount,
-            'method' => $method,
-            'status' => $status,
-            'reference' => $request->reference,
-            'transaction_date' => $request->transaction_date ?? $payment->transaction_date,
-        ]);
+        $payment->update($request->all());
         Cache::forget("admin_stats_total_payments_month");
-        return redirect()->route('admin.payments.index')
-            ->with('success', 'Payment updated successfully.');
+        return redirect()->route('admin.payments.index')->with('success', 'Payment updated.');
     }
 
     public function destroy(Payment $payment)
     {
         $payment->delete();
         Cache::forget("admin_stats_total_payments_month");
-        return redirect()->route('admin.payments.index')
-            ->with('success', 'Payment deleted successfully.');
+        return redirect()->route('admin.payments.index')->with('success', 'Payment deleted.');
     }
 
     public function invoiceList()
     {
-        $payments = Payment::with(['user', 'appointment.doctor'])
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-            
+        $payments = Payment::with(['user', 'appointment.doctor'])->orderBy('created_at', 'desc')->paginate(10);
         return view('admin.invoice', compact('payments'));
-    }
-
-    public function initializePaystack(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'amount' => 'required|numeric|min:100', 
-            'metadata' => 'nullable|array',
-        ]);
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 422);
-        }
-        $amountInKobo = $request->amount * 100;
-        $paystack = new \Yabacon\Paystack(config('services.paystack.secret_key'));
-        try {
-            $tranx = $paystack->transaction->initialize([
-                'amount' => $amountInKobo,
-                'email' => $request->email,
-                'callback_url' => route('admin.payments.paystack.callback'),
-                'metadata' => $request->metadata ?? [],
-            ]);
-            return response()->json(['authorization_url' => $tranx->data->authorization_url]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => 'Payment initialization failed: ' . $e->getMessage()], 500);
-        }
-    }
-
-    public function handlePaystackCallback(Request $request)
-    {
-        $paystack = new \Yabacon\Paystack(config('services.paystack.secret_key'));
-        try {
-            $tranx = $paystack->transaction->verify([
-                'reference' => $request->reference,
-            ]);
-            if ('success' === $tranx->data->status) {
-                $payment = Payment::updateOrCreate(
-                    ['reference' => $request->reference],
-                    [
-                        'user_id' => Auth::id(),
-                        'amount' => $tranx->data->amount / 100, 
-                        'method' => 'card_online', 
-                        'status' => 'paid', 
-                        'transaction_date' => now(),
-                        'clinic_id' => Auth::user()->clinic_id ?? 1,
-                    ]
-                );
-                Cache::forget("admin_stats_total_payments_month");
-                return view('admin.payments.success', compact('payment'));
-            } else {
-                $payment = Payment::where('reference', $request->reference)->first();
-                return view('admin.payments.failed', [
-                    'payment' => $payment,
-                    'errorMessage' => 'Payment was not successful. Please try again.'
-                ]);
-            }
-        } catch (\Exception $e) {
-            return view('admin.payments.failed', [
-                'errorMessage' => 'Payment verification failed: ' . $e->getMessage()
-            ]);
-        }
     }
 
     public function invoice(Payment $payment)
@@ -260,151 +178,64 @@ class PaymentController extends Controller
     {
         $request->validate(['amount' => 'required|integer|min:100', 'email' => 'required|email']);
         
-        // 1. Prepare data for the "expert"
-        $email = $request->email;
-        $amount = $request->amount;
         $metadata = [
             'admin_id' => Auth::id(), 
             'purpose' => 'Hospital Fund Top-Up',
-            'success_view' => 'admin.payments.success', // Admin success view
-            'failed_view' => 'admin.payments.failed', // Admin failed view
+            'role_initiator' => 'admin'
         ];
 
-        // 2. Ask the "expert" to do the work
-        $response = $this->paymentService->initializePaymentTransaction($email, $amount, $metadata);
+        $response = $this->paymentService->initializePaymentTransaction($request->email, $request->amount, $metadata);
 
-        // 3. Handle the expert's response
-        if (isset($response['error'])) {
+        if (isset($response['status']) && $response['status'] === false) {
             return response()->json($response, 500);
         }
         return response()->json($response);
     }
-
-    /**
-     * This function is now thin and refactored.
-     */
-    public function verifyPayment(Request $request)
+    
+    public function initializePaystack(Request $request)
     {
-        $reference = $request->query('reference');
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'amount' => 'required|numeric|min:1', 
+        ]);
         
-        Log::info("[PaymentController] Received Paystack verification callback for reference: " . $reference);
-
-        if (!$reference) {
-            return redirect()->route('admin.dashboard')->with('error', 'Payment reference not found.');
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'message' => $validator->errors()->first()], 422);
         }
 
-        try {
-            // 1. MANAGER: Tell the Expert Worker (PaymentService) to handle the verification.
-            $result = $this->paymentService->handleVerification($reference);
+        $metadata = $request->metadata ?? [];
+        $metadata['role_initiator'] = 'admin'; 
 
-            // 2. MANAGER: Handle the outcome based on the result.
-            // Get the payment to check metadata
-            $payment = Payment::where('reference', $reference)->first();
-            
-            if ($result instanceof Payment && $result->status === 'paid') {
-                // Check if this payment was initiated by a nurse
-                // Since metadata is already an array due to model casting, we don't need to decode it
-                $paymentMetadata = $payment->metadata ?? [];
-                $roleInitiator = $paymentMetadata['role_initiator'] ?? null;
-                
-                if ($roleInitiator === 'nurse') {
-                    // For nurse payments, redirect to nurse payment success route
-                    // Pass reference as query parameter instead of route parameter
-                    \Illuminate\Support\Facades\Log::info('Redirecting nurse payment to success page', [
-                        'reference' => $result->reference,
-                        'route' => route('nurse.payments.success.public', ['reference' => $result->reference])
-                    ]);
-                    return redirect()->route('nurse.payments.success.public', ['reference' => $result->reference])
-                                   ->with('success', 'Payment successful! Appointment has been confirmed.');
-                } else {
-                    // For admin and other payments, return the view as before
-                    return view('admin.payments.success', ['payment' => $result]);
-                }
-            } else {
-                 $errorMessage = 'Payment verification failed or was unsuccessful.';
-                 
-                 // Check if this payment was initiated by a nurse
-                 if ($payment) {
-                     // Since metadata is already an array due to model casting, we don't need to decode it
-                     $paymentMetadata = $payment->metadata ?? [];
-                     $roleInitiator = $paymentMetadata['role_initiator'] ?? null;
-                     
-                     if ($roleInitiator === 'nurse') {
-                         return redirect()->route('nurse.payments.failed.public', ['reference' => $reference])
-                                        ->with('error', $errorMessage);
-                     }
-                 }
-                 
-                 // Handle failed payments for admin and others
-                 return view('admin.payments.failed', ['errorMessage' => $errorMessage]);
-            }
-
-        } catch (\Exception $e) {
-            Log::error("[PaymentController] FATAL EXCEPTION in verification process: " . $e->getMessage());
-            $errorMessage = 'Verification server error: ' . $e->getMessage();
-            return view('admin.payments.failed', compact('errorMessage'));
-        }
+        $result = $this->paymentService->initializePaymentTransaction($request->email, $request->amount, $metadata);
+        
+        return response()->json($result);
     }
-
+    
+    public function handlePaystackCallback(Request $request)
+    {
+        return $this->verifyPayment($request);
+    }
+    
     public function showPendingPayment($reference = null)
     {
         $payment = null;
         if ($reference) {
             $payment = Payment::where('reference', $reference)->first();
         }
-        
         return view('admin.payments.pending', compact('payment'));
     }
-
+    
     public function initializeAppointmentPayment(Request $request)
     {
-        // This 'GET' part just shows the page, it's fine.
         if ($request->isMethod('get')) {
-            $consultationId = $request->input('consultation_id');
-            $paymentId = $request->input('payment_id');
-            $serviceId = $request->input('service_id');
-            $patientId = $request->input('patient_id');
-            $consultation = Consultation::findOrFail($consultationId);
-            $payment = Payment::findOrFail($paymentId);
-            $patient = User::findOrFail($consultation->patient_id);
-            $service = Service::findOrFail($serviceId ?? $consultation->service_type);
+            $consultation = Consultation::find($request->consultation_id);
+            $payment = Payment::find($request->payment_id);
+            $patient = User::find($request->patient_id);
+            $service = Service::find($request->service_id);
             $publicKey = config('services.paystack.public_key');
+            
             return view('admin.appointment-payment', compact('consultation', 'payment', 'patient', 'publicKey', 'service'));
         }
-
-        // --- This is the 'POST' part, which we are refactoring ---
-        $request->validate([
-            'consultation_id' => 'required|exists:consultations,id',
-            'payment_id' => 'required|exists:payments,id',
-            'email' => 'required|email',
-        ]);
-
-        $consultation = Consultation::findOrFail($request->consultation_id);
-        $payment = Payment::findOrFail($request->payment_id);
-        $service = Service::where('service_name', $consultation->service_type)->first();
-        
-        // 1. Prepare data for the "expert"
-        $email = $request->email;
-        $amount = $consultation->fee; // Get the fee from the consultation
-        $metadata = [
-            'patient_id' => $consultation->patient_id,
-            'service_id' => $service->id ?? null,
-            'consultation_id' => $consultation->id,
-            'payment_id' => $payment->id, // This is critical
-            'purpose' => 'Appointment Payment for ' . $consultation->service_type,
-            'success_view' => 'admin.payments.success', // Admin success view
-            'failed_view' => 'admin.payments.failed', // Admin failed view
-        ];
-
-        // 2. Ask the "expert" to do the work
-        $response = $this->paymentService->initializePaymentTransaction($email, $amount, $metadata);
-
-        // 3. Handle the expert's response
-        if (isset($response['error'])) {
-            return response()->json($response, 500);
-        }
-        
-        // The service gives us the full response, which is what the JS expects
-        return response()->json($response);
+        return response()->json(['error' => 'Method not allowed'], 405);
     }
 }

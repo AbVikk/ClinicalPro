@@ -2,36 +2,43 @@
 
 use Illuminate\Support\Facades\Broadcast;
 use App\Models\User;
-use Illuminate\Support\Facades\Log; // We'll keep logging
+use Illuminate\Support\Facades\Log;
 
 /*
 |--------------------------------------------------------------------------
 | Broadcast Channels
 |--------------------------------------------------------------------------
+|
+| Here you may register all of the event broadcasting channels that your
+| application supports. The given channel authorization callbacks are
+| used to check if an authenticated user can listen to the channel.
+|
 */
 
+// 1. User Private Channel
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
 
-
-// --- THIS IS THE CORRECT, SIMPLE RULE ---
-
-// We are looking for the SIMPLE, SHORT channel name.
-// e.g., "doctor-alerts.3"
-// Our bootstrap.js file will "knock on the door" asking for "private-doctor-alerts.3"
-// and Laravel is smart enough to match that to "doctor-alerts.{doctorId}"
+// 2. Doctor Alerts Channel (Secured + Logged)
 Broadcast::channel('doctor-alerts.{doctorId}', function (User $user, $doctorId) {
-
+    
     Log::info("[Broadcast Auth] Attempting to auth channel: doctor-alerts.{$doctorId}");
-    Log::info("[Broadcast Auth] User ID is: " . $user->id);
+    Log::info("[Broadcast Auth] Authenticated User ID: " . $user->id . " | Role: " . $user->role);
 
-    // Now we do our simple security check
-    if ($user->id == $doctorId && $user->role == 'doctor') {
-        Log::info("[Broadcast Auth] SUCCESS: User {$user->id} authorized for channel.");
-        return true; // ...you are IN!
+    // Security Check:
+    // 1. User must be a Doctor
+    // 2. User ID must match the channel ID
+    if ($user->role === 'doctor' && (int) $user->id === (int) $doctorId) {
+        Log::info("[Broadcast Auth] SUCCESS: Doctor {$user->id} authorized.");
+        return true; 
     }
 
-    Log::warning("[Broadcast Auth] FAILED: User {$user->id} denied for channel.");
-    return false; // ...you are NOT allowed.
+    Log::warning("[Broadcast Auth] FAILED: User {$user->id} denied access to doctor-alerts.{$doctorId}");
+    return false; 
 });
+
+// 3. Future P2P Chat Channel (Placeholder)
+// Broadcast::channel('chat.{roomId}', function ($user, $roomId) {
+//     return $user->canJoinRoom($roomId);
+// });

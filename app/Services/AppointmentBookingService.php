@@ -12,6 +12,8 @@ use App\Events\DoctorAlert;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\AppointmentConfirmationEmail;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
@@ -19,7 +21,6 @@ class AppointmentBookingService
 {
     /**
      * Handles the initial booking request.
-     * UPDATED LOGIC: For Online payments, we DO NOT create the Appointment record yet.
      */
     public function createAppointment(array $validatedData, string $paymentMethod): array
     {
@@ -54,14 +55,12 @@ class AppointmentBookingService
                 $locationId = $isVirtual ? 1 : (int)$validatedData['clinic_id'];
 
                 // 2. Status Logic
-                // If Cash: 'scheduled' (Nurse verifies). 
-                // If Online: 'pending' (Waiting for money).
                 $consultationStatus = ($paymentMethod === Payment::METHOD_CASH) ? 'scheduled' : 'pending';
                 $paymentStatus = ($paymentMethod === Payment::METHOD_CASH) 
                     ? Payment::STATUS_PENDING_VERIFICATION 
                     : Payment::STATUS_PENDING;
 
-                // 3. Create Consultation (Holds the slot safely)
+                // 3. Create Consultation
                 $consultation = Consultation::create([
                     'patient_id' => $patient->id,
                     'doctor_id' => $doctor->id,
@@ -87,8 +86,7 @@ class AppointmentBookingService
                     'reference' => 'CONS-' . $consultation->id . '-' . strtoupper(Str::random(6)),
                 ]);
 
-                // 5. CRITICAL CHANGE: Only create Appointment record if CASH.
-                // If Online, we wait for the webhook/callback in PaymentService.
+                // 5. If Cash, finalize immediately. If Online, wait for webhook.
                 if ($paymentMethod === Payment::METHOD_CASH) {
                     $this->createAppointmentRecord($consultation, $payment);
                 }
@@ -144,7 +142,24 @@ class AppointmentBookingService
             $payment->save();
         }
 
+        // Notify Doctor & Patient via Database
         $this->sendAppointmentNotifications($appointment, $consultation->patient, User::find($consultation->doctor_id));
+
+        // --- NEW: SEND EMAIL CONFIRMATION TO PATIENT ---
+        try {
+            // We reload the relationship to ensure doctor/clinic info is available for the email view
+            $appointment->load(['patient', 'doctor', 'consultation.clinic']);
+            
+            if ($appointment->patient && $appointment->patient->email) {
+                Mail::to($appointment->patient->email)->send(new AppointmentConfirmationEmail($appointment));
+                Log::info("[AppointmentBookingService] Confirmation email sent to: " . $appointment->patient->email);
+            }
+        } catch (\Exception $e) {
+            // We catch the error so the booking doesn't fail just because email failed
+            Log::error("[AppointmentBookingService] Failed to send confirmation email: " . $e->getMessage());
+        }
+        // -----------------------------------------------
+
         return $appointment;
     }
 

@@ -56,7 +56,7 @@
                     </a>
                 </li>                
                 <li class="nav-item">
-                    <a class="nav-link btn btn-white btn-round" href="{{ route('register') }}">SIGN UP</a>
+                    <a class="nav-link btn btn-white btn-round" href="{{ route('register.initial') }}">SIGN UP</a>
                 </li>
             </ul>
         </div>
@@ -98,7 +98,7 @@
                             </small>
                         </div>
                         <div id="countdownTimer" class="text-center" style="display: none; margin-top: 10px;">
-                            <small>OTP expires in <span id="countdown">300</span> seconds</small>
+                            <small>OTP expires in <span id="countdown">{{ $remaining_seconds ?? 300 }}</span> seconds</small>
                         </div>
                     </div>
                     <div class="footer text-center">
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('.otp-input').focus();
     
     // Start OTP expiration countdown
-    startOtpCountdown(300); // 5 minutes = 300 seconds
+    startOtpCountdown({{ $remaining_seconds ?? 300 }}); // Use actual remaining time or default to 300 seconds
     
     // Handle OTP input navigation
     const otpInputs = document.querySelectorAll('.otp-input');
@@ -251,7 +251,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 'email': email
             }),
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
             }
         })
         .then(response => response.json())
