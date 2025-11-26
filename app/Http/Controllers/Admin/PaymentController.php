@@ -206,6 +206,11 @@ class PaymentController extends Controller
         $metadata = $request->metadata ?? [];
         $metadata['role_initiator'] = 'admin'; 
 
+        // Add consultation_id to metadata if present in request
+        if ($request->has('consultation_id')) {
+            $metadata['consultation_id'] = $request->consultation_id;
+        }
+
         $result = $this->paymentService->initializePaymentTransaction($request->email, $request->amount, $metadata);
         
         return response()->json($result);

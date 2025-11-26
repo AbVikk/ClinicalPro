@@ -1025,10 +1025,47 @@
         0%, 80%, 100% { transform: scale(0); }
         40% { transform: scale(1.0); }
     }
+    
+    /* Markdown Styles for AI Response */
+    .chat-bubble-ai strong {
+        font-weight: 700;
+        color: #000;
+    }
+    .chat-bubble-ai em {
+        font-style: italic;
+    }
+    .chat-bubble-ai ul, .chat-bubble-ai ol {
+        padding-left: 20px;
+        margin: 5px 0;
+    }
+    .chat-bubble-ai li {
+        margin-bottom: 3px;
+    }
+    .chat-bubble-ai p {
+        margin-bottom: 10px;
+    }
+    .chat-bubble-ai p:last-child {
+        margin-bottom: 0;
+    }
+    .chat-bubble-ai h1, .chat-bubble-ai h2, .chat-bubble-ai h3 {
+        font-size: 1.1em;
+        font-weight: bold;
+        margin: 10px 0 5px;
+    }
+    .chat-bubble-ai code {
+        background-color: #f0f0f0;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.9em;
+    }
 </style>
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 @push('page-scripts')
+ <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+
  <script>
     $(document).ready(function() {
         // --- ALL OUR JQUERY SELECTORS ---
@@ -1059,6 +1096,14 @@
         let scrollTimer = null; 
         let isFastForward = false; 
 
+        // Configure Marked.js options
+        if (typeof marked !== 'undefined') {
+            marked.use({
+                breaks: true, // Enable line breaks
+                gfm: true     // Enable GitHub Flavored Markdown
+            });
+        }
+
         const typingIndicatorHtml = `
             <li class="chat-row-ai" id="ai-typing-indicator">
                 <div class="chat-info">
@@ -1077,8 +1122,6 @@
         const userRole = "{{ Auth::user()->role }}";
 
         // 2. We let Laravel build the *correct* URLs based on the user's role.
-        // This creates the proper URL (e.g., /admin/ai/chat-history or /doctor/ai/chat-history)
-        // by finding the *named routes* we created in Fix 2 and Fix 3.
         const AiRoutes = {
             history: '{{ route(Auth::user()->role . ".api.ai.chat-history") }}',
             send: '{{ route(Auth::user()->role . ".api.ai.scheduling") }}',
@@ -1108,10 +1151,19 @@
 
         function addAiMessage(text) {
             const safeText = text || '...';
+            // Parse Markdown and Sanitize HTML for Security
+            let htmlContent = safeText;
+            if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+                const rawHtml = marked.parse(safeText);
+                htmlContent = DOMPurify.sanitize(rawHtml);
+            } else {
+                htmlContent = safeText.replace(/\n/g, '<br>');
+            }
+
             const messageHtml = `
                 <li class="chat-row-ai">
                     <div class="chat-info">
-                        <span class="message chat-bubble-ai">${safeText.replace(/\n/g, '<br>')}</span>
+                        <span class="message chat-bubble-ai">${htmlContent}</span>
                     </div>
                 </li>
             `;
@@ -1138,6 +1190,7 @@
             fullAiResponse = text; 
             isFastForward = false; 
 
+            // Create container
             const messageHtml = `<li class="chat-row-ai"><div class="chat-info"><span class="message chat-bubble-ai"></span></div></li>`;
             chatBodyList.append(messageHtml);
 
@@ -1150,9 +1203,16 @@
             function type() {
                 if (index < text.length) {
                     if (isFastForward) {
-                        targetElement.html(fullAiResponse.replace(/\n/g, '<br>')); 
+                        // If fast forward, convert full markdown immediately
+                        if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+                            const rawHtml = marked.parse(fullAiResponse);
+                            targetElement.html(DOMPurify.sanitize(rawHtml));
+                        } else {
+                            targetElement.html(fullAiResponse.replace(/\n/g, '<br>'));
+                        }
                         index = text.length; 
                     } else {
+                        // Type raw characters for effect (simulates thinking/typing)
                         let char = text[index];
                         if (char === '\n') {
                             targetElement.append('<br>');
@@ -1165,6 +1225,13 @@
                     typewriterTimeout = setTimeout(type, speed);
                 } else {
                     typewriterTimeout = null;
+                    
+                    // FINISHED TYPING: Swap raw text with formatted Markdown HTML
+                    if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+                        const rawHtml = marked.parse(fullAiResponse);
+                        targetElement.html(DOMPurify.sanitize(rawHtml));
+                    }
+
                     fullAiResponse = '';
                     resetChatForm(); 
                 }
@@ -1185,7 +1252,7 @@
             chatBodyList.append(typingIndicatorHtml); 
             
             $.ajax({
-                url: AiRoutes.history, // <-- USES THE CORRECT, PRE-BUILT URL
+                url: AiRoutes.history,
                 type: 'GET',
                 dataType: 'json',
                 headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
@@ -1252,7 +1319,7 @@
             isFastForward = false;
             
             currentAiRequest = $.ajax({
-                url: AiRoutes.send, // <-- USES THE CORRECT, PRE-BUILT URL
+                url: AiRoutes.send,
                 type: 'POST',
                 data: formData,
                 processData: false, 
@@ -1375,7 +1442,7 @@
                 addAiMessage("Chat history cleared."); 
                 
                 $.ajax({
-                    url: AiRoutes.clear, // <-- USES THE CORRECT, PRE-BUILT URL
+                    url: AiRoutes.clear,
                     type: 'DELETE',
                     headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
                     success: function() {

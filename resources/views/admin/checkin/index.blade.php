@@ -38,9 +38,8 @@
 
             </div>
 
-            @if(session('success'))
-                <div class="alert alert-success">{{ session('success') }}</div>
-            @endif
+            @if(session('success')) <div class="alert alert-success">{{ session('success') }}</div> @endif
+            @if(session('error')) <div class="alert alert-danger">{{ session('error') }}</div> @endif
 
             <!-- Live Search Input -->
             <div class="row mb-3">
@@ -61,46 +60,78 @@
                     <table class="table table-hover" id="checkin-table">
                         <thead>
                             <tr>
-                                <th>Patient ID</th>
+                                {{-- <th>Patient ID</th> --}}
                                 <th>Patient</th>
                                 <th>Doctor</th>
                                 <th>Time</th>
-                                <th>Payment Status</th>
+                                <th>Status</th>
+                                <th>Payment</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse($patientsWaiting as $appointment)
                                 <tr class="checkin-row" 
-                                    data-patient-id="{{ $appointment->patient->id ?? '' }}"
+                                    {{-- data-patient-id="{{ $appointment->patient->id ?? '' }}" --}}
                                     data-patient-name="{{ strtolower($appointment->patient->name ?? '') }}"
-                                    data-doctor-name="{{ strtolower($appointment->doctor->name ?? '') }}"
+                                    data-doctor-name="{{ strtolower($appointment->doctor->name ?? 'Unassigned') }}"
                                     data-time="{{ $appointment->appointment_time->format('g:i A') }}"
                                     data-payment-status="{{ strtolower($appointment->payment->status ?? 'N/A') }}">
-                                    <td>{{ $appointment->patient->id ?? 'N/A' }}</td>
-                                    <td>{{ $appointment->patient->name ?? 'N/A' }}</td>
+                                    {{-- <td>{{ $appointment->patient->id ?? 'N/A' }}</td> --}}
+                                    <td>
+                                        <strong>{{ $appointment->patient->name ?? 'Unknown' }}</strong><br>
+                                        <small>{{ $appointment->patient->user_id ?? '' }}</small>
+                                    </td>
                                     <td>{{ $appointment->doctor->name ?? 'N/A' }}</td>
-                                    <td>{{ $appointment->appointment_time->format('g:i A') }}</td>
+                                    <td>{{ $appointment->appointment_time->format('h:i A') }}</td>
+                                    <td>
+                                        <span class="badge badge-{{ $appointment->status == 'approved' ? 'success' : 'warning' }}">
+                                            {{ ucfirst($appointment->status) }}
+                                        </span>
+                                    </td>
                                     <td>
                                         @if($appointment->payment)
-                                            <span class="badge badge-{{ $appointment->payment->status == 'paid' ? 'success' : ($appointment->payment->status == 'pending' ? 'warning' : 'secondary') }}">
-                                                {{ ucfirst($appointment->payment->status) }}
-                                            </span>
+                                            @if($appointment->payment->status == 'paid')
+                                                <span class="badge badge-success">PAID</span>
+                                            @else
+                                                <span class="badge badge-warning">PENDING</span>
+                                            @endif
                                         @else
                                             <span class="badge badge-secondary">N/A</span>
                                         @endif
                                     </td>
                                     <td>
-                                        {{-- Add payment confirmation logic here if needed --}}
-                                        <form action="{{ route('admin.checkin.store', $appointment) }}" method="POST">
-                                            @csrf
-                                            <button type="submit" class="btn btn-primary">Check In Patient</button>
-                                        </form>
+                                        <div class="d-flex align-items-center">
+                                            {{-- SCENARIO 1: Payment is Pending (Cash) --}}
+                                            @if($appointment->payment && $appointment->payment->status != 'paid')
+                                                <form action="{{ route('admin.checkin.confirm-payment', $appointment->payment->id) }}" method="POST" onsubmit="return confirm('Confirm cash received? This will confirm the appointment.');">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-success mr-2" title="Confirm Cash Payment">
+                                                        <i class="zmdi zmdi-money-box"></i> Confirm Payment
+                                                    </button>
+                                                </form>
+                                            
+                                            {{-- SCENARIO 2: Paid, but Doctor hasn't approved yet --}}
+                                            @elseif($appointment->status == 'pending')
+                                                <button class="btn btn-sm btn-secondary" disabled title="Waiting for Doctor Approval">
+                                                    <i class="zmdi zmdi-time"></i> Wait for Doctor
+                                                </button>
+
+                                            {{-- SCENARIO 3: Paid & Approved -> Ready to Check In --}}
+                                            @else
+                                                <form action="{{ route('admin.checkin.store', $appointment) }}" method="POST">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-primary" title="Send to Nurse">
+                                                        <i class="zmdi zmdi-check-circle"></i> Check In
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="text-center">No patients are waiting for check-in.</td>
+                                    <td colspan="6" class="text-center">No patients Today.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -116,33 +147,11 @@
     <script src="{{ asset('assets/bundles/mainscripts.bundle.js') }}"></script><!-- Custom Js --> 
     
     <!-- Live Search Script -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const searchInput = document.getElementById('checkin-search');
-            const tableRows = document.querySelectorAll('.checkin-row');
-            
-            searchInput.addEventListener('keyup', function() {
-                const searchTerm = this.value.toLowerCase().trim();
-                
-                tableRows.forEach(function(row) {
-                    const patientId = row.getAttribute('data-patient-id');
-                    const patientName = row.getAttribute('data-patient-name');
-                    const doctorName = row.getAttribute('data-doctor-name');
-                    const time = row.getAttribute('data-time');
-                    const paymentStatus = row.getAttribute('data-payment-status');
-                    
-                    // Check if any of the fields contain the search term
-                    if (searchTerm === '' || 
-                        patientId.includes(searchTerm) ||
-                        patientName.includes(searchTerm) ||
-                        doctorName.includes(searchTerm) ||
-                        time.includes(searchTerm) ||
-                        paymentStatus.includes(searchTerm)) {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
+   <script>
+        document.getElementById('checkin-search').addEventListener('keyup', function() {
+            let val = this.value.toLowerCase();
+            document.querySelectorAll('.checkin-row').forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(val) ? '' : 'none';
             });
         });
     </script>

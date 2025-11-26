@@ -224,6 +224,11 @@ Route::get('/payments/success', function () { return view('admin.payments.succes
 Route::get('/payments/failed', function () { return view('admin.payments.failed'); })->name('payments.failed');
 Route::get('/payments/pending', [Admin\PaymentController::class, 'showPendingPayment'])->name('payments.pending');
 
+// --- Check-in ---
+Route::get('/checkin', [Admin\CheckInController::class, 'index'])->name('checkin.index');
+Route::post('/checkin/{appointment}', [Admin\CheckInController::class, 'checkInPatient'])->name('checkin.store');
+Route::post('/checkin/payment/{payment}/confirm', [Admin\CheckInController::class, 'confirmPayment'])->name('checkin.confirm-payment');
+
 // --- Services ---
 Route::get('/services', [Admin\ServiceController::class, 'index'])->name('services.index');
 Route::get('/services/all', [Admin\ServiceController::class, 'showAll'])->name('services.all');
