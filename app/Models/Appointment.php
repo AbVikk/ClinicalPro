@@ -21,10 +21,15 @@ class Appointment extends Model
         'appointment_reason_id',
         'consultation_id', // <-- You added this (Correct!)
         'payment_id',      // <-- THIS IS THE NEW FIX (Bug A)
+        'started_at',      // <-- Added this for appointment start tracking
+        'completed_at',    // <-- Added this for appointment completion tracking
+        'end_reason',      // <-- Added this for appointment end reason
     ];
 
     protected $casts = [
         'appointment_time' => 'datetime',
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
 
     /**

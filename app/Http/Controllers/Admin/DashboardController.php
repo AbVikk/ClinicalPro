@@ -8,9 +8,10 @@ use App\Models\User;
 use App\Models\Appointment;
 use App\Models\Payment;
 use App\Models\Disbursement;
-use App\Models\Invitation; // <-- ADDED THIS, IT'S IMPORTANT
+use App\Models\Invitation;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
@@ -19,31 +20,28 @@ class DashboardController extends Controller
         // Set our cache time. 3600 seconds = 1 hour.
         $cacheTime = 3600;
         
-        // --- CACHED ---
-        // Get total users excluding admins
+        // =================================================================
+        // 1. KPI CARDS (Users, Registrations, Pending Actions)
+        // =================================================================
+
+        // Total Users (excluding admins)
         $totalUsers = Cache::remember("admin_stats_total_users", $cacheTime, function () {
             return User::where('role', '!=', 'admin')->count();
         });
         
-        // Calculate progress percentage: 1% for every 20 new users
+        // Calculate progress percentage (visual only)
         $progressPercentage = min(100, floor($totalUsers / 20));
-        
-        // Calculate the actual percentage for display
         $actualPercentage = min(100, ($totalUsers / 20) * 100);
         
-        // --- CACHED ---
-        // Get new registrations in the last 7 days (excluding admins)
+        // New Registrations (Last 7 Days)
         $newRegistrations = Cache::remember("admin_stats_new_registrations_7d", $cacheTime, function () {
             return User::where('role', '!=', 'admin')
                 ->where('created_at', '>=', now()->subDays(7))
                 ->count();
         });
-            
-        // Calculate progress for new registrations (1% per registration for visualization)
-        $newRegProgress = min(100, $newRegistrations * 5); // 5% per registration, capped at 100%
+        $newRegProgress = min(100, $newRegistrations * 5);
         
-        // --- CACHED ---
-        // Calculate change percentage for new registrations compared to previous week
+        // Calculate change vs previous week
         $previousWeekRegistrations = Cache::remember("admin_stats_prev_week_registrations", $cacheTime, function () {
             return User::where('role', '!=', 'admin')
                 ->whereBetween('created_at', [now()->subDays(14), now()->subDays(7)])
@@ -54,20 +52,16 @@ class DashboardController extends Controller
         if ($previousWeekRegistrations > 0) {
             $regChangePercentage = round((($newRegistrations - $previousWeekRegistrations) / $previousWeekRegistrations) * 100);
         } elseif ($newRegistrations > 0) {
-            $regChangePercentage = 100; // 100% increase if previous week was 0
+            $regChangePercentage = 100;
         }
         
-        // --- CACHED ---
-        // Get pending appointments count
+        // Pending Appointments
         $pendingAppointments = Cache::remember("admin_stats_pending_appointments", $cacheTime, function () {
             return Appointment::where('status', 'pending')->count();
         });
+        $pendingProgress = min(100, $pendingAppointments * 10);
         
-        // Calculate progress for pending appointments (10% per appointment for visualization)
-        $pendingProgress = min(100, $pendingAppointments * 10); // 10% per appointment, capped at 100%
-        
-        // --- CACHED ---
-        // Calculate change percentage for pending appointments compared to previous week
+        // Change vs previous week
         $previousWeekPending = Cache::remember("admin_stats_prev_week_pending", $cacheTime, function () {
             return Appointment::where('status', 'pending')
                 ->whereBetween('created_at', [now()->subDays(14), now()->subDays(7)])
@@ -78,72 +72,97 @@ class DashboardController extends Controller
         if ($previousWeekPending > 0) {
             $pendingChangePercentage = round((($pendingAppointments - $previousWeekPending) / $previousWeekPending) * 100);
         } elseif ($pendingAppointments > 0) {
-            $pendingChangePercentage = 100; // 100% increase if previous week was 0
+            $pendingChangePercentage = 100;
         }
         
-        // --- NEW CACHED QUERY ---
-        // This query was being run from your index.blade.php file, which is very slow.
-        // We moved it here and cached it.
+        // Pending Invitations
         $pendingInvitations = Cache::remember("admin_stats_pending_invitations", $cacheTime, function () {
             return Invitation::where('used', false)->where('expires_at', '>', now())->count();
         });
 
-        // Get system update/backup information from cache
-        // This part was already using the cache, so it's already fast!
+        // System Status (Fake data for UI visualization)
         $lastUpdate = Cache::get('system_last_update', 'Never');
         $lastBackup = Cache::get('system_last_backup', 'Never');
         
-        // For demo purposes, let's set some default values if not set
         if ($lastUpdate === 'Never') {
             $lastUpdate = now()->subDays(2)->format('Y-m-d H:i:s');
             Cache::put('system_last_update', $lastUpdate, now()->addDays(30));
         }
-        
         if ($lastBackup === 'Never') {
             $lastBackup = now()->subDay()->format('Y-m-d H:i:s');
             Cache::put('system_last_backup', $lastBackup, now()->addDays(30));
         }
         
-        // Calculate days since last update and backup
         $daysSinceUpdate = ($lastUpdate !== 'Never') ? now()->diffInDays(\Carbon\Carbon::parse($lastUpdate)) : 'N/A';
         $daysSinceBackup = ($lastBackup !== 'Never') ? now()->diffInDays(\Carbon\Carbon::parse($lastBackup)) : 'N/A';
-        
-        // Create a combined message for the card
         $systemInfo = "Update: {$daysSinceUpdate} days ago, Backup: {$daysSinceBackup} days ago";
+        $systemProgress = min(100, ($daysSinceBackup !== 'N/A') ? $daysSinceBackup * 3.33 : 50);
         
-        // Progress for system info (based on days since last backup, capped at 30 days = 100%)
-        $systemProgress = min(100, ($daysSinceBackup !== 'N/A') ? $daysSinceBackup * 3.33 : 50); // 3.33% per day, capped at 100%
-        
-        // Calculate net cash flow for current month
+        // =================================================================
+        // 2. FINANCIAL OVERVIEW (This Month)
+        // =================================================================
         $startDate = now()->startOfMonth();
         $endDate = now()->endOfMonth();
         
-        // --- CACHED ---
-        // Get total payments for current month
         $totalPayments = Cache::remember("admin_stats_total_payments_month", $cacheTime, function () use ($startDate, $endDate) {
             return Payment::where('status', 'paid')
                 ->whereBetween('transaction_date', [$startDate, $endDate])
                 ->sum('amount');
         });
         
-        // --- CACHED ---
-        // Get total disbursements for current month
         $totalDisbursements = Cache::remember("admin_stats_total_disbursements_month", $cacheTime, function () use ($startDate, $endDate) {
             return Disbursement::where('status', 'processed')
                 ->whereBetween('disbursement_date', [$startDate, $endDate])
                 ->sum('amount');
         });
         
-        // Calculate net cash flow
         $netCashFlow = $totalPayments - $totalDisbursements;
         
-        // Format the net cash flow for display
         $formattedNetCashFlow = number_format($netCashFlow, 2);
         $formattedTotalPayments = number_format($totalPayments, 2);
         $formattedTotalDisbursements = number_format($totalDisbursements, 2);
         
-        // --- CACHED ---
-        // Get recent appointments (limit 5) with patient and doctor information
+        // =================================================================
+        // 3. ANALYTICS CHARTS (Merged Logic)
+        // =================================================================
+        
+        // A. Revenue Chart (Last 6 Months)
+        $revenueData = Cache::remember("admin_chart_revenue", $cacheTime, function () {
+            return Payment::select(
+                DB::raw('SUM(amount) as total'),
+                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month")
+            )
+            ->where('status', 'paid')
+            ->where('created_at', '>=', Carbon::now()->subMonths(6))
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+        });
+
+        // B. Top Performing Doctors (Top 5)
+        $topDoctors = Cache::remember("admin_chart_doctors", $cacheTime, function () {
+            return Appointment::select('doctor_id', DB::raw('count(*) as total'))
+                ->where('status', 'completed')
+                ->with('doctor')
+                ->groupBy('doctor_id')
+                ->orderByDesc('total')
+                ->limit(5)
+                ->get();
+        });
+
+        // C. Appointment Status Breakdown (Pie Chart)
+        $appointmentStats = Cache::remember("admin_chart_status", $cacheTime, function () {
+            return Appointment::select('status', DB::raw('count(*) as total'))
+                ->groupBy('status')
+                ->pluck('total', 'status')
+                ->toArray();
+        });
+        
+        // =================================================================
+        // 4. DATA LISTS (Tables)
+        // =================================================================
+
+        // Recent Appointments
         $recentAppointments = Cache::remember("admin_stats_recent_appointments", $cacheTime, function () {
             return Appointment::with(['patient', 'doctor'])
                 ->whereHas('patient')
@@ -152,16 +171,14 @@ class DashboardController extends Controller
                 ->get();
         });
         
-        // --- CACHED ---
-        // Get available doctors for assignment
+        // Available Doctors (For assignment dropdowns)
         $availableDoctors = Cache::remember("admin_stats_available_doctors", $cacheTime, function () {
             return User::where('role', 'doctor')
                 ->where('status', 'verified')
                 ->get();
         });
         
-        // --- CACHED ---
-        // Get new patients (limit 5)
+        // New Patients List
         $newPatients = Cache::remember("admin_stats_new_patients_list", $cacheTime, function () {
             return User::where('role', 'patient')
                 ->orderBy('created_at', 'desc')
@@ -169,6 +186,9 @@ class DashboardController extends Controller
                 ->get();
         });
         
+        // =================================================================
+        // 5. RETURN VIEW
+        // =================================================================
         return view('admin.index', compact(
             'totalUsers', 
             'progressPercentage', 
@@ -179,7 +199,7 @@ class DashboardController extends Controller
             'pendingAppointments',
             'pendingProgress',
             'pendingChangePercentage',
-            'pendingInvitations', // <-- ADDED THIS VARIABLE
+            'pendingInvitations',
             'systemInfo',
             'systemProgress',
             'formattedNetCashFlow',
@@ -189,7 +209,11 @@ class DashboardController extends Controller
             'formattedTotalDisbursements',
             'recentAppointments',
             'availableDoctors',
-            'newPatients'
+            'newPatients',
+            // Chart Data
+            'revenueData',
+            'topDoctors',
+            'appointmentStats'
         ));
     }
 }

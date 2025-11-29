@@ -14,6 +14,7 @@ class ClinicalNote extends Model
         'doctor_id',
         'note_text',
         'skin_allergy',
+        'note_type',  // Added this field
     ];
 
     // Relationships

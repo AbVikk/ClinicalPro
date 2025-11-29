@@ -115,6 +115,10 @@ Route::get('/nurse/payments/success', [NurseController::class, 'paymentSuccess']
 Route::get('/nurse/payments/failed', [NurseController::class, 'paymentFailed'])->name('nurse.payments.failed.public');
 Route::get('/nurse/payments/pending', [NurseController::class, 'paymentPending'])->name('nurse.payments.pending.public');
 
+// --- QUEUE MONITOR (PUBLIC TV) ---
+Route::get('/monitor', [App\Http\Controllers\QueueMonitorController::class, 'index'])->name('monitor.index');
+Route::get('/monitor/content', [App\Http\Controllers\QueueMonitorController::class, 'content'])->name('monitor.content');
+
 // [Security Cleanup] - Commented out Debug Routes
 // Route::get('/admin/wallet/test-webhook', function () { return view('admin.wallet.test_webhook'); });
 // Route::get('/test-redis', function () { ... });

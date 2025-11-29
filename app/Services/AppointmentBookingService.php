@@ -14,11 +14,19 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\AppointmentConfirmationEmail;
+use App\Services\SmsService;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class AppointmentBookingService
 {
+    protected $smsService;
+
+    public function __construct()
+    {
+        $this->smsService = new SmsService();
+    }
+
     /**
      * Handles the initial booking request.
      */
@@ -118,7 +126,7 @@ class AppointmentBookingService
 
     /**
      * Creates the official Appointment record.
-     * Public because PaymentService uses this on success.
+     * Uses SmsService to notify patient.
      */
     public function createAppointmentRecord(Consultation $consultation, Payment $payment): Appointment
     {
@@ -142,23 +150,38 @@ class AppointmentBookingService
             $payment->save();
         }
 
-        // Notify Doctor & Patient via Database
+        // 1. Notify via Database (In-App)
         $this->sendAppointmentNotifications($appointment, $consultation->patient, User::find($consultation->doctor_id));
 
-        // --- NEW: SEND EMAIL CONFIRMATION TO PATIENT ---
+        // 2. Notify via Email
         try {
-            // We reload the relationship to ensure doctor/clinic info is available for the email view
             $appointment->load(['patient', 'doctor', 'consultation.clinic']);
-            
             if ($appointment->patient && $appointment->patient->email) {
                 Mail::to($appointment->patient->email)->send(new AppointmentConfirmationEmail($appointment));
-                Log::info("[AppointmentBookingService] Confirmation email sent to: " . $appointment->patient->email);
             }
         } catch (\Exception $e) {
-            // We catch the error so the booking doesn't fail just because email failed
-            Log::error("[AppointmentBookingService] Failed to send confirmation email: " . $e->getMessage());
+            Log::error("[AppointmentBookingService] Email Failed: " . $e->getMessage());
         }
-        // -----------------------------------------------
+
+        // 3. Notify via SMS / WhatsApp (NEW)
+        try {
+            if ($appointment->patient && $appointment->patient->phone) {
+                
+                $date = Carbon::parse($appointment->appointment_time)->format('D, M d @ h:i A');
+                $doctorName = $appointment->doctor->name ?? 'Doctor';
+                
+                // Short, clear message
+                $smsMessage = "Hello {$appointment->patient->name}, your appointment with Dr. {$doctorName} is confirmed for {$date}. Please arrive 15mins early.";
+                
+                // Send SMS
+                $this->smsService->send($appointment->patient->phone, $smsMessage, 'sms');
+                
+                // Optional: Send WhatsApp if you have it configured
+                // $this->smsService->send($appointment->patient->phone, $smsMessage, 'whatsapp');
+            }
+        } catch (\Exception $e) {
+            Log::error("[AppointmentBookingService] SMS Failed: " . $e->getMessage());
+        }
 
         return $appointment;
     }

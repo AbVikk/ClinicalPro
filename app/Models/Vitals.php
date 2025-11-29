@@ -11,6 +11,7 @@ class Vitals extends Model
 
     protected $fillable = [
         'appointment_id',
+        'doctor_id',
         'recorded_at',
         'blood_pressure',
         'temperature',
@@ -32,5 +33,10 @@ class Vitals extends Model
     public function appointment()
     {
         return $this->belongsTo(Appointment::class);
+    }
+    
+    public function doctor()
+    {
+        return $this->belongsTo(User::class, 'doctor_id');
     }
 }

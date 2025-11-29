@@ -80,3 +80,4 @@ Route::delete('/prescriptions/{prescription}', [Doctor\DashboardController::clas
 Route::get('/ajax/request-count', [Doctor\DashboardController::class, 'ajaxGetRequestCount'])->name('ajax.requestCount');
 Route::get('/ajax/notification-count', [Doctor\DashboardController::class, 'ajaxGetNotificationCount'])->name('ajax.notificationCount');
 
+Route::get('/prescriptions/{prescription}/print', [Doctor\DashboardController::class, 'printPrescription'])->name('prescriptions.print');

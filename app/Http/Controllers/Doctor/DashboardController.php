@@ -14,6 +14,8 @@ use App\Models\Vitals;
 use App\Models\ClinicalNote;
 use App\Models\Medication;
 use App\Models\Prescription;
+use App\Models\PrescriptionItem;
+use App\Models\Drug;
 use App\Models\User;
 use App\Models\Clinic; 
 use App\Models\LabTest; 
@@ -169,11 +171,37 @@ class DashboardController extends Controller
         }
     }
     private function saveMedications(Request $request, $appointmentId) {
+        // Delete existing medications for this appointment
         Medication::where('appointment_id', $appointmentId)->delete();
+        
+        // Get the appointment to get patient and doctor info
+        $appointment = Appointment::find($appointmentId);
+        if (!$appointment) {
+            return;
+        }
+        
         if ($request->medications) {
+            // Create/update prescription
+            $prescription = Prescription::updateOrCreate(
+                [
+                    'patient_id' => $appointment->patient_id,
+                    'doctor_id' => $appointment->doctor_id,
+                    'consultation_id' => $appointment->consultation_id,
+                ],
+                [
+                    'status' => 'active',
+                    'notes' => 'Prescribed during appointment #' . $appointmentId,
+                    'refills_allowed' => 0,
+                ]
+            );
+            
+            // Clear existing prescription items
+            $prescription->items()->delete();
+            
             foreach ($request->medications as $medicationData) {
                 $medName = $medicationData['name'] ?? null; 
                 if (!empty($medName)) { 
+                    // Save to medications table (existing functionality)
                     Medication::create([
                         'appointment_id' => $appointmentId,
                         'medication_name' => $medName,
@@ -182,6 +210,23 @@ class DashboardController extends Controller
                         'duration' => $medicationData['duration'] ?? null,
                         'use_pattern' => $medicationData['use_pattern'] ?? null, 
                         'instructions' => $medicationData['instructions'] ?? null,
+                    ]);
+                    
+                    // Also save to prescription items table (new functionality)
+                    // Try to find drug by name
+                    $drug = Drug::where('name', 'LIKE', "%{$medName}%")->first();
+                    
+                    PrescriptionItem::create([
+                        'prescription_id' => $prescription->id,
+                        'drug_id' => $drug ? $drug->id : null,
+                        'medication_name' => $medName,
+                        'type' => $medicationData['type'] ?? null,
+                        'dosage' => $medicationData['dosage'] ?? null,
+                        'duration' => $medicationData['duration'] ?? null,
+                        'use_pattern' => $medicationData['use_pattern'] ?? null,
+                        'instructions' => $medicationData['instructions'] ?? null,
+                        'quantity' => 1, // Default quantity
+                        'fulfillment_status' => 'pending',
                     ]);
                 }
             }
@@ -637,14 +682,19 @@ class DashboardController extends Controller
             AppointmentDetail::firstOrCreate([
                 'appointment_id' => $appointment->id
             ]);
+            
+            // Improved error handling for doctor profile update
             try {
                 $doctorProfile = Auth::user()->doctorProfile; 
                 if ($doctorProfile) {
                     $doctorProfile->live_status = 'In Appointment';
                     $doctorProfile->save();
+                } else {
+                    Log::warning('Doctor profile not found for user ID: ' . $doctorId);
                 }
             } catch (\Exception $e) {
                 Log::error('Failed to update live_status on startAppointment: ' . $e->getMessage());
+                // Continue with the process even if we can't update live_status
             }
 
             // --- FIX ---
@@ -658,7 +708,8 @@ class DashboardController extends Controller
                 'redirect_url' => route('doctor.appointments.details', $appointment->id)
             ]);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error starting appointment: ' . $e->getMessage()], 500);
+            Log::error('Error starting appointment: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
+            return response()->json(['success' => false, 'message' => 'Error starting appointment. Please try again.'], 500);
         }
     }
     
@@ -692,14 +743,19 @@ class DashboardController extends Controller
                     ]);
                 }
             }
+            
+            // Improved error handling for doctor profile update
             try {
                 $doctorProfile = Auth::user()->doctorProfile; 
                 if ($doctorProfile) {
                     $doctorProfile->live_status = 'Available';
                     $doctorProfile->save();
+                } else {
+                    Log::warning('Doctor profile not found for user ID: ' . $doctorId);
                 }
             } catch (\Exception $e) {
                 Log::error('Failed to update live_status on endAppointment: ' . $e->getMessage());
+                // Continue with the process even if we can't update live_status
             }
 
             // --- FIX ---
@@ -715,8 +771,9 @@ class DashboardController extends Controller
             }
             return redirect()->route('doctor.dashboard')->with('success', 'Appointment completed successfully');
         } catch (\Exception $e) {
-            if ($request->ajax()) { return response()->json(['success' => false, 'message' => 'Error completing appointment: ' . $e->getMessage()], 500); }
-            return redirect()->back()->with('error', 'Error completing appointment: ' . $e->getMessage());
+            Log::error('Error completing appointment: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
+            if ($request->ajax()) { return response()->json(['success' => false, 'message' => 'Error completing appointment. Please try again.'], 500); }
+            return redirect()->back()->with('error', 'Error completing appointment. Please try again.');
         }
     }
     public function getRequestCount()
@@ -1316,7 +1373,7 @@ class DashboardController extends Controller
         $notifications = $this->getUnreadNotifications();
         $notificationCount = $this->getNotificationCount();
         $requestCount = $this->getAppointmentRequestCount();
-        $prescription->load(['patient', 'items.drug', 'doctor']);
+        $prescription->load(['patient', 'items.drug', 'doctor', 'consultation']);
         return view('doctor.prescription-show', compact(
             'prescription', 'notifications', 'notificationCount', 'requestCount'
         ));
@@ -1339,6 +1396,24 @@ class DashboardController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to delete prescription: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Generate PDF for a prescription
+     */
+    public function printPrescription($prescriptionId)
+    {
+        $prescription = \App\Models\Prescription::with(['patient', 'doctor.doctorProfile', 'items.drug', 'consultation'])
+            ->where('doctor_id', Auth::id())
+            ->findOrFail($prescriptionId);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.prescription', compact('prescription'));
+        
+        // Download the file with a nice name like "Prescription-JohnDoe-2024.pdf"
+        $filename = 'Prescription-' . \Illuminate\Support\Str::slug($prescription->patient->name) . '-' . now()->format('Ymd') . '.pdf';
+        
+        return $pdf->download($filename);
+    }
+
     public function uploadLabTestResult(Request $request, \App\Models\LabTest $labTest)
     {
         $doctorId = Auth::user()->id;

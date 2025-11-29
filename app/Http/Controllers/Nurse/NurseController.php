@@ -239,7 +239,7 @@ class NurseController extends Controller
             Vitals::updateOrCreate(
                 ['appointment_id' => $appointment->id],
                 [
-                    'doctor_id' => $nurseId, 
+                    'doctor_id' => $appointment->doctor_id, 
                     'blood_pressure' => $request->input('blood_pressure'),
                     'temperature' => $request->input('temperature'),
                     'pulse' => $request->input('pulse'),

@@ -2,9 +2,8 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Schedule; // <-- VITAL: Import the Schedule Facade
-use App\Console\Commands\SendDueReminders; // <-- VITAL: Import your Command Class
-
+use Illuminate\Support\Facades\Schedule;
+use App\Console\Commands\SendDueReminders;
 /*
 |--------------------------------------------------------------------------
 | Console Routes
@@ -21,5 +20,8 @@ Artisan::command('inspire', function () {
 // 2. AI REMINDER SCHEDULER DEFINITION
 Schedule::command(SendDueReminders::class)
     ->everyMinute()
-    ->withoutOverlapping() // Ensures only one instance runs at a time
+    ->withoutOverlapping() 
     ->runInBackground();
+    
+    // Run the robot every day at 8:00 AM
+Schedule::command('appointments:remind')->dailyAt('08:00');

@@ -298,211 +298,30 @@
             <div class="col-lg-8 col-md-12">
                 <div class="card">
                     <div class="header">
-                        <h2><strong>Hospital</strong> Survey</h2>
+                        <h2><strong>Revenue</strong> Growth (Last 6 Months)</h2>
                         <ul class="header-dropdown">
-                            <li class="dropdown"> <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"> <i class="zmdi zmdi-more"></i> </a>
-                                <ul class="dropdown-menu dropdown-menu-right slideUp float-right">
-                                    <li><a href="javascript:void(0);">Edit</a></li>
-                                    <li><a href="javascript:void(0);">Delete</a></li>
-                                    <li><a href="javascript:void(0);">Report</a></li>
-                                </ul>
-                            </li>
                             <li class="remove">
                                 <a role="button" class="boxs-close"><i class="zmdi zmdi-close"></i></a>
                             </li>
                         </ul>
                     </div>                    
                     <div class="body">
-                        <!-- Nav tabs -->
-                        <ul class="nav nav-tabs padding-0">
-                            <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#chart-view">Chart View</a></li>
-                            <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#table-view">Table View</a></li>
-                        </ul>
-                            
-                        <!-- Tab panes -->
-                        <div class="tab-content m-t-10">
-                            <div class="tab-pane active" id="chart-view">
-                                <div id="area_chart" class="graph"></div>
-                                <div class="xl-slategray">
-                                    <div class="body">
-                                        <div class="row text-center">
-                                            <div class="col-sm-3 col-6">
-                                                <h4 class="margin-0">$106</h4>
-                                                <p class="text-muted margin-0"> Today's</p>
-                                            </div>
-                                            <div class="col-sm-3 col-6">
-                                                <h4 class="margin-0">$907</h4>
-                                                <p class="text-muted margin-0">This Week's</p>
-                                            </div>
-                                            <div class="col-sm-3 col-6">
-                                                <h4 class="margin-0">$4210</h4>
-                                                <p class="text-muted margin-0">This Month's</p>
-                                            </div>
-                                            <div class="col-sm-3 col-6">
-                                                <h4 class="margin-0">$7,000</h4>
-                                                <p class="text-muted margin-0">This Year's</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>                                
-                            </div>
-                            <div class="tab-pane" id="table-view">
-                                <div class="table-responsive">
-                                    <table class="table m-b-0 table-hover">
-                                        <thead>
-                                            <tr>                                                
-                                                <th>Name</th>
-                                                <th>Address</th>
-                                                <th>Earning</th>
-                                                <th>Reviews</th>
-                                                <th></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>                                                
-                                                <td>Hospital Name</td>
-                                                <td>Porterfield 508 Virginia Street Chicago, IL 60653</td>
-                                                <td>$2,325</td>
-                                                <td>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                </td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-neutral"><i class="zmdi zmdi-chart"></i></button>
-                                                </td>
-                                            </tr>
-                                            <tr>                                                
-                                                <td>Hospital Name</td>
-                                                <td>2595 Pearlman Avenue Sudbury, MA 01776 </td>
-                                                <td>$3,325</td>
-                                                <td>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                </td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-neutral"><i class="zmdi zmdi-chart"></i></button>
-                                                </td>
-                                            </tr>
-                                            <tr>                                                
-                                                <td>Hospital Name</td>
-                                                <td>Porterfield 508 Virginia Street Chicago, IL 60653</td>
-                                                <td>$5,021</td>
-                                                <td>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                </td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-neutral"><i class="zmdi zmdi-chart"></i></button>
-                                                </td>
-                                            </tr>
-                                            <tr>                                                
-                                                <td>Hospital Name</td>
-                                                <td>508 Virginia Street Chicago, IL 60653</td>
-                                                <td>$1,325</td>
-                                                <td>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star-outline"></i>
-                                                </td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-neutral"><i class="zmdi zmdi-chart"></i></button>
-                                                </td>
-                                            </tr>
-                                            <tr>                                                
-                                                <td>Hospital Name</td>
-                                                <td>1516 Holt Street West Palm Beach, FL 33401</td>
-                                                <td>$2,325</td>
-                                                <td>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star-outline"></i>
-                                                </td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-neutral"><i class="zmdi zmdi-chart"></i></button>
-                                                </td>
-                                            </tr>
-                                            <tr>                                                
-                                                <td>Hospital Name</td>
-                                                <td>508 Virginia Street Chicago, IL 60653</td>
-                                                <td>$2,325</td>
-                                                <td>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star col-amber"></i>
-                                                    <i class="zmdi zmdi-star-outline"></i>
-                                                </td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-neutral"><i class="zmdi zmdi-chart"></i></button>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>                    
+                        <canvas id="revenueChart" height="120"></canvas>                               
+                    </div>
                 </div>
             </div>
             <div class="col-lg-4 col-md-12">
                 <div class="card">
+                    <div class="header">
+                        <h2><strong>Appointment</strong> Status</h2>
+                    </div>
                     <div class="body">
-                        <div class="sparkline m-b-10" data-type="bar" data-width="97%" data-height="38px" data-bar-Width="2" data-bar-Spacing="6" data-bar-Color="#555555">2,8,5,3,1,7,9,5,6,4,2,3,1,2,8,5,3,1,7,9,5,6,4,2,3,1</div>
-                        <h6 class="text-center m-b-15">Total New Patient</h6>
-                        <div id="world-map-markers2" style="height:125px;"></div>
-                        <div class="table-responsive m-t-20">
-                            <table class="table table-striped m-b-0">
-                                <thead>
-                                    <tr>
-                                        <th>City</th>                                        
-                                        <th>Count</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>New York</td>
-                                        <td>215<i class="zmdi zmdi-trending-up m-l-10"></i></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Los Angeles</td>
-                                        <td>189<i class="zmdi zmdi-trending-up m-l-10"></i></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Chicago</td>
-                                        <td>408<i class="zmdi zmdi-trending-down m-l-10"></i></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Houston</td>
-                                        <td>78<i class="zmdi zmdi-trending-down m-l-10"></i></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Phoenix</td>
-                                        <td>148<i class="zmdi zmdi-trending-up m-l-10"></i></td>
-                                    </tr>
-                                    <tr>
-                                        <td>San Diego</td>
-                                        <td>102<i class="zmdi zmdi-trending-down m-l-10"></i></td>
-                                    </tr>                                    
-                                </tbody>
-                            </table>
-                        </div>
+                        <canvas id="statusChart" height="285"></canvas>
                     </div>
                 </div>
             </div>
-        </div>         
+        </div>
+        
         <div class="row clearfix">
             <div class="col-lg-4 col-md-12">
                 <div class="card">
@@ -602,118 +421,9 @@
                         </div>
                     </div>
                 </div>
-                <div class="card visitors-map">
-                    <div class="header">
-                        <h2><strong>Our</strong> Location <small>Contrary to popular belief, Lorem Ipsum is not simply random text</small></h2>
-                        <ul class="header-dropdown">
-                            <li class="dropdown"> <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"> <i class="zmdi zmdi-more"></i> </a>
-                                <ul class="dropdown-menu dropdown-menu-right slideUp">
-                                    <li><a href="javascript:void(0);">Action</a></li>
-                                    <li><a href="javascript:void(0);">Another action</a></li>
-                                    <li><a href="javascript:void(0);">Something else</a></li>
-                                </ul>
-                            </li>
-                            <li class="remove">
-                                <a role="button" class="boxs-close"><i class="zmdi zmdi-close"></i></a>
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="body">
-                        <div class="row">
-                            <div class="col-lg-6 col-md-12">
-                                <div id="world-map-markers" style="height:280px;"></div>
-                            </div>
-                            <div class="col-lg-6 col-md-12">
-                                <div class="body">
-                                    <ul class="row location_list list-unstyled">
-                                        <li class="col-lg-4 col-md-4 col-6">
-                                            <div class="body xl-turquoise">
-                                                <i class="zmdi zmdi-pin"></i>
-                                                <h4 class="number count-to" data-from="0" data-to="453" data-speed="2500" data-fresh-interval="700">453</h4>
-                                                <span>America</span>
-                                            </div>
-                                        </li>
-                                        <li class="col-lg-4 col-md-4 col-6">
-                                            <div class="body xl-khaki">
-                                                <i class="zmdi zmdi-pin"></i>
-                                                <h4 class="number count-to" data-from="0" data-to="124" data-speed="2500" data-fresh-interval="700">124</h4>
-                                                <span>Australia</span>
-                                            </div>
-                                        </li>
-                                        <li class="col-lg-4 col-md-4 col-6">
-                                            <div class="body xl-parpl">
-                                                <i class="zmdi zmdi-pin"></i>
-                                                <h4 class="number count-to" data-from="0" data-to="215" data-speed="2500" data-fresh-interval="700">215</h4>
-                                                <span>Canada</span>
-                                            </div>
-                                        </li>
-                                        <li class="col-lg-4 col-md-4 col-6">
-                                            <div class="body xl-salmon">
-                                                <i class="zmdi zmdi-pin"></i>
-                                                <h4 class="number count-to" data-from="0" data-to="155" data-speed="2500" data-fresh-interval="700">155</h4>
-                                                <span>India</span>
-                                            </div>
-                                        </li>
-                                        <li class="col-lg-4 col-md-4 col-6">
-                                            <div class="body xl-blue">
-                                                <i class="zmdi zmdi-pin"></i>
-                                                <h4 class="number count-to" data-from="0" data-to="78" data-speed="2500" data-fresh-interval="700">78</h4>
-                                                <span>UK</span>
-                                            </div>
-                                        </li>
-                                        <li class="col-lg-4 col-md-4 col-6">
-                                            <div class="body xl-slategray">
-                                                <i class="zmdi zmdi-pin"></i>
-                                                <h4 class="number count-to" data-from="0" data-to="55" data-speed="2500" data-fresh-interval="700">55</h4>
-                                                <span>Other</span>
-                                            </div>
-                                        </li>                      
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>                
+                
             </div>           
         </div>        
-        <div class="row clearfix">
-            <div class="col-lg-4 col-md-12">
-                <div class="card">
-                    <div class="header">
-                        <h2><strong>Heart</strong> Surgeries <small>18% High then last month</small></h2>
-                    </div>
-                    <div class="body">
-                        <div class="sparkline" data-type="line" data-spot-Radius="1" data-highlight-Spot-Color="rgb(233, 30, 99)" data-highlight-Line-Color="#222"
-                            data-min-Spot-Color="rgb(233, 30, 99)" data-max-Spot-Color="rgb(96, 125, 139)" data-spot-Color="rgb(96, 125, 139, 0.7)"
-                            data-offset="90" data-width="100%" data-height="50px" data-line-Width="1" data-line-Color="rgb(96, 125, 139, 0.7)"
-                            data-fill-Color="rgba(96, 125, 139, 0.3)"> 6,4,7,8,4,3,2,2,5,6,7,4,1,5,7,9,9,8,7,6 </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 col-md-12">
-                <div class="card">
-                    <div class="header">
-                        <h2><strong>Medical</strong> Treatment <small>18% High then last month</small></h2>
-                    </div>
-                    <div class="body">
-                        <div class="sparkline" data-type="line" data-spot-Radius="1" data-highlight-Spot-Color="rgb(233, 30, 99)" data-highlight-Line-Color="#222"
-                            data-min-Spot-Color="rgb(233, 30, 99)" data-max-Spot-Color="rgb(120, 184, 62)" data-spot-Color="rgb(120, 184, 62, 0.7)"
-                            data-offset="90" data-width="100%" data-height="50px" data-line-Width="1" data-line-Color="rgb(120, 184, 62, 0.7)"
-                            data-fill-Color="rgba(120, 184, 62, 0.3)"> 6,4,7,6,9,3,3,5,7,4,2,3,7,6 </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 col-md-12">
-                <div class="card">
-                    <div class="header">
-                        <h2><strong>New</strong> Patient <small >18% High then last month</small></h2>                        
-                    </div>
-                    <div class="body">                        
-                        <div class="sparkline" data-type="bar" data-width="97%" data-height="50px" data-bar-Width="4" data-bar-Spacing="10" data-bar-Color="#00ced1">2,8,5,3,1,7,9,5,6,4,2,3,1</div>
-                    </div>
-                </div>
-            </div>
-        </div>
         <div class="row clearfix">
             <div class="col-lg-4 col-md-12">
                 <div class="card tasks_report">
@@ -851,37 +561,114 @@
 <script src="{{ asset('assets/js/pages/charts/jquery-knob.js') }}"></script>
 <script src="{{ asset('assets/js/pages/cards/basic.js') }}"></script>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
-    // Handle doctor assignment
+document.addEventListener("DOMContentLoaded", function() {
+    
+    // --- 1. REVENUE CHART ---
+    // We use a try-catch to ensure the page loads even if data is empty
+    try {
+        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        // Pass data from Controller
+        const revenueData = @json($revenueData);
+        
+        if(revenueData && revenueData.length > 0) {
+            new Chart(revenueCtx, {
+                type: 'line',
+                data: {
+                    labels: revenueData.map(d => d.month),
+                    datasets: [{
+                        label: 'Revenue (NGN)',
+                        data: revenueData.map(d => d.total),
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        } else {
+            // Empty State for Chart
+            const revenueCtx = document.getElementById('revenueChart');
+            revenueCtx.parentNode.innerHTML = '<p class="text-center text-muted m-t-20">No financial data available yet.</p>';
+        }
+    } catch (e) { console.log("Chart Error:", e); }
+
+    // --- 2. STATUS PIE CHART ---
+    try {
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        const statusRaw = @json($appointmentStats);
+        
+        // Check if we have any data keys
+        if(Object.keys(statusRaw).length > 0) {
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(statusRaw).map(s => s.charAt(0).toUpperCase() + s.slice(1)),
+                    datasets: [{
+                        data: Object.values(statusRaw),
+                        backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#17a2b8', '#6c757d'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: { 
+                        legend: { position: 'bottom', labels: { boxWidth: 10 } } 
+                    }
+                }
+            });
+        } else {
+             const statusCtx = document.getElementById('statusChart');
+             statusCtx.parentNode.innerHTML = '<p class="text-center text-muted m-t-50">No appointment data.</p>';
+        }
+    } catch (e) { console.log("Chart Error:", e); }
+
+    // --- Doctor Assignment Logic ---
     $(document).on('click', '.assign-doctor', function(e) {
         e.preventDefault();
-        
         var appointmentId = $(this).data('appointment-id');
-        var doctorId = $(this).data('doctor-id');
-        var doctorName = $(this).data('doctor-name');
         
         $('#appointmentId').val(appointmentId);
-        $('#doctorId').val(doctorId);
-        $('#doctorName').text(doctorName);
-        
-        $('#assignDoctorModal').modal('show');
+        // Ensure the modal exists before showing
+        if($('#assignDoctorModal').length) {
+            $('#assignDoctorModal').modal('show');
+        }
     });
     
-    // Confirm assignment
     $('#confirmAssign').on('click', function() {
         var appointmentId = $('#appointmentId').val();
         var doctorId = $('#doctorId').val();
         
-        // Here you would make an AJAX call to assign the doctor to the appointment
-        // For now, we'll just close the modal and show a success message
-        $('#assignDoctorModal').modal('hide');
-        
-        // Show success message (you can replace this with a proper notification)
-        alert('Doctor assigned successfully!');
-        
-        // In a real implementation, you would update the table row to show the assigned doctor
-        // and remove the dropdown menu for that appointment
+        // Perform AJAX to backend
+        $.ajax({
+            url: '/admin/appointments/' + appointmentId + '/assign-doctor',
+            type: 'PUT',
+            data: {
+                doctor_id: doctorId,
+                _token: $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function(res) {
+                $('#assignDoctorModal').modal('hide');
+                alert('Doctor assigned successfully!');
+                location.reload();
+            },
+            error: function() {
+                alert('Failed to assign doctor.');
+            }
+        });
     });
+});
 </script>
 @stack('page-scripts')
 </body>

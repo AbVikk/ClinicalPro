@@ -49,4 +49,11 @@ return [
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
     ],
 
+    'sms' => [
+        'provider' => env('SMS_PROVIDER', 'termii'),
+        'key' => env('SMS_API_KEY'),
+        'sender_id' => env('SMS_SENDER_ID', 'ClinicalPro'),
+        'url' => 'https://api.ng.termii.com/api/sms/send',
+    ],
+
 ];
