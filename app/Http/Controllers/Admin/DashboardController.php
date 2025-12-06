@@ -123,7 +123,7 @@ class DashboardController extends Controller
         $formattedTotalDisbursements = number_format($totalDisbursements, 2);
         
         // =================================================================
-        // 3. ANALYTICS CHARTS (Merged Logic)
+        // 3. ANALYTICS CHARTS & STRATEGIC METRICS
         // =================================================================
         
         // A. Revenue Chart (Last 6 Months)
@@ -139,7 +139,7 @@ class DashboardController extends Controller
             ->get();
         });
 
-        // B. Top Performing Doctors (Top 5)
+        // B. Top Performing Doctors (By Appointments Count - Operational)
         $topDoctors = Cache::remember("admin_chart_doctors", $cacheTime, function () {
             return Appointment::select('doctor_id', DB::raw('count(*) as total'))
                 ->where('status', 'completed')
@@ -156,6 +156,60 @@ class DashboardController extends Controller
                 ->groupBy('status')
                 ->pluck('total', 'status')
                 ->toArray();
+        });
+
+        // --- NEW STRATEGIC METRICS (Owner View) ---
+
+        // D. Revenue Per Doctor (Who brings in the money?)
+        $revenuePerDoctor = Cache::remember("admin_stats_revenue_per_doctor", $cacheTime, function () {
+            return DB::table('payments')
+                ->join('consultations', 'payments.consultation_id', '=', 'consultations.id')
+                ->join('users', 'consultations.doctor_id', '=', 'users.id')
+                ->where('payments.status', 'paid')
+                ->select('users.name as doctor_name', DB::raw('SUM(payments.amount) as total_revenue'))
+                ->groupBy('users.id', 'users.name')
+                ->orderByDesc('total_revenue')
+                ->limit(5)
+                ->get();
+        });
+
+        // E. Busiest Time of Day (Heatmap Logic)
+        $busiestHours = Cache::remember("admin_stats_busiest_hours", $cacheTime, function () {
+            return Appointment::select(DB::raw('HOUR(appointment_time) as hour'), DB::raw('count(*) as count'))
+                ->whereDate('appointment_time', '>=', now()->subDays(30))
+                ->groupBy('hour')
+                ->orderBy('hour')
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'hour' => Carbon::createFromTime($item->hour)->format('g A'),
+                        'count' => $item->count
+                    ];
+                });
+        });
+
+        // F. No-Show Rate & Revenue Splits
+        $metrics = Cache::remember("admin_stats_strategic_kpis", $cacheTime, function () {
+            $total = Appointment::where('created_at', '>=', now()->subMonth())->count();
+            $missed = Appointment::where('created_at', '>=', now()->subMonth())
+                ->whereIn('status', ['missed', 'cancelled'])
+                ->count();
+            
+            $pharmacyRev = DB::table('payments')
+                ->where('status', 'paid')
+                ->whereNotNull('order_id')
+                ->sum('amount');
+                
+            $clinicRev = DB::table('payments')
+                ->where('status', 'paid')
+                ->whereNotNull('consultation_id')
+                ->sum('amount');
+
+            return [
+                'noShowRate' => $total > 0 ? round(($missed / $total) * 100, 1) : 0,
+                'pharmacyRevenue' => $pharmacyRev,
+                'clinicRevenue' => $clinicRev
+            ];
         });
         
         // =================================================================
@@ -190,30 +244,16 @@ class DashboardController extends Controller
         // 5. RETURN VIEW
         // =================================================================
         return view('admin.index', compact(
-            'totalUsers', 
-            'progressPercentage', 
-            'actualPercentage', 
-            'newRegistrations', 
-            'newRegProgress', 
-            'regChangePercentage',
-            'pendingAppointments',
-            'pendingProgress',
-            'pendingChangePercentage',
-            'pendingInvitations',
-            'systemInfo',
-            'systemProgress',
-            'formattedNetCashFlow',
-            'totalPayments',
-            'totalDisbursements',
-            'formattedTotalPayments',
-            'formattedTotalDisbursements',
-            'recentAppointments',
-            'availableDoctors',
-            'newPatients',
-            // Chart Data
-            'revenueData',
-            'topDoctors',
-            'appointmentStats'
+            'totalUsers', 'progressPercentage', 'actualPercentage', 
+            'newRegistrations', 'newRegProgress', 'regChangePercentage',
+            'pendingAppointments', 'pendingProgress', 'pendingChangePercentage',
+            'pendingInvitations', 'systemInfo', 'systemProgress',
+            'formattedNetCashFlow', 'totalPayments', 'totalDisbursements',
+            'formattedTotalPayments', 'formattedTotalDisbursements',
+            'recentAppointments', 'availableDoctors', 'newPatients',
+            // Charts & Strategic Data
+            'revenueData', 'topDoctors', 'appointmentStats',
+            'revenuePerDoctor', 'busiestHours', 'metrics' // <-- New Variables
         ));
     }
 }

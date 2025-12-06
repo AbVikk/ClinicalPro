@@ -55,9 +55,12 @@ class LoginController extends Controller
                 case 'donor':
                     return redirect('/donor/dashboard');
                 case 'primary_pharmacist':
+                    return redirect('/primary_pharmacist/dashboard');
                 case 'senior_pharmacist':
+                    return redirect('/senior_pharmacist/dashboard');
                 case 'clinic_pharmacist':
-                    return redirect('/pharmacy/dashboard');
+                    // Redirect clinic pharmacist directly to POS dashboard
+                    return redirect('/clinic_pharmacist/sales');
                 default:
                     return redirect('/admin/index');
             }

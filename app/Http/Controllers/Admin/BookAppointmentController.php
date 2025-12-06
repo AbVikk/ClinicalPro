@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth; 
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Mail; // Added
-use App\Mail\WelcomeEmail;           // Added
+use Illuminate\Support\Facades\Mail; 
+use App\Mail\WelcomeEmail;           
 use App\Services\AppointmentQueryService; 
 use App\Services\AppointmentBookingService; 
 use App\Traits\ManagesAdminCache;
@@ -37,11 +37,17 @@ class BookAppointmentController extends Controller
     {
         $patientData = null;
         if ($request->has('patient_id')) {
-            $patientData = [
-                'user_id' => $request->patient_id,
-                'name' => $request->patient_name ?? '',
-                'email' => $request->patient_email ?? ''
-            ];
+            $user = User::where('user_id', $request->patient_id)
+                ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope
+                ->first();
+
+            if ($user) {
+                $patientData = [
+                    'user_id' => $user->user_id,
+                    'name' => $user->name,
+                    'email' => $user->email
+                ];
+            }
         }
         $services = Service::with('activeTimePricings')->select('id', 'service_name', 'price_amount', 'price_currency', 'default_duration')->get();
         $clinics = Clinic::where('is_physical', 1)->get(); 
@@ -54,7 +60,9 @@ class BookAppointmentController extends Controller
         $patientId = $request->input('patient_id');
         $patient = User::where('user_id', $patientId)
             ->where('role', 'patient')
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope
             ->first();
+            
         if (!$patient) {
             return response()->json(['error' => 'Patient not found'], 404);
         }
@@ -79,21 +87,28 @@ class BookAppointmentController extends Controller
         
     public function store(Request $request)
     {
-        // 1. Format the date from the picker
+        // Security check for patient ownership
+        $patient = User::where('user_id', $request->patient_id)
+            ->where('hospital_id', Auth::user()->hospital_id)
+            ->first();
+            
+        if (!$patient) {
+             return redirect()->back()->with('error', 'Patient not found in this hospital.')->withInput();
+        }
+
         $appointmentDate = $request->input('appointment_date');
         $formattedDate = null;
         if ($appointmentDate) {
             try {
                 $dateObj = \Carbon\Carbon::createFromFormat('l d F Y - H:i', $appointmentDate);
                 $formattedDate = $dateObj->format('Y-m-d H:i:s');
-            } catch (\Exception $e) { /* validation handles it */ }
+            } catch (\Exception $e) { }
         }
         $request->merge(['appointment_date' => $formattedDate]);
         
-        // 2. Validate the request
         $validatedData = $request->validate([
-            'patient_id' => 'required|exists:users,user_id,role,patient', 
-            'doctor_id' => 'required|exists:users,id,role,doctor',
+            'patient_id' => 'required', 
+            'doctor_id' => 'required|exists:users,id', 
             'appointment_date' => 'required|date|after:now',
             'service_id' => 'required|exists:hospital_services,id',
             'service_duration' => 'required|integer|min:1', 
@@ -103,13 +118,11 @@ class BookAppointmentController extends Controller
         ]);
         
         try {
-            // 3. Delegate to "Booker"
             $result = $this->appointmentBookingService->createAppointment(
                 $validatedData,
-                'card_online' // Admin initiated bookings usually proceed to payment gateway or pos
+                'card_online'
             );
 
-            // 4. Redirect to the payment page
             $this->flushAdminStatsCache();
             
             return redirect()->route('admin.appointment.payment.initialize', [
@@ -129,15 +142,14 @@ class BookAppointmentController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20|unique:users,phone',
-            'email' => 'nullable|email|max:255|unique:users,email',
+            'phone' => 'required|string|max:20',
+            'email' => 'nullable|email|max:255',
         ]);
         
         try {
-            // 1. Generate Password
             $rawPassword = Str::random(10);
 
-            // 2. Create User
+            // FIX: Assign to current hospital
             $user = User::create([
                 'name' => $request->input('name'),
                 'phone' => $request->input('phone'),
@@ -147,14 +159,16 @@ class BookAppointmentController extends Controller
                 'status' => 'active',
                 'user_id' => 'PID' . (User::max('id') + 1),
                 'email_verified_at' => now(),
+                'hospital_id' => Auth::user()->hospital_id, // <-- CRITICAL
             ]);
 
-            // 3. Create Profile
             if(method_exists($user, 'patient')) {
-                $user->patient()->create(['user_id' => $user->id]);
+                $user->patient()->create([
+                    'user_id' => $user->id,
+                    'hospital_id' => Auth::user()->hospital_id
+                ]);
             }
 
-            // 4. Send Email
             if ($request->input('email')) {
                 try {
                     Mail::to($user->email)->send(new WelcomeEmail($user, $rawPassword));
@@ -174,7 +188,10 @@ class BookAppointmentController extends Controller
     
     public function showAvailabilityForm()
     {
-        $doctors = Doctor::with('user')->where('status', 'Verified')->get();
+        // FIX: Scope doctor list
+        $doctors = Doctor::whereHas('user', function($q) {
+             $q->where('hospital_id', Auth::user()->hospital_id);
+        })->where('status', 'Verified')->get();
         return view('admin.doctor-availability', compact('doctors'));
     }
     
@@ -185,6 +202,7 @@ class BookAppointmentController extends Controller
             'availability' => 'required|array',
         ]);
         
+        // Model scopes handle the filtering here, but safe to be explicit
         $doctor = Doctor::findOrFail($request->input('doctor_id'));
         $doctor->availability = $request->input('availability');
         $doctor->save();
@@ -214,6 +232,7 @@ class BookAppointmentController extends Controller
             return response()->json(['patients' => []]);
         }
         $patients = User::where('role', 'patient')
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope
             ->where('name', 'LIKE', '%' . $searchTerm . '%')
             ->select('id', 'user_id', 'name', 'email')
             ->limit(10)

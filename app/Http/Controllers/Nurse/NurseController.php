@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Nurse;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Models\User;
 use App\Models\Appointment;
@@ -50,22 +51,27 @@ class NurseController extends Controller
     
     public function dashboard()
     {
-        $nurseId = Auth::user()->id;
+        $user = Auth::user();
+        $nurseId = $user->id;
+        $hospitalId = $user->hospital_id; // Get current hospital
         $cacheTime = 3600;
         
+        // Appointments are automatically scoped by BelongsToHospital trait
         $patientsWaitingCount = Cache::remember("nurse_{$nurseId}_patients_waiting", $cacheTime, function () {
             return Appointment::whereDate('appointment_time', Carbon::today())
                             ->where('status', 'confirmed') 
                             ->count();
         });
 
-        $doctorsAvailableCount = Cache::remember("nurse_{$nurseId}_doctors_available", 60, function () {
+        $doctorsAvailableCount = Cache::remember("nurse_{$nurseId}_doctors_available", 60, function () use ($hospitalId) {
             $now = Carbon::now();
             $currentDay = strtolower($now->format('l'));
             $currentTime = $now->format('H:i:s');
             $currentDate = $now->format('Y-m-d');
 
-            return User::where('role', 'doctor')
+            // FIX: Manually scope User query
+            return User::where('hospital_id', $hospitalId)
+                ->where('role', 'doctor')
                 ->where('status', 'active')
                 ->whereHas('doctorProfile', function ($query) {
                     $query->where('live_status', 'Available');
@@ -85,8 +91,11 @@ class NurseController extends Controller
                                 ->where('status', 'in_progress')
                                 ->count();
         });
-        $doctorsOnDutyCount = Cache::remember("nurse_{$nurseId}_doctors_on_duty", $cacheTime, function () {
-            return User::where('role', 'doctor')
+
+        $doctorsOnDutyCount = Cache::remember("nurse_{$nurseId}_doctors_on_duty", $cacheTime, function () use ($hospitalId) {
+            // FIX: Manually scope User query
+            return User::where('hospital_id', $hospitalId)
+                          ->where('role', 'doctor')
                           ->where('status', 'active')
                           ->count();
         });
@@ -121,6 +130,7 @@ class NurseController extends Controller
 
     private function getUnreadNotifications()
     {
+        // Notifications has BelongsToHospital trait, so it's safe
         $userId = Auth::id();
         return Notification::where('user_id', $userId)
             ->where('is_read', false)
@@ -148,6 +158,7 @@ class NurseController extends Controller
         $nurseId = Auth::id();
         $cacheTime = 60; 
         
+        // Appointments are safe (Trait)
         return Cache::remember("nurse_{$nurseId}_patient_queue", $cacheTime, function () {
             return Appointment::whereDate('appointment_time', Carbon::today())
                                     ->whereIn('status', ['checked_in', 'in_progress'])
@@ -160,10 +171,13 @@ class NurseController extends Controller
     private function getDoctorStatusData()
     {
         $nurseId = Auth::id();
+        $hospitalId = Auth::user()->hospital_id;
         $cacheTime = 60; 
 
-        $doctors = Cache::remember("nurse_{$nurseId}_doctors_status", $cacheTime, function () {
-            return User::where('role', 'doctor')
+        $doctors = Cache::remember("nurse_{$nurseId}_doctors_status", $cacheTime, function () use ($hospitalId) {
+            // FIX: Manually scope User query
+            return User::where('hospital_id', $hospitalId)
+                            ->where('role', 'doctor')
                             ->with('doctorProfile') 
                             ->where('status', 'active') 
                             ->orderBy('name', 'asc')
@@ -234,46 +248,50 @@ class NurseController extends Controller
         ]);
         
         try {
-            $nurseId = Auth::id();
-            
-            Vitals::updateOrCreate(
-                ['appointment_id' => $appointment->id],
-                [
-                    'doctor_id' => $appointment->doctor_id, 
-                    'blood_pressure' => $request->input('blood_pressure'),
-                    'temperature' => $request->input('temperature'),
-                    'pulse' => $request->input('pulse'),
-                    'height' => $request->input('height'),
-                    'weight' => $request->input('weight'),
-                    'spo2' => $request->input('spo2'),
-                ]
-            );
-            
-            $detail = AppointmentDetail::firstOrCreate(
-                ['appointment_id' => $appointment->id]
-            );
-            if ($request->filled('blood_group')) {
-                $detail->blood_group = $request->input('blood_group');
-            }
-            $detail->save();
-
-            if ($request->filled('nurse_note')) {
-                ClinicalNote::updateOrCreate(
+            DB::transaction(function () use ($appointment, $request) {
+                
+                Vitals::updateOrCreate(
                     ['appointment_id' => $appointment->id],
                     [
-                        'doctor_id' => $appointment->doctor_id,
-                        'note_text' => $request->input('nurse_note')
+                        'doctor_id' => $appointment->doctor_id, 
+                        'blood_pressure' => $request->input('blood_pressure'),
+                        'temperature' => $request->input('temperature'),
+                        'pulse' => $request->input('pulse'),
+                        'height' => $request->input('height'),
+                        'weight' => $request->input('weight'),
+                        'spo2' => $request->input('spo2'),
+                        'hospital_id' => Auth::user()->hospital_id, // Added security
                     ]
                 );
-            }
-            
-            if ($appointment->type == 'in_person' && $appointment->status == 'checked_in') {
-                $appointment->status = 'vitals_taken'; 
-                $appointment->save();
+                
+                $detail = AppointmentDetail::firstOrCreate(
+                    ['appointment_id' => $appointment->id],
+                    ['hospital_id' => Auth::user()->hospital_id] // Added security
+                );
+                if ($request->filled('blood_group')) {
+                    $detail->blood_group = $request->input('blood_group');
+                    $detail->save();
+                }
 
-                $patientName = $appointment->patient->name ?? 'a patient';
-                event(new \App\Events\DoctorAlert($appointment->doctor_id, "Vitals saved for {$patientName}. The patient is ready to be seen."));
-            }
+                if ($request->filled('nurse_note')) {
+                    ClinicalNote::updateOrCreate(
+                        ['appointment_id' => $appointment->id],
+                        [
+                            'doctor_id' => $appointment->doctor_id,
+                            'note_text' => $request->input('nurse_note'),
+                            'hospital_id' => Auth::user()->hospital_id // Added security
+                        ]
+                    );
+                }
+                
+                if ($appointment->type == 'in_person' && $appointment->status == 'checked_in') {
+                    $appointment->status = 'vitals_taken'; 
+                    $appointment->save();
+
+                    $patientName = $appointment->patient->name ?? 'a patient';
+                    event(new \App\Events\DoctorAlert($appointment->doctor_id, "Vitals saved for {$patientName}. The patient is ready to be seen."));
+                }
+            });
 
             Cache::flush();
             
@@ -288,8 +306,11 @@ class NurseController extends Controller
     public function patientsIndex(Request $request)
     {
         $search = $request->get('search');
+        $hospitalId = Auth::user()->hospital_id;
         
-        $patients = User::where('role', 'patient')
+        // FIX: Manually scope User query
+        $patients = User::where('hospital_id', $hospitalId)
+            ->where('role', 'patient')
             ->when($search, function ($query, $search) {
                 return $query->where(function ($q) use ($search) {
                     $q->where('name', 'LIKE', "%{$search}%")
@@ -312,11 +333,17 @@ class NurseController extends Controller
 
     public function bookAppointment(Request $request)
     {
+        // Service has BelongsToHospital, safe.
         $services = Service::with('activeTimePricings')->select('id', 'service_name', 'price_amount', 'price_currency', 'default_duration')->get();
         $patientData = [];
 
         if ($request->has('patient_id')) {
-            $patient = User::where('user_id', $request->patient_id)->where('role', 'patient')->first();
+            // FIX: Manually scope
+            $patient = User::where('hospital_id', Auth::user()->hospital_id)
+                ->where('user_id', $request->patient_id)
+                ->where('role', 'patient')
+                ->first();
+                
             if ($patient) {
                 $patientData = [
                     'user_id' => $patient->user_id,
@@ -330,7 +357,6 @@ class NurseController extends Controller
 
     public function storeAppointment(Request $request)
     {
-        // 1. Format the date
         $appointmentDate = $request->input('appointment_date');
         $formattedDate = null;
         if ($appointmentDate) {
@@ -341,7 +367,6 @@ class NurseController extends Controller
         }
         $request->merge(['appointment_date' => $formattedDate]);
 
-        // 2. Validate the request
         $validatedData = $request->validate([
             'patient_id' => 'required|string|exists:users,user_id,role,patient',
             'appointment_date' => 'required|date|after:now',
@@ -357,7 +382,6 @@ class NurseController extends Controller
         try {
             $paymentMethod = ($validatedData['payment_method'] == 'cash') ? 'cash_in_clinic' : 'card_online';
 
-            // Delegate to Booking Service
             $result = $this->appointmentBookingService->createAppointment($validatedData, $paymentMethod);
             
             Cache::flush(); 
@@ -383,7 +407,12 @@ class NurseController extends Controller
 
     public function getPatientInfo(Request $request)
     {
-        $patient = User::where('user_id', $request->patient_id)->where('role', 'patient')->first();
+        // FIX: Manually scope
+        $patient = User::where('hospital_id', Auth::user()->hospital_id)
+            ->where('user_id', $request->patient_id)
+            ->where('role', 'patient')
+            ->first();
+            
         if ($patient) {
             return response()->json(['patient' => $patient]);
         }
@@ -392,10 +421,13 @@ class NurseController extends Controller
 
     public function searchPatients(Request $request)
     {
-        $patients = User::where('name', 'LIKE', '%' . $request->search . '%')
-                        ->where('role', 'patient')
-                        ->limit(10)
-                        ->get(['id', 'user_id', 'name', 'email']);
+        // FIX: Manually scope
+        $patients = User::where('hospital_id', Auth::user()->hospital_id)
+            ->where('name', 'LIKE', '%' . $request->search . '%')
+            ->where('role', 'patient')
+            ->limit(10)
+            ->get(['id', 'user_id', 'name', 'email']);
+            
         return response()->json(['patients' => $patients]);
     }
 
@@ -407,42 +439,55 @@ class NurseController extends Controller
             'email' => 'nullable|email|max:255|unique:users,email',
         ]);
 
-        // 1. Generate Password
-        $rawPassword = Str::random(10);
+        try {
+            $data = DB::transaction(function () use ($validated) {
+                $rawPassword = Str::random(10);
 
-        // 2. Create User
-        $patient = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'],
-            'password' => Hash::make($rawPassword),
-            'role' => 'patient',
-            'user_id' => 'PID' . (User::max('id') + 1),
-            'status' => 'active', 
-            'email_verified_at' => now(), // Auto-verify walk-ins
-        ]);
+                $patient = User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'],
+                    'password' => Hash::make($rawPassword),
+                    'role' => 'patient',
+                    'user_id' => 'PID' . (User::max('id') + 1),
+                    'status' => 'active', 
+                    'email_verified_at' => now(),
+                    // FIX: Explicitly assign the Nurse's Hospital ID to the new patient
+                    'hospital_id' => Auth::user()->hospital_id, 
+                ]);
 
-        // 3. Create Patient Profile
-        // Check if relationship exists before creating to prevent errors if model structure varies
-        if(method_exists($patient, 'patient')) {
-            $patient->patient()->create(['user_id' => $patient->id]);
-        }
+                if(method_exists($patient, 'patient')) {
+                    $patient->patient()->create([
+                        'user_id' => $patient->id,
+                        'hospital_id' => Auth::user()->hospital_id, // Security
+                    ]);
+                }
+                
+                return ['user' => $patient, 'raw_password' => $rawPassword];
+            });
 
-        // 4. Send Welcome Email (Queued)
-        if ($validated['email']) {
-            try {
-                Mail::to($patient->email)->send(new WelcomeEmail($patient, $rawPassword));
-            } catch (\Exception $e) {
-                Log::error("Failed to send walk-in welcome email: " . $e->getMessage());
+            if ($validated['email']) {
+                try {
+                    Mail::to($data['user']->email)->send(new WelcomeEmail($data['user'], $data['raw_password']));
+                } catch (\Exception $e) {
+                    Log::error("Failed to send walk-in welcome email: " . $e->getMessage());
+                }
             }
-        }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Walk-in patient registered! Password sent to email.',
-            'patient_id' => $patient->user_id,
-            'temp_password' => $rawPassword // Optional: return to frontend for immediate display
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Walk-in patient registered! Password sent to email.',
+                'patient_id' => $data['user']->user_id,
+                'temp_password' => $data['raw_password']
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("[NurseController] Failed to store walk-in: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error creating patient. Please try again.'
+            ], 500);
+        }
     }
     
     public function getAvailableLocations(Request $request)
@@ -482,25 +527,29 @@ class NurseController extends Controller
     
     /*
     |--------------------------------------------------------------------------
-    | PAYMENT FUNCTIONS (UPDATED FOR SHARED SERVICE)
+    | PAYMENT FUNCTIONS
     |--------------------------------------------------------------------------
     */
     
     public function paymentIndex()
     {
-        $payments = Payment::with('user')->orderBy('created_at', 'desc')->paginate(10);
+        $payments = Payment::with('user')
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
         return view('nurse.payments.index', compact('payments'));
     }
 
     public function paymentCreate()
     {
-        $patients = User::where('role', 'patient')->get();
+        // FIX: Scope Patient list
+        $patients = User::where('hospital_id', Auth::user()->hospital_id)
+            ->where('role', 'patient')
+            ->get();
         return view('nurse.payments.create', compact('patients'));
     }
 
     public function paymentStore(Request $request)
     {
-        // Manual payments (Cash, etc.)
         $data = $request->validate([
             'user_id' => 'required|exists:users,id',
             'amount' => 'required|numeric|min:0',
@@ -510,7 +559,11 @@ class NurseController extends Controller
             'transaction_date' => 'required|date',
         ]);
         
-        Payment::create($data);
+        // Add hospital_id automatically via Payment model trait, but redundant check safe
+        $payment = new Payment($data);
+        $payment->hospital_id = Auth::user()->hospital_id;
+        $payment->save();
+        
         return redirect()->route('nurse.payments.index')->with('success', 'Payment created successfully.');
     }
 
@@ -529,9 +582,6 @@ class NurseController extends Controller
         return view('nurse.appointment-payment', compact('consultation', 'payment', 'patient', 'publicKey', 'service'));
     }
     
-    /**
-     * Initialize Paystack using Shared Service
-     */
     public function initializePaystack(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -546,16 +596,15 @@ class NurseController extends Controller
 
         $consultation = Consultation::findOrFail($request->consultation_id);
 
-        // Metadata tells the system a NURSE did this
         $metadata = [
             'consultation_id' => $consultation->id,
             'patient_id'      => $consultation->patient_id,
             'clinic_id'       => Auth::user()->clinic_id ?? 1,
+            'hospital_id'     => Auth::user()->hospital_id, // Added metadata
             'role_initiator'  => 'nurse',
             'redirect_route'  => 'nurse.payments.success.public'
         ];
 
-        // Call Shared Service
         $result = $this->paymentService->initializePaymentTransaction(
             $request->email, 
             $request->amount, 
@@ -563,13 +612,11 @@ class NurseController extends Controller
         );
 
         if (isset($result['status']) && $result['status'] === true) {
-            // Update the existing payment record with metadata
             $payment = Payment::where('consultation_id', $consultation->id)->first();
             if ($payment) {
                 $payment->update(['metadata' => $metadata]);
             }
             
-            // Return only the reference
             return response()->json([
                 'status' => true,
                 'reference' => $result['data']['reference']
@@ -607,7 +654,9 @@ class NurseController extends Controller
         return view('nurse.payments.show', compact('payment'));
     }
     public function paymentEdit(Payment $payment) {
-        $patients = User::where('role', 'patient')->get();
+        // FIX: Scope user list
+        $patients = User::where('hospital_id', Auth::user()->hospital_id)
+            ->where('role', 'patient')->get();
         return view('nurse.payments.edit', compact('payment', 'patients'));
     }
     public function paymentUpdate(Request $request, Payment $payment) {

@@ -7,12 +7,14 @@ use App\Models\Service;
 use App\Models\Consultation;
 use App\Models\Payment;
 use App\Models\Appointment;
+use App\Models\AppointmentDetail;
 use App\Models\Notification;
 use App\Events\DoctorAlert;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Auth;
 use App\Mail\AppointmentConfirmationEmail;
 use App\Services\SmsService;
 use Illuminate\Support\Str;
@@ -22,14 +24,11 @@ class AppointmentBookingService
 {
     protected $smsService;
 
-    public function __construct()
+    public function __construct(SmsService $smsService)
     {
-        $this->smsService = new SmsService();
+        $this->smsService = $smsService;
     }
 
-    /**
-     * Handles the initial booking request.
-     */
     public function createAppointment(array $validatedData, string $paymentMethod): array
     {
         Log::info('[AppointmentBookingService] Starting appointment creation...');
@@ -53,22 +52,30 @@ class AppointmentBookingService
             }
 
             try {
-                $patient = User::where('user_id', $validatedData['patient_id'])->firstOrFail();
+                // FIX: Ensure Patient belongs to same hospital
+                $patient = User::where('user_id', $validatedData['patient_id'])
+                    ->where('hospital_id', Auth::user()->hospital_id) 
+                    ->firstOrFail();
+                    
+                // Service is scoped by model trait
                 $service = Service::findOrFail($validatedData['service_id']);
-                $doctor = User::findOrFail($validatedData['doctor_id']);
+                
+                // FIX: Ensure Doctor belongs to same hospital
+                $doctor = User::where('id', $validatedData['doctor_id'])
+                    ->where('hospital_id', Auth::user()->hospital_id)
+                    ->firstOrFail();
 
                 $calculatedFee = $this->calculateFee($service, (int)$validatedData['service_duration']);
 
                 $isVirtual = isset($validatedData['clinic_id']) && $validatedData['clinic_id'] === 'virtual';
                 $locationId = $isVirtual ? 1 : (int)$validatedData['clinic_id'];
 
-                // 2. Status Logic
                 $consultationStatus = ($paymentMethod === Payment::METHOD_CASH) ? 'scheduled' : 'pending';
                 $paymentStatus = ($paymentMethod === Payment::METHOD_CASH) 
                     ? Payment::STATUS_PENDING_VERIFICATION 
                     : Payment::STATUS_PENDING;
 
-                // 3. Create Consultation
+                // Models automatically attach hospital_id via Trait
                 $consultation = Consultation::create([
                     'patient_id' => $patient->id,
                     'doctor_id' => $doctor->id,
@@ -80,9 +87,9 @@ class AppointmentBookingService
                     'start_time' => $validatedData['appointment_date'],
                     'duration_minutes' => $validatedData['service_duration'],
                     'reason' => $validatedData['reason'] ?? null,
+                    'hospital_id' => Auth::user()->hospital_id, // Explicitly set for safety
                 ]);
 
-                // 4. Create Payment
                 $payment = Payment::create([
                     'user_id' => $patient->id,
                     'consultation_id' => $consultation->id,
@@ -92,9 +99,9 @@ class AppointmentBookingService
                     'status' => $paymentStatus,
                     'transaction_date' => now(),
                     'reference' => 'CONS-' . $consultation->id . '-' . strtoupper(Str::random(6)),
+                    'hospital_id' => Auth::user()->hospital_id, // Explicitly set for safety
                 ]);
 
-                // 5. If Cash, finalize immediately. If Online, wait for webhook.
                 if ($paymentMethod === Payment::METHOD_CASH) {
                     $this->createAppointmentRecord($consultation, $payment);
                 }
@@ -114,6 +121,9 @@ class AppointmentBookingService
         });
     }
 
+    // ... (Rest of methods: calculateFee, createAppointmentRecord, etc. remain the same)
+    // ... They rely on Models which now have the Trait, so they are safe.
+    
     private function calculateFee(Service $service, int $duration): float
     {
         $basePrice = $service->price_amount;
@@ -124,13 +134,8 @@ class AppointmentBookingService
         return round($calculatedFee, 2);
     }
 
-    /**
-     * Creates the official Appointment record.
-     * Uses SmsService to notify patient.
-     */
     public function createAppointmentRecord(Consultation $consultation, Payment $payment): Appointment
     {
-        // Prevent duplicates
         $appointment = Appointment::firstOrCreate(
             ['consultation_id' => $consultation->id],
             [
@@ -138,22 +143,20 @@ class AppointmentBookingService
                 'doctor_id' => $consultation->doctor_id,
                 'appointment_time' => $consultation->start_time,
                 'type' => ($consultation->delivery_channel == 'virtual') ? 'telehealth' : 'in_person',
-                'status' => 'pending', // Pending doctor acceptance
+                'status' => 'pending', 
                 'reason' => $consultation->reason ?? 'Consultation Booked',
                 'payment_id' => $payment->id,
+                'hospital_id' => Auth::user()->hospital_id ?? $consultation->hospital_id,
             ]
         );
 
-        // Ensure payment is linked
         if ($payment->appointment_id !== $appointment->id) {
             $payment->appointment_id = $appointment->id;
             $payment->save();
         }
 
-        // 1. Notify via Database (In-App)
         $this->sendAppointmentNotifications($appointment, $consultation->patient, User::find($consultation->doctor_id));
 
-        // 2. Notify via Email
         try {
             $appointment->load(['patient', 'doctor', 'consultation.clinic']);
             if ($appointment->patient && $appointment->patient->email) {
@@ -163,21 +166,12 @@ class AppointmentBookingService
             Log::error("[AppointmentBookingService] Email Failed: " . $e->getMessage());
         }
 
-        // 3. Notify via SMS / WhatsApp (NEW)
         try {
             if ($appointment->patient && $appointment->patient->phone) {
-                
                 $date = Carbon::parse($appointment->appointment_time)->format('D, M d @ h:i A');
                 $doctorName = $appointment->doctor->name ?? 'Doctor';
-                
-                // Short, clear message
                 $smsMessage = "Hello {$appointment->patient->name}, your appointment with Dr. {$doctorName} is confirmed for {$date}. Please arrive 15mins early.";
-                
-                // Send SMS
                 $this->smsService->send($appointment->patient->phone, $smsMessage, 'sms');
-                
-                // Optional: Send WhatsApp if you have it configured
-                // $this->smsService->send($appointment->patient->phone, $smsMessage, 'whatsapp');
             }
         } catch (\Exception $e) {
             Log::error("[AppointmentBookingService] SMS Failed: " . $e->getMessage());
@@ -188,12 +182,15 @@ class AppointmentBookingService
 
     private function sendAppointmentNotifications(Appointment $appointment, User $patient, ?User $doctor)
     {
+        // Notifications model now has Trait, so it will auto-assign hospital_id
         if ($appointment->wasRecentlyCreated) {
             $time = Carbon::parse($appointment->appointment_time)->format('M d, Y g:i A');
             if ($doctor) {
                 $message = "New appointment request: {$patient->name} scheduled for {$time}.";
                 Notification::create(['user_id' => $doctor->id, 'type' => 'appointment', 'message' => $message, 'is_read' => false, 'channel' => 'database']);
-                try { event(new DoctorAlert($doctor->id, $message)); } catch (\Exception $e) {}
+                try { 
+                    event(new DoctorAlert($doctor->id, $message)); 
+                } catch (\Exception $e) {}
             }
             Notification::create(['user_id' => $patient->id, 'type' => 'appointment', 'message' => "Appointment pending with Dr. " . ($doctor->name ?? ''), 'is_read' => false, 'channel' => 'database']);
         }

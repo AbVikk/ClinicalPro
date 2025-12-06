@@ -8,6 +8,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Carbon;
+use App\Traits\Auditable;
+// use App\Traits\BelongsToHospital;
 
 /**
  * @property string|null $photo
@@ -16,7 +18,7 @@ use Illuminate\Support\Carbon;
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, Auditable, HasApiTokens;
 
     // Define user roles
     const ROLE_ADMIN = 'admin';
@@ -55,7 +57,9 @@ class User extends Authenticatable
         'country',
         'photo', 
         'department_id',
+        'clinic_id',
         'email_verified_at',
+        'registration_date', // Add this field
     ];
 
     /**
@@ -79,6 +83,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'date_of_birth' => 'date',
+            'registration_date' => 'datetime', // Add this cast
         ];
     }
 
@@ -135,6 +140,14 @@ class User extends Authenticatable
 
     // --- RELATIONSHIPS ---
 
+    /**
+     * The hospital this user belongs to.
+     */
+    public function hospital()
+    {
+        return $this->belongsTo(Hospital::class);
+    }
+    
     public function appointmentsAsDoctor()
     {
         return $this->hasMany(Appointment::class, 'doctor_id');

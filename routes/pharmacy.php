@@ -5,3 +5,4 @@ use App\Http\Controllers\Pharmacy;
 
 // Pharmacy routes (middleware applied in RouteServiceProvider)
 Route::get('/dashboard', [Pharmacy\DashboardController::class, 'index'])->name('dashboard');
+Route::get('/inventory/predictions', [Pharmacy\InventoryController::class, 'index'])->name('inventory.predictions');

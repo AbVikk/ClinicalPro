@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\OtpEmail;
+use App\Mail\WelcomeEmail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 
@@ -48,27 +49,32 @@ class RegistrationController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'phone' => 'required|string|max:20',
-            'role' => 'required|in:patient,doctor,nurse,admin,donor',
+            'hospital_id' => 'required|exists:hospitals,id',
+            'role' => 'required|in:patient,doctor,nurse,admin,donor,primary_pharmacist,senior_pharmacist,clinic_pharmacist',
         ]);
 
-        $otp = rand(1000, 9999);
+        // Use secure random integer for OTP
+        try {
+            $otp = random_int(1000, 9999);
+        } catch (\Exception $e) {
+            $otp = rand(1000, 9999);
+        }
         
-        // --- FIX: Send Real Email ---
         try {
             Mail::to($request->email)->send(new OtpEmail($otp, 'Registration Verification'));
         } catch (\Exception $e) {
             Log::error("Failed to send registration OTP: " . $e->getMessage());
             return response()->json(['status' => 'error', 'message' => 'Failed to send email. Please check your connection.'], 500);
         }
-        // ----------------------------
         
         $registrationData = [
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
+            'hospital_id' => $request->hospital_id,
             'role' => $request->role,
             'otp' => Hash::make($otp),
-            'expires_at' => now()->addMinutes(5),
+            'expires_at' => now()->addMinutes(10), // Increased to 10 mins
             'created_at' => now(),
         ];
         
@@ -89,11 +95,8 @@ class RegistrationController extends Controller
         
         $registrationData = session('registration_data');
         $expiresAt = Carbon::parse($registrationData['expires_at']);
-        
-        // FIX 1: Calculate exact seconds remaining (can be negative if expired)
         $remainingSeconds = now()->diffInSeconds($expiresAt, false);
 
-        // If already expired, force a clean state
         if ($remainingSeconds <= 0) {
             session()->forget('registration_data');
             return redirect()->route('register.initial')->withErrors(['error' => 'OTP has expired. Please start again.']);
@@ -101,7 +104,7 @@ class RegistrationController extends Controller
         
         return view('auth.register-otp', [
             'email' => $registrationData['email'],
-            'remaining_seconds' => $remainingSeconds // <-- Passing this to View
+            'remaining_seconds' => $remainingSeconds
         ]);
     }
 
@@ -113,15 +116,16 @@ class RegistrationController extends Controller
 
         $data = session('registration_data');
         
-        // Generate new OTP
-        $otp = rand(1000, 9999);
+        try {
+            $otp = random_int(1000, 9999);
+        } catch (\Exception $e) {
+            $otp = rand(1000, 9999);
+        }
         
-        // Update Session
         $data['otp'] = Hash::make($otp);
-        $data['expires_at'] = now()->addMinutes(5); // Extend time
+        $data['expires_at'] = now()->addMinutes(10);
         session(['registration_data' => $data]);
 
-        // Send Email
         try {
             Mail::to($data['email'])->send(new OtpEmail($otp, 'Resend Registration Code'));
             return response()->json(['status' => 'success', 'message' => 'New code sent!']);
@@ -215,35 +219,42 @@ class RegistrationController extends Controller
             ]);
         }
         
-        $generatedUserId = $this->generateUserId($registrationData['role']);
+        // Use transaction for atomicity
+        $userId = DB::transaction(function () use ($registrationData, $request) {
+            $generatedUserId = $this->generateUserId($registrationData['role']);
+            
+            // Insert user with hospital_id from session
+            $id = DB::table('users')->insertGetId([
+                'name' => $registrationData['name'],
+                'email' => $registrationData['email'],
+                'phone' => $registrationData['phone'],
+                'user_id' => $generatedUserId,
+                'gender' => $request->gender,
+                'address' => $request->address,
+                'date_of_birth' => $request->date_of_birth,
+                'password' => Hash::make($request->password),
+                'role' => $registrationData['role'],
+                'status' => 'active',
+                'email_verified_at' => $registrationData['email_verified_at'],
+                'registration_date' => now(),
+                'hospital_id' => $registrationData['hospital_id'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            
+            $this->createRoleSpecificRecord($id, $registrationData['role'], $generatedUserId, $registrationData['hospital_id']);
+            
+            return $generatedUserId; // Return the string ID for session
+        });
         
-        $user = DB::table('users')->insertGetId([
-            'name' => $registrationData['name'],
-            'email' => $registrationData['email'],
-            'phone' => $registrationData['phone'],
-            'user_id' => $generatedUserId,
-            'gender' => $request->gender,
-            'address' => $request->address,
-            'date_of_birth' => $request->date_of_birth,
-            'password' => Hash::make($request->password),
-            'role' => $registrationData['role'],
-            'status' => 'active',
-            'email_verified_at' => $registrationData['email_verified_at'],
-            'registration_date' => now(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        
-        $this->createRoleSpecificRecord($user, $registrationData['role'], $generatedUserId);
-        
-        session(['registration_user_id' => $generatedUserId]);
+        session(['registration_user_id' => $userId]);
         $registrationData = session('registration_data');
         session(['registration_data' => $registrationData]);
         
         return response()->json([
             'success' => true,
             'message' => 'Registration details saved successfully!',
-            'redirect' => route('register.photo', ['user_id' => $generatedUserId])
+            'redirect' => route('register.photo', ['user_id' => $userId])
         ]);
     }
 
@@ -309,6 +320,7 @@ class RegistrationController extends Controller
             ]);
         }
         
+        // Check if user needs to go through proof/licence steps
         if (in_array($user->role, ['doctor', 'clinic_staff'])) {
             return response()->json([
                 'success' => true,
@@ -316,16 +328,18 @@ class RegistrationController extends Controller
                 'redirect' => route('register.proof', ['user_id' => $user->user_id])
             ]);
         } else {
+            // For pharmacists and other roles, registration is complete
             session()->forget(['registration_data', 'registration_user_id']);
             
-            // --- OPTIONAL: SEND WELCOME EMAIL HERE ---
+            // Send Welcome Email
             try {
                 $userModel = \App\Models\User::find($user->id);
                 if($userModel) {
                      Mail::to($userModel->email)->send(new \App\Mail\WelcomeEmail($userModel));
                 }
-            } catch (\Exception $e) {}
-            // -----------------------------------------
+            } catch (\Exception $e) {
+                Log::error("Welcome email error: " . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -335,9 +349,6 @@ class RegistrationController extends Controller
         }
     }
 
-    // ... [Proof, License, and Helper methods remain unchanged from your file] ...
-    // ... [Keeping them concise for this response] ...
-    
     public function showProofForm(Request $request)
     {
         $user = DB::table('users')->where('user_id', $request->user_id)->first();
@@ -386,103 +397,131 @@ class RegistrationController extends Controller
         if (!$user || !in_array($user->role, ['doctor', 'clinic_staff'])) {
             return response()->json(['success' => false, 'message' => 'Invalid request.']);
         }
-        switch ($user->role) {
-            case 'doctor':
-                DB::table('doctors_new')->where('user_id', $user->id)->update([
-                    'license_number' => $request->license_number,
-                    'specialization' => $request->specialization,
-                    'updated_at' => now(),
-                ]);
-                break;
-            case 'clinic_staff':
-                DB::table('clinic_staff')->where('user_id', $user->id)->update([
-                    'license_number' => $request->license_number,
-                    'specialization' => $request->specialization,
-                    'updated_at' => now(),
-                ]);
-                break;
-        }
+        
+        // Transaction to ensure consistency
+        DB::transaction(function() use ($user, $request) {
+            switch ($user->role) {
+                case 'doctor':
+                    DB::table('doctors_new')->where('user_id', $user->id)->update([
+                        'license_number' => $request->license_number,
+                        'specialization' => $request->specialization,
+                        'updated_at' => now(),
+                    ]);
+                    break;
+                case 'clinic_staff':
+                    DB::table('clinic_staff')->where('user_id', $user->id)->update([
+                        'license_number' => $request->license_number,
+                        'updated_at' => now(),
+                    ]);
+                    break;
+            }
+        });
+
         session()->forget(['registration_data', 'registration_user_id']);
         
-        // --- OPTIONAL: SEND WELCOME EMAIL HERE FOR DOCTORS ---
+        // Send Welcome Email (Delayed to here for doctors/staff)
         try {
             $userModel = \App\Models\User::find($user->id);
             if($userModel) {
                  Mail::to($userModel->email)->send(new \App\Mail\WelcomeEmail($userModel));
             }
-        } catch (\Exception $e) {}
-        // ----------------------------------------------------
+        } catch (\Exception $e) {
+            Log::error("Welcome email error: " . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Professional details saved successfully!',
+            'message' => 'Registration completed successfully!',
             'redirect' => route('login')
         ]);
     }
 
     private function generateUserId($role)
     {
-        $prefix = '';
-        switch ($role) {
-            case 'doctor': $prefix = 'DOC'; break;
-            case 'patient': $prefix = 'PAT'; break;
-            case 'admin': $prefix = 'ADM'; break;
-            case 'donor': $prefix = 'DON'; break;
-            case 'clinic_staff': $prefix = 'CLI'; break;
-            default: $prefix = 'USR';
-        }
-        return $prefix . '-' . time() . '-' . rand(1000, 9999);
-    }
-
-    private function getRedirectUrlForExistingRegistration($registrationData)
-    {
-        if (isset($registrationData['email_verified_at'])) {
-            return route('register.continue');
-        } elseif (isset($registrationData['otp'])) {
-            return route('register.otp');
-        } else {
-            return route('register.initial');
-        }
-    }
-
-    private function createRoleSpecificRecord($userId, $role, $userIdentifier)
-    {
-        $data = [
-            'user_id' => $userId,
-            'status' => 'pending',
-            'created_at' => now(),
-            'updated_at' => now(),
+        $prefixes = [
+            'admin' => 'ADM',
+            'doctor' => 'DOC',
+            'nurse' => 'NUR',
+            'patient' => 'PAT',
+            'donor' => 'DON',
+            'primary_pharmacist' => 'PHA',
+            'senior_pharmacist' => 'PHA',
+            'clinic_pharmacist' => 'PHA',
+            'clinic_staff' => 'STF',
         ];
+        
+        $prefix = $prefixes[$role] ?? 'USR';
+        $uniqueId = strtoupper(Str::random(6));
+        $userId = $prefix . $uniqueId;
+        
+        while (DB::table('users')->where('user_id', $userId)->exists()) {
+            $uniqueId = strtoupper(Str::random(6));
+            $userId = $prefix . $uniqueId;
+        }
+        
+        return $userId;
+    }
+
+    private function createRoleSpecificRecord($userId, $role, $generatedUserId, $hospitalId)
+    {
         switch ($role) {
             case 'doctor':
-                $data['doctor_id'] = $userIdentifier;
-                DB::table('doctors_new')->insert($data);
+                DB::table('doctors_new')->insert([
+                    'user_id' => $userId,
+                    'hospital_id' => $hospitalId,
+                    'doctor_id' => 'DOC' . substr($generatedUserId, 3),
+                    'status' => 'pending',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
                 break;
             case 'clinic_staff':
-                $data['staff_id'] = $userIdentifier;
-                DB::table('clinic_staff')->insert($data);
+                DB::table('clinic_staff')->insert([
+                    'user_id' => $userId,
+                    'hospital_id' => $hospitalId,
+                    'staff_id' => 'STF' . substr($generatedUserId, 3),
+                    'status' => 'pending',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
                 break;
-            case 'admin':
-                $data['admin_id'] = $userIdentifier;
-                DB::table('admin')->insert($data);
-                break;
+            // Pharmacists don't have extra tables, just User table.
         }
     }
 
     private function updateRoleProof($userId, $role, $proofPath)
     {
-        $data = [
-            'proof_of_identity' => $proofPath,
-            'status' => 'pending_verification',
-            'updated_at' => now(),
-        ];
         switch ($role) {
             case 'doctor':
-                DB::table('doctors_new')->where('user_id', $userId)->update($data);
+                DB::table('doctors_new')->where('user_id', $userId)->update([
+                    'proof_of_identity' => $proofPath,
+                    'updated_at' => now(),
+                ]);
                 break;
             case 'clinic_staff':
-                DB::table('clinic_staff')->where('user_id', $userId)->update($data);
+                DB::table('clinic_staff')->where('user_id', $userId)->update([
+                    'proof_of_identity' => $proofPath,
+                    'updated_at' => now(),
+                ]);
                 break;
         }
+    }
+
+    private function getRedirectUrlForExistingRegistration($registrationData)
+    {
+        if (!isset($registrationData['email_verified_at'])) {
+            return route('register.otp');
+        }
+        
+        $user = DB::table('users')->where('email', $registrationData['email'])->first();
+        if ($user) {
+            return route('login');
+        }
+        
+        if (session('registration_user_id')) {
+            return route('register.photo', ['user_id' => session('registration_user_id')]);
+        }
+        
+        return route('register.continue');
     }
 }

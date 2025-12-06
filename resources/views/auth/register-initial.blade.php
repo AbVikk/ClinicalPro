@@ -97,6 +97,17 @@
                             </span>
                         </div>
                         <div class="input-group">
+                            <select class="form-control" name="hospital_id" id="hospitalSelect" required>
+                                <option value="">Select Hospital</option>
+                                @foreach(App\Models\Hospital::where('is_active', true)->get() as $hospital)
+                                    <option value="{{ $hospital->id }}">{{ $hospital->name }}</option>
+                                @endforeach
+                            </select>
+                            <span class="input-group-addon">
+                                <i class="zmdi zmdi-hospital"></i>
+                            </span>
+                        </div>
+                        <div class="input-group">
                             <select class="form-control" name="role" required>
                                 <option value="">Select Role</option>
                                 <option value="patient">Patient</option>
@@ -104,6 +115,9 @@
                                 <option value="nurse">Nurse</option>
                                 <option value="admin">Admin</option>
                                 <option value="donor">Donor</option>
+                                <option value="primary_pharmacist">Primary Pharmacist</option>
+                                <option value="senior_pharmacist">Senior Pharmacist</option>
+                                <option value="clinic_pharmacist">Clinic Pharmacist</option>
                             </select>
                             <span class="input-group-addon">
                                 <i class="zmdi zmdi-accounts"></i>
@@ -115,6 +129,7 @@
                     <div class="footer text-center" id="submitButtonContainer">
                         <button type="submit" class="btn btn-primary btn-round btn-block waves-effect waves-light" id="submitBtn">CONTINUE</button>
                         <h5><a href="{{ route('login') }}" class="link">Already have an account?</a></h5>
+                        <h5><a href="{{ route('hospital.register.form') }}" class="link">Register a New Hospital</a></h5>
                     </div>
                 </form>
             </div>
@@ -164,6 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const name = document.querySelector('input[name="name"]').value;
         const email = document.querySelector('input[name="email"]').value;
         const phone = document.querySelector('input[name="phone"]').value;
+        const hospitalId = document.querySelector('select[name="hospital_id"]').value;
         const role = document.querySelector('select[name="role"]').value;
         
         // Submit via AJAX
@@ -173,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: name,
                 email: email,
                 phone: phone,
+                hospital_id: hospitalId,
                 role: role,
                 _token: document.querySelector('input[name="_token"]').value
             }),

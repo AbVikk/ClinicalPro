@@ -8,18 +8,21 @@ use App\Models\Category;
 use App\Models\Department;
 use App\Models\DoctorSchedule;
 use App\Models\Appointment;
-use App\Models\Consultation; // Added this import
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
+use App\Models\Consultation;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class Doctor extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable, BelongsToHospital;
     
     protected $table = 'doctors_new';
     
     protected $fillable = [
         'user_id',
+        'hospital_id',
         'doctor_id',
         'specialization',
         'department_id',

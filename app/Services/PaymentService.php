@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 use App\Events\DoctorAlert;
+use App\Services\AppointmentBookingService;
 
 class PaymentService
 {
@@ -22,11 +23,14 @@ class PaymentService
     protected $paystackSecretKey;
     protected $bookingService; 
 
-    public function __construct()
+    /**
+     * Dependency Injection: Laravel automatically injects AppointmentBookingService.
+     */
+    public function __construct(AppointmentBookingService $bookingService)
     {
         $this->paystackBaseUrl = config('services.paystack.payment_url', 'https://api.paystack.co');
         $this->paystackSecretKey = config('services.paystack.secret_key');
-        $this->bookingService = new AppointmentBookingService();
+        $this->bookingService = $bookingService;
     }
 
     public function initializePaymentTransaction(string $email, float $amount, array $metadata)
@@ -89,7 +93,7 @@ class PaymentService
                         'user_id'          => $meta['patient_id'] ?? Auth::id(),
                         'consultation_id'  => $meta['consultation_id'] ?? null,
                         'clinic_id'        => $meta['clinic_id'] ?? 1,
-                        'metadata'         => $meta, // CRITICAL: Save metadata so Controller can read role_initiator
+                        'metadata'         => $meta, 
                     ]
                 );
 

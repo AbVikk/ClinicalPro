@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Appointment;
 use Illuminate\Support\Facades\Cache; // <-- ADD THIS "WHISTLEBLOWER" IMPORT
+use Illuminate\Support\Facades\Auth; // <-- ADD Auth facade for hospital_id
 
 class PatientController extends Controller
 {
@@ -18,7 +19,8 @@ class PatientController extends Controller
     public function index(Request $request)
     {
         // For live search, we'll load all patients but still support server-side search for pagination
-        $query = User::where('role', 'patient');
+        $query = User::where('role', 'patient')
+            ->where('hospital_id', Auth::user()->hospital_id); // FIX: Scope to hospital
         
         // Add server-side search functionality (for initial page load or when search is submitted)
         if ($request->has('search') && $request->search != '') {
@@ -47,6 +49,7 @@ class PatientController extends Controller
     public function show($id)
     {
         $patient = User::where('role', 'patient')
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
             ->with([
                 'appointmentsAsPatient.doctor', 
                 'prescriptions.items.drug', 
@@ -79,6 +82,7 @@ class PatientController extends Controller
     public function destroy($id)
     {
         $patient = User::where('role', 'patient')
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
             ->findOrFail($id);
         
         // Delete the patient

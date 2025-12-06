@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\BelongsToHospital;
 
 class ServiceTimePricing extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToHospital;
 
     /**
      * The table associated with the model.
@@ -16,6 +17,7 @@ class ServiceTimePricing extends Model
     protected $table = 'service_time_pricing';
 
     protected $fillable = [
+        'hospital_id',
         'service_id',
         'duration_minutes',
         'price',

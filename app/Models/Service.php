@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\BelongsToHospital;
 
 /**
  * @property int $id
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Service extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToHospital;
 
     /**
      * The table associated with the model.
@@ -28,6 +29,7 @@ class Service extends Model
      * @var array
      */
     protected $fillable = [
+        'hospital_id',
         'service_name',
         'service_type',
         'description',

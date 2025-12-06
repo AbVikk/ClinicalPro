@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\Auditable;
 
 class DrugBatch extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable;
 
     protected $fillable = [
         'batch_uuid',
@@ -15,14 +16,23 @@ class DrugBatch extends Model
         'supplier_id',
         'received_quantity',
         'expiry_date',
+        'cost_price',
     ];
 
+    /**
+     * The attributes that should be cast.
+     * THIS FIXES THE ERROR.
+     */
     protected $casts = [
+        'expiry_date' => 'date',        // <--- Converts string to Carbon date
         'received_quantity' => 'integer',
-        'expiry_date' => 'date',
+        'cost_price' => 'decimal:2',
+        'created_at' => 'datetime',     // <--- Ensures created_at is always a Carbon object
+        'updated_at' => 'datetime',
     ];
 
-    // Relationships
+    // --- Relationships ---
+
     public function drug()
     {
         return $this->belongsTo(Drug::class);

@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class Invitation extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable, BelongsToHospital;
 
     /**
      * The attributes that are mass assignable.
@@ -16,6 +18,7 @@ class Invitation extends Model
         'token',
         'email',
         'role',
+        'hospital_id',
         'used',
         'expires_at',
         'invited_by', // <--- Restored

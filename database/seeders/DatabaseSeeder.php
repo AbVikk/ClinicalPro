@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             DrugCategoriesTableSeeder::class,
             DrugMgTableSeeder::class,
             DrugsTableSeeder::class,
+            DrugBatchSeeder::class,
             MedicationTypeSeeder::class,
             MedicationDosageSeeder::class,
             MedicationSeeder::class,

@@ -176,6 +176,7 @@
                             <li class="dropdown"> <a href="javascript:void(0);" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"> <i class="zmdi zmdi-more"></i> </a>
                                 <ul class="dropdown-menu dropdown-menu-right slideUp float-right">
                                     <li><a href="{{ route('admin.pharmacy.drugs.create.form') }}">Add New Drug</a></li>
+                                    <li><a href="{{ route('admin.pharmacy.drugs.all') }}">View All Drugs</a></li>
                                     <li><a href="{{ route('admin.pharmacy.stock.receive') }}">Receive Stock</a></li>
                                 </ul>
                             </li>
@@ -308,7 +309,19 @@
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <button class="btn btn-sm btn-primary">View</button>
+                                                    <div class="btn-group">
+                                                        <button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                            Action
+                                                        </button>
+                                                        <div class="dropdown-menu">
+                                                            <a class="dropdown-item" href="{{ route('admin.pharmacy.drugs.view', $drug->id) }}">View Details</a>
+                                                            <a class="dropdown-item" href="{{ route('admin.pharmacy.drugs.edit', $drug->id) }}">Edit Medicine</a>
+                                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#updateStockModal" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}" data-current-stock="{{ $drug->batches->sum('received_quantity') }}">Update Stock</a>
+                                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#viewHistoryModal" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}">View History</a>
+                                                            <div class="dropdown-divider"></div>
+                                                            <a class="dropdown-item text-danger delete-drug" href="#" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}">Delete</a>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             </tr>
                                             @endforeach
@@ -364,7 +377,19 @@
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <button class="btn btn-sm btn-primary">View</button>
+                                                    <div class="btn-group">
+                                                        <button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                            Action
+                                                        </button>
+                                                        <div class="dropdown-menu">
+                                                            <a class="dropdown-item" href="{{ route('admin.pharmacy.drugs.view', $drug->id) }}">View Details</a>
+                                                            <a class="dropdown-item" href="{{ route('admin.pharmacy.drugs.edit', $drug->id) }}">Edit Medicine</a>
+                                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#updateStockModal" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}" data-current-stock="{{ $drug->batches->sum('received_quantity') }}">Update Stock</a>
+                                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#viewHistoryModal" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}">View History</a>
+                                                            <div class="dropdown-divider"></div>
+                                                            <a class="dropdown-item text-danger delete-drug" href="#" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}">Delete</a>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             </tr>
                                             @endforeach
@@ -420,7 +445,19 @@
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <button class="btn btn-sm btn-primary">View</button>
+                                                    <div class="btn-group">
+                                                        <button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                            Action
+                                                        </button>
+                                                        <div class="dropdown-menu">
+                                                            <a class="dropdown-item" href="{{ route('admin.pharmacy.drugs.view', $drug->id) }}">View Details</a>
+                                                            <a class="dropdown-item" href="{{ route('admin.pharmacy.drugs.edit', $drug->id) }}">Edit Medicine</a>
+                                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#updateStockModal" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}" data-current-stock="{{ $drug->batches->sum('received_quantity') }}">Update Stock</a>
+                                                            <a class="dropdown-item" href="#" data-toggle="modal" data-target="#viewHistoryModal" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}">View History</a>
+                                                            <div class="dropdown-divider"></div>
+                                                            <a class="dropdown-item text-danger delete-drug" href="#" data-drug-id="{{ $drug->id }}" data-drug-name="{{ $drug->name }}">Delete</a>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             </tr>
                                             @endforeach

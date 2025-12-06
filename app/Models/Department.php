@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\BelongsToHospital;
 
 class Department extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToHospital;
     
     protected $fillable = [
+        'hospital_id',
         'name',
         'department_head_id',
         'about',

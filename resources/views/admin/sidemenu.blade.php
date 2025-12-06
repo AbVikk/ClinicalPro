@@ -232,6 +232,12 @@
                             <li><a href="{{ route('admin.doctor.specialization.add_department') }}">Add Department</a></li>
                         </ul>
                     </li>
+
+                    <li class="{{ request()->routeIs('admin.audit-logs.index') ? 'active' : '' }}">
+                        <a href="{{ route('admin.audit-logs.index') }}">
+                            <i class="zmdi zmdi-shield-security"></i><span>Audit Logs</span>
+                        </a>
+                    </li>
                     
                     <li><a href="javascript:void(0);" class="menu-toggle"><i class="zmdi zmdi-accounts"></i><span>Nurses</span> </a>
                         <ul class="ml-menu">
@@ -1122,10 +1128,18 @@
         const userRole = "{{ Auth::user()->role }}";
 
         // 2. We let Laravel build the *correct* URLs based on the user's role.
+        // Handle cases where the user might be accessing admin panel with a different role
+        let routePrefix = userRole;
+        // If user is a pharmacist role but accessing admin panel, use admin routes
+        if (userRole.includes('pharmacist') && window.location.pathname.startsWith('/admin')) {
+            routePrefix = 'admin';
+        }
+
+        // Check if routes exist before using them
         const AiRoutes = {
-            history: '{{ route(Auth::user()->role . ".api.ai.chat-history") }}',
-            send: '{{ route(Auth::user()->role . ".api.ai.scheduling") }}',
-            clear: '{{ route(Auth::user()->role . ".api.ai.chat-history.clear") }}'
+            history: (routePrefix === 'admin') ? '{{ route("admin.api.ai.chat-history") }}' : '{{ route(Auth::user()->role . ".api.ai.chat-history") }}',
+            send: (routePrefix === 'admin') ? '{{ route("admin.api.ai.scheduling") }}' : '{{ route(Auth::user()->role . ".api.ai.scheduling") }}',
+            clear: (routePrefix === 'admin') ? '{{ route("admin.api.ai.chat-history.clear") }}' : '{{ route(Auth::user()->role . ".api.ai.chat-history.clear") }}'
         };
 
         // --- HELPER FUNCTIONS ---

@@ -1,15 +1,19 @@
 <?php
 namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class Notification extends Model
 {
+    use Auditable, BelongsToHospital;
     protected $fillable = [
         'user_id',
-        'type', // e.g., 'appointment', 'message', 'payment'
+        'hospital_id',
+        'type',
         'message',
         'is_read',
-        'channel', // e.g., 'sms', 'email', 'database'
+        'channel',
     ];
 
     protected $casts = [

@@ -18,21 +18,22 @@ use App\Traits\ManagesAdminCache;
 
 class DoctorController extends Controller
 {
-    use ManagesAdminCache; // <-- 2. USE THE HELPER
+    use ManagesAdminCache;
 
-    /**
-     * Display a listing of the doctors.
-     */
     public function index(Request $request)
     {
-        // (This function remains the same)
+        $hospitalId = Auth::user()->hospital_id;
+
+        // Scoped via Doctor Model Trait automatically, but eager load user
         $query = Doctor::with(['user', 'category', 'appointments.patient']);
+        
         if ($request->has('category_id')) {
             $query->where('category_id', $request->category_id);
         }
         if ($request->has('department_id')) {
             $query->where('department_id', $request->department_id);
         }
+        
         $search = $request->get('search');
         if ($search) {
             $query->whereHas('user', function ($userQuery) use ($search) {
@@ -41,18 +42,18 @@ class DoctorController extends Controller
                           ->orWhere('phone', 'like', "%{$search}%");
             });
         }
+        
         $doctors = $query->get();
         return view('admin.doctor.doctors_lists', compact('doctors'));
     }
 
-    /**
-     * Display a listing of all HODs.
-     */
     public function listHODs(Request $request)
     {
-        // (This function remains the same)
-        $query = User::where('role', 'hod')
+        // FIX: Manually scope User query
+        $query = User::where('hospital_id', Auth::user()->hospital_id)
+                     ->where('role', 'hod')
                      ->with(['doctor.department']);
+                     
         $search = $request->get('search');
         if ($search) {
             $query->where('name', 'like', "%{$search}%")
@@ -62,11 +63,11 @@ class DoctorController extends Controller
         return view('admin.doctor.hods_list', compact('hods'));
     }
 
-    /**
-     * Assign an HOD back to doctor role.
-     */
     public function assignDoctorRole(User $user)
     {
+        // Security check
+        if ($user->hospital_id !== Auth::user()->hospital_id) abort(403);
+
         if ($user->role !== 'hod') {
             return redirect()->back()->with('error', 'User is not an HOD.');
         }
@@ -78,10 +79,7 @@ class DoctorController extends Controller
                 $department->update(['department_head_id' => null]);
             }
 
-            // --- 3. THIS IS THE UPGRADE ---
-            // Use our new helper function
             $this->flushAdminStatsCache();
-            // --- END OF UPGRADE ---
 
             return redirect()->back()->with('success', $user->name . ' has been successfully assigned back to doctor role.');
         } catch (\Exception $e) {
@@ -89,23 +87,15 @@ class DoctorController extends Controller
         }
     }
 
-    /**
-     * Show the form for creating a new doctor.
-     */
     public function create()
     {
-        // (This function remains the same)
-        $departments = Department::all();
-        $categories = Category::all();
+        $departments = Department::all(); // Scoped by Trait
+        $categories = Category::all();    // Scoped by Trait
         return view('admin.doctor.add_doctor', compact('departments', 'categories'));
     }
 
-    /**
-     * Store a newly created doctor in storage.
-     */
     public function store(Request $request)
     {
-        // (This function remains the same)
         $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
@@ -118,17 +108,15 @@ class DoctorController extends Controller
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        \Log::info('Doctor store request data:', $request->all());
-
+        // FIX: Assign hospital_id
         $user = User::create([
             'name' => $request->first_name . ' ' . $request->last_name,
             'email' => $request->email,
             'phone' => $request->phone,
             'password' => bcrypt($request->password),
             'role' => 'doctor',
+            'hospital_id' => Auth::user()->hospital_id, // <-- CRITICAL
         ]);
-
-        \Log::info('Created user:', $user->toArray());
 
         if ($request->hasFile('profile_image')) {
             $profileImage = $request->file('profile_image');
@@ -138,44 +126,44 @@ class DoctorController extends Controller
             $user->save();
         }
 
-        $doctor = Doctor::create([
+        // Doctor model has BelongsToHospital trait, so it auto-assigns, 
+        // but we pass it explicitly for clarity since we are creating it manually.
+        Doctor::create([
             'user_id' => $user->id,
+            'hospital_id' => Auth::user()->hospital_id,
             'doctor_id' => 'DOC' . str_pad($user->id, 6, '0', STR_PAD_LEFT),
             'license_number' => $request->license_number,
             'category_id' => $request->specialization_id,
             'department_id' => $request->department_id,
             'status' => $request->status ?? 'verified',
-            'availability' => json_encode([]), 
         ]);
 
-        \Log::info('Created doctor:', $doctor->toArray());
-
-        // --- 3. THIS IS THE UPGRADE ---
-        // Use our new helper function
         $this->flushAdminStatsCache();
-        // --- END OF UPGRADE ---
 
         return redirect()->route('admin.doctor.index')->with('success', 'Doctor added successfully.');
     }
 
-    /**
-     * Display the doctor dashboard.
-     */
     public function dashboard()
     {
-        // (This function remains the same)
         $today = now()->toDateString();
+        // Models with Traits are safe
         $doctorsCount = Doctor::count();
         $appointmentsCount = Appointment::whereDate('appointment_time', $today)->count();
-        $patientsCount = User::where('role', 'patient')->count();
+        
+        // FIX: Scope User count
+        $patientsCount = User::where('role', 'patient')
+            ->where('hospital_id', Auth::user()->hospital_id)
+            ->count();
+            
         $disbursementsCount = Payment::whereMonth('created_at', now()->month)
-                                        ->whereYear('created_at', now()->year)
-                                        ->count();
+            ->whereYear('created_at', now()->year)
+            ->count();
+                                        
         $todaysAppointments = Appointment::with(['patient', 'doctor'])
-                                            ->whereDate('appointment_time', $today)
-                                            ->orderBy('appointment_time')
-                                            ->limit(5)
-                                            ->get();
+            ->whereDate('appointment_time', $today)
+            ->orderBy('appointment_time')
+            ->limit(5)
+            ->get();
         return view('admin.doctor.index', compact(
             'doctorsCount',
             'appointmentsCount',
@@ -185,21 +173,21 @@ class DoctorController extends Controller
         ));
     }
 
-    /**
-     * Display the specified doctor profile.
-     */
     public function show(Doctor $doctor)
     {
-        // (This function remains the same)
+        // Security check handled by Global Scope on Doctor model
         $doctor->load(['user', 'department', 'category', 'appointments.patient']);
+        
         $consultations = \App\Models\Consultation::with(['patient'])
             ->where('doctor_id', $doctor->user_id)
             ->orderBy('start_time', 'desc')
             ->get();
+            
         $doctorSchedule = $doctor->schedules()->with('clinic')->get()->groupBy('day_of_week');
         $todayName = now()->format('l'); 
         $todayKey = strtolower($todayName);  
         $todaysSchedule = $doctorSchedule->get($todayKey); 
+        
         $todaysAppointments = \App\Models\Appointment::with(['patient', 'consultation'])
             ->where('doctor_id', $doctor->user_id)
             ->whereDate('appointment_time', now())
@@ -216,32 +204,19 @@ class DoctorController extends Controller
         ));
     }
 
-    /**
-     * Show the form for editing the specified doctor.
-     */
     public function edit(Doctor $doctor)
     {
-        // (This function remains the same)
         $doctor->load(['user', 'department', 'category']);
         $departments = Department::all();
         $categories = Category::all();
         return view('admin.doctor.add_doctor', compact('doctor', 'departments', 'categories'));
     }
 
-    /**
-     * Update the specified doctor in storage.
-     */
     public function update(Request $request, Doctor $doctor)
     {
         if ($request->has('status') && in_array($request->status, ['suspended', 'verified'])) {
-            $doctor->update([
-                'status' => $request->status,
-            ]);
-            
-            // --- 3. THIS IS THE UPGRADE ---
+            $doctor->update(['status' => $request->status]);
             $this->flushAdminStatsCache();
-            // --- END OF UPGRADE ---
-
             return redirect()->route('admin.doctor.index')->with('success', 'Doctor status updated successfully.');
         }
         
@@ -274,37 +249,24 @@ class DoctorController extends Controller
             'status' => $request->status,
         ]);
 
-        // --- 3. THIS IS THE UPGRADE ---
         $this->flushAdminStatsCache();
-        // --- END OF UPGRADE ---
 
         return redirect()->route('admin.doctor.index')->with('success', 'Doctor updated successfully.');
     }
 
-    /**
-     * Remove the specified doctor from storage.
-     */
     public function destroy(Doctor $doctor)
     {
         try {
             $doctor->user->delete();
-            
-            // --- 3. THIS IS THE UPGRADE ---
             $this->flushAdminStatsCache();
-            // --- END OF UPGRADE ---
-
             return redirect()->route('admin.doctor.index')->with('success', 'Doctor deleted successfully.');
         } catch (\Exception $e) {
             return redirect()->route('admin.doctor.index')->with('error', 'Failed to delete doctor: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Show the doctor specialization management page.
-     */
     public function specializations()
     {
-        // (This function remains the same)
         $categories = Category::all();
         $departments = Department::all();
         $specializations = collect();
@@ -329,12 +291,8 @@ class DoctorController extends Controller
         return view('admin.doctor.specialization.specializations', compact('specializations'));
     }
 
-    /**
-     * Show the doctor schedule management page.
-     */
     public function schedule()
     {
-        // (This function remains the same)
         $doctor = Auth::user()->doctor;
         if (!$doctor) {
             return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
@@ -343,21 +301,17 @@ class DoctorController extends Controller
         return view('admin.doctor.schedule', compact('doctor', 'schedules'));
     }
 
-    /**
-     * Store a new doctor schedule.
-     */
     public function storeSchedule(Request $request)
     {
-        // (This function remains the same)
         $doctor = Auth::user()->doctor;
-        if (!$doctor) {
-            return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
-        }
+        if (!$doctor) return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
+        
         $request->validate([
             'day_of_week' => 'required|in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
         ]);
+        // DoctorSchedule has BelongsToHospital trait, so hospital_id is automatic
         $doctor->schedules()->create([
             'day_of_week' => $request->day_of_week,
             'start_time' => $request->start_time,
@@ -366,16 +320,11 @@ class DoctorController extends Controller
         return redirect()->route('admin.doctor.schedule')->with('success', 'Schedule added successfully.');
     }
 
-    /**
-     * Update an existing doctor schedule.
-     */
     public function updateSchedule(Request $request)
     {
-        // (This function remains the same)
         $doctor = Auth::user()->doctor;
-        if (!$doctor) {
-            return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
-        }
+        if (!$doctor) return redirect()->route('admin.doctor.index')->with('error', 'You are not a doctor.');
+        
         $request->validate([
             'schedule_id' => 'required|exists:doctor_schedules,id',
             'day_of_week' => 'required|in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday',
@@ -391,21 +340,17 @@ class DoctorController extends Controller
         return redirect()->route('admin.doctor.schedule')->with('success', 'Schedule updated successfully.');
     }
 
-    /**
-     * Assign a user as Head of Department (HOD).
-     */
     public function assignHOD(User $user)
     {
+        // Security check
+        if ($user->hospital_id !== Auth::user()->hospital_id) abort(403);
+
         if ($user->role !== 'doctor') {
             return redirect()->back()->with('error', 'User is not a doctor.');
         }
         try {
             $user->update(['role' => 'hod']);
-
-            // --- 3. THIS IS THE UPGRADE ---
             $this->flushAdminStatsCache();
-            // --- END OF UPGRADE ---
-
             return redirect()->back()->with('success', $user->name . ' has been successfully assigned as HOD.');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Failed to assign HOD: ' . $e->getMessage());

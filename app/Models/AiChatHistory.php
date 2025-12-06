@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\BelongsToHospital;
 
 class AiChatHistory extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToHospital;
 
     /**
      * The table associated with the model.
@@ -26,6 +27,7 @@ class AiChatHistory extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'hospital_id',
         'user_id',
         'history',
     ];

@@ -97,6 +97,7 @@ class PaymentController extends Controller
     public function index()
     {
         $payments = Payment::with(['user', 'appointment', 'consultation'])
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
             ->orderBy('created_at', 'desc')
             ->paginate(10);
         return view('admin.payments.index', compact('payments'));
@@ -104,9 +105,15 @@ class PaymentController extends Controller
 
     public function create()
     {
-        $patients = User::where('role', 'patient')->get();
-        $doctors = User::where('role', 'doctor')->get();
-        $appointments = Appointment::with(['patient', 'doctor'])->get();
+        $patients = User::where('role', 'patient')
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
+            ->get();
+        $doctors = User::where('role', 'doctor')
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
+            ->get();
+        $appointments = Appointment::with(['patient', 'doctor'])
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
+            ->get();
         return view('admin.payments.create', compact('patients', 'doctors', 'appointments'));
     }
 
@@ -123,7 +130,10 @@ class PaymentController extends Controller
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
-        Payment::create($request->all());
+        // FIX: Explicitly set hospital_id when creating payment
+        $paymentData = $request->all();
+        $paymentData['hospital_id'] = Auth::user()->hospital_id;
+        Payment::create($paymentData);
         Cache::forget("admin_stats_total_payments_month");
         
         return redirect()->route('admin.payments.index')->with('success', 'Payment added.');
@@ -131,19 +141,32 @@ class PaymentController extends Controller
 
     public function show(Payment $payment)
     {
+        // Security check
+        if ($payment->hospital_id !== Auth::user()->hospital_id) abort(403);
+        
         $payment->load(['user', 'appointment', 'consultation']);
         return view('admin.payments.show', compact('payment'));
     }
 
     public function edit(Payment $payment)
     {
-        $patients = User::where('role', 'patient')->get();
-        $doctors = User::where('role', 'doctor')->get();
+        // Security check
+        if ($payment->hospital_id !== Auth::user()->hospital_id) abort(403);
+        
+        $patients = User::where('role', 'patient')
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
+            ->get();
+        $doctors = User::where('role', 'doctor')
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
+            ->get();
         return view('admin.payments.edit', compact('payment', 'patients', 'doctors'));
     }
 
     public function update(Request $request, Payment $payment)
     {
+        // Security check
+        if ($payment->hospital_id !== Auth::user()->hospital_id) abort(403);
+        
         $payment->update($request->all());
         Cache::forget("admin_stats_total_payments_month");
         return redirect()->route('admin.payments.index')->with('success', 'Payment updated.');
@@ -151,6 +174,9 @@ class PaymentController extends Controller
 
     public function destroy(Payment $payment)
     {
+        // Security check
+        if ($payment->hospital_id !== Auth::user()->hospital_id) abort(403);
+        
         $payment->delete();
         Cache::forget("admin_stats_total_payments_month");
         return redirect()->route('admin.payments.index')->with('success', 'Payment deleted.');
@@ -158,12 +184,18 @@ class PaymentController extends Controller
 
     public function invoiceList()
     {
-        $payments = Payment::with(['user', 'appointment.doctor'])->orderBy('created_at', 'desc')->paginate(10);
+        $payments = Payment::with(['user', 'appointment.doctor'])
+            ->where('hospital_id', Auth::user()->hospital_id) // FIX: Scope to hospital
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
         return view('admin.invoice', compact('payments'));
     }
 
     public function invoice(Payment $payment)
     {
+        // Security check
+        if ($payment->hospital_id !== Auth::user()->hospital_id) abort(403);
+        
         $payment->load(['user', 'appointment.doctor', 'consultation']);
         return view('admin.payments.invoice', compact('payment'));
     }

@@ -1,14 +1,18 @@
 <?php
 namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\BelongsToHospital;
 
 class Chat extends Model
 {
+    use BelongsToHospital;
+
     protected $fillable = [
+        'hospital_id',
         'doctor_id',
         'patient_id',
         'message',
-        'sender_type', // e.g., 'doctor', 'patient'
+        'sender_type',
         'sent_at',
     ];
 

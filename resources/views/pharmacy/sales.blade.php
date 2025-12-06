@@ -1,13 +1,33 @@
-@extends('layouts.pharmacy')
+<!doctype html>
+<html class="no-js " lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+<meta name="description" content="Pharmacy Sales - Process and Manage Sales">
+<title>Clinical Pro || Pharmacy Sales</title>
+<!-- Favicon -->
+<link rel="icon" href="{{ asset('assets/favicon.ico') }}" type="image/x-icon">
 
-@section('content')
+<!-- Bootstrap CSS -->
+<link rel="stylesheet" href="{{ asset('assets/plugins/bootstrap/css/bootstrap.min.css') }}">
+
+<!-- Custom Css -->
+<link rel="stylesheet" href="{{ asset('assets/css/main.css') }}">
+<link rel="stylesheet" href="{{ asset('assets/css/color_skins.css') }}">
+</head>
+<body class="theme-cyan">
+
+@include('pharmacy.pharmacy_sidemenu')
+
+<section class="content">
 <div class="container-fluid">
     <div class="block-header">
         <div class="row">
             <div class="col-lg-6 col-md-8 col-sm-12">
                 <h2><a href="javascript:void(0);" class="btn btn-xs btn-link btn-toggle-fullwidth"><i class="fa fa-arrow-left"></i></a> Pharmacy Sales</h2>
                 <ul class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ route('pharmacy.dashboard') }}"><i class="icon-home"></i></a></li>
+                    <li class="breadcrumb-item"><a href="{{ Auth::user()->role === 'primary_pharmacist' ? route('primary_pharmacist.dashboard') : (Auth::user()->role === 'senior_pharmacist' ? route('senior_pharmacist.dashboard') : route('clinic_pharmacist.dashboard')) }}"><i class="icon-home"></i></a></li>
                     <li class="breadcrumb-item active">Sales</li>
                 </ul>
             </div>
@@ -119,6 +139,12 @@
         </div>
     </div>
 </div>
+</section>
+
+<!-- Scripts -->
+<script src="{{ asset('assets/plugins/jquery/jquery.min.js') }}"></script>
+<script src="{{ asset('assets/plugins/bootstrap/js/bootstrap.min.js') }}"></script>
+<script src="{{ asset('assets/js/admin.js') }}"></script>
 
 <script>
     document.getElementById('drug_id').addEventListener('change', function() {
@@ -162,4 +188,5 @@
         });
     });
 </script>
-@endsection
+</body>
+</html>

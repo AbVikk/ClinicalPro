@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class Drug extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable, BelongsToHospital;
 
     protected $fillable = [
         'name',
@@ -16,6 +18,7 @@ class Drug extends Model
         'unit_price',
         'is_controlled',
         'details',
+        'hospital_id',
     ];
 
     protected $casts = [
@@ -37,7 +40,7 @@ class Drug extends Model
 
     public function clinicInventories()
     {
-        return $this->hasManyThrough(ClinicInventory::class, DrugBatch::class);
+        return $this->hasManyThrough(ClinicInventory::class, DrugBatch::class, 'drug_id', 'batch_id', 'id', 'id');
     }
     
     // Relationship to DrugCategory

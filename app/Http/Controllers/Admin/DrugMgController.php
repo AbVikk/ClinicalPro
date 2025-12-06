@@ -14,6 +14,12 @@ class DrugMgController extends Controller
     public function index()
     {
         $mgs = DrugMg::all();
+        
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.mg.*')) {
+            return view('pharmacy.primary_pharmacist.pharmacy.mg.index', compact('mgs'));
+        }
+        
         return view('admin.pharmacy.mg.index', compact('mgs'));
     }
 
@@ -22,6 +28,11 @@ class DrugMgController extends Controller
      */
     public function create()
     {
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.mg.*')) {
+            return view('pharmacy.primary_pharmacist.pharmacy.mg.create');
+        }
+        
         return view('admin.pharmacy.mg.create');
     }
 
@@ -38,6 +49,12 @@ class DrugMgController extends Controller
             'mg_value' => $request->mg_value,
         ]);
 
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.mg.*')) {
+            return redirect()->route('primary_pharmacist.pharmacy.mg.index')
+                ->with('success', 'Drug mg value created successfully.');
+        }
+
         return redirect()->route('admin.pharmacy.mg.index')
             ->with('success', 'Drug mg value created successfully.');
     }
@@ -47,6 +64,11 @@ class DrugMgController extends Controller
      */
     public function edit(DrugMg $mg)
     {
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.mg.*')) {
+            return view('pharmacy.primary_pharmacist.pharmacy.mg.edit', compact('mg'));
+        }
+        
         return view('admin.pharmacy.mg.edit', compact('mg'));
     }
 
@@ -63,6 +85,12 @@ class DrugMgController extends Controller
             'mg_value' => $request->mg_value,
         ]);
 
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.mg.*')) {
+            return redirect()->route('primary_pharmacist.pharmacy.mg.index')
+                ->with('success', 'Drug mg value updated successfully.');
+        }
+
         return redirect()->route('admin.pharmacy.mg.index')
             ->with('success', 'Drug mg value updated successfully.');
     }
@@ -74,11 +102,23 @@ class DrugMgController extends Controller
     {
         // Check if the mg value is being used by any drugs
         if ($mg->drugs()->count() > 0) {
+            // Check if the route is for primary pharmacist
+            if (request()->routeIs('primary_pharmacist.pharmacy.mg.*')) {
+                return redirect()->route('primary_pharmacist.pharmacy.mg.index')
+                    ->with('error', 'Cannot delete mg value because it is being used by drugs.');
+            }
+            
             return redirect()->route('admin.pharmacy.mg.index')
                 ->with('error', 'Cannot delete mg value because it is being used by drugs.');
         }
 
         $mg->delete();
+
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.mg.*')) {
+            return redirect()->route('primary_pharmacist.pharmacy.mg.index')
+                ->with('success', 'Drug mg value deleted successfully.');
+        }
 
         return redirect()->route('admin.pharmacy.mg.index')
             ->with('success', 'Drug mg value deleted successfully.');

@@ -4,13 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class Payment extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable, BelongsToHospital;
 
     protected $fillable = [
         'user_id',
+        'hospital_id',
         'appointment_id',
         'consultation_id',
         'clinic_id',
@@ -40,8 +43,8 @@ class Payment extends Model
     public const METHOD_CARD_ONLINE = 'card_online';
     public const METHOD_CASH = 'cash_in_clinic';
     public const METHOD_BANK_TRANSFER = 'bank_transfer';
-    // 'paystack' is technically the gateway, but if you use it as a method name in DB:
-    public const METHOD_PAYSTACK = 'paystack'; 
+    public const METHOD_POS = 'pos';
+    public const METHOD_PAYSTACK = 'paystack';
 
     // Payment Statuses
     public const STATUS_PAID = 'paid';
@@ -60,6 +63,7 @@ class Payment extends Model
             self::METHOD_CARD_ONLINE,
             self::METHOD_CASH,
             self::METHOD_BANK_TRANSFER,
+            self::METHOD_POS,
             self::METHOD_PAYSTACK,
         ];
     }

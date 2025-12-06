@@ -24,7 +24,7 @@ class RouteServiceProvider extends ServiceProvider
                 ->group(base_path('routes/api.php'));
 
             // ✅ Public Web Routes
-            Route::middleware('web')
+            Route::middleware(['web', 'hospital.subdomain'])
                 ->group(base_path('routes/web.php'));
 
             // ✅ Admin Routes
@@ -51,11 +51,23 @@ class RouteServiceProvider extends ServiceProvider
                 ->name('patient.')
                 ->group(base_path('routes/patient.php'));
 
-            // ✅ Pharmacy Routes (covers all pharmacist roles)
-            Route::middleware(['web', 'auth', 'role:primary_pharmacist|senior_pharmacist|clinic_pharmacist'])
-                ->prefix('pharmacy')
-                ->name('pharmacy.')
-                ->group(base_path('routes/pharmacy.php'));
+            // ✅ Primary Pharmacist Routes
+            Route::middleware(['web', 'auth', 'role:primary_pharmacist'])
+                ->prefix('primary_pharmacist')
+                ->name('primary_pharmacist.')
+                ->group(base_path('routes/primary_pharmacist.php'));
+
+            // ✅ Senior Pharmacist Routes
+            Route::middleware(['web', 'auth', 'role:senior_pharmacist'])
+                ->prefix('senior_pharmacist')
+                ->name('senior_pharmacist.')
+                ->group(base_path('routes/senior_pharmacist.php'));
+
+            // ✅ Clinic Pharmacist Routes
+            Route::middleware(['web', 'auth', 'role:clinic_pharmacist'])
+                ->prefix('clinic_pharmacist')
+                ->name('clinic_pharmacist.')
+                ->group(base_path('routes/clinic_pharmacist.php'));
 
             // ✅ Clinic Routes
             Route::middleware(['web', 'auth', 'role:nurse'])

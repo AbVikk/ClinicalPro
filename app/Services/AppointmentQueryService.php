@@ -10,176 +10,166 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-/**
- * This service handles complex queries for finding
- * available doctors, locations, and appointment slots.
- */
 class AppointmentQueryService
 {
     /**
      * Find available LOCATIONS based on a selected date and time.
-     * This logic is now centralized here.
      */
     public function getAvailableLocations(string $dateTimeString)
     {
-        Log::info("=== AppointmentQueryService@getAvailableLocations Start ===");
+        Log::info("--- LOOKING FOR LOCATIONS ---");
+        Log::info("Input: " . $dateTimeString);
+
         if (!$dateTimeString) {
-            Log::warning("No date/time string received.");
             return response()->json(['locations' => []]);
         }
 
         try {
             $selectedDateTime = Carbon::createFromFormat('l d F Y - H:i', $dateTimeString);
         } catch (\Exception $e) {
-            Log::error("!!! Date parsing error: " . $e->getMessage() . " | Input: " . $dateTimeString);
-            return response()->json(['locations' => [], 'error' => 'Invalid date format.']);
+            Log::error("Date Parse Error: " . $e->getMessage());
+            return response()->json(['locations' => [], 'error' => 'Invalid date.']);
         }
 
-        $dayOfWeek = strtolower($selectedDateTime->format('l'));
+        $dayOfWeek = strtolower($selectedDateTime->format('l')); // e.g., 'monday'
         $time = $selectedDateTime->format('H:i:s');
         $date = $selectedDateTime->format('Y-m-d');
-        Log::info("Checking Rulebook for: Day={$dayOfWeek}, Date={$date}, Time={$time}");
+        
+        Log::info("Search Criteria: Day={$dayOfWeek}, Date={$date}, Time={$time}");
 
+        // 1. Find Schedules (Case-Insensitive Day Match)
         $schedulesQuery = DoctorSchedule::with(['doctor', 'doctor.doctorProfile'])
-            ->where('day_of_week', $dayOfWeek)
-            ->where('start_date', '<=', $date)
-            ->where('end_date', '>=', $date)
+            // Fix: Check lowercase day against lowercase DB column to ensure match
+            ->where(DB::raw('LOWER(day_of_week)'), $dayOfWeek)
+            // Handle Date Ranges (NULL = Forever)
+            ->where(function($q) use ($date) {
+                $q->whereNull('start_date')->orWhere('start_date', '<=', $date);
+            })
+            ->where(function($q) use ($date) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $date);
+            })
+            // Handle Time
             ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $time)
             ->where(DB::raw('CAST(end_time AS TIME)'), '>', $time);
 
         $schedulesFound = $schedulesQuery->get();
-        Log::info("Found " . $schedulesFound->count() . " schedules matching time/date criteria.");
+        Log::info("Schedules Found in DB: " . $schedulesFound->count());
 
         if ($schedulesFound->isEmpty()) {
-            Log::info("=== AppointmentQueryService@getAvailableLocations End (No schedules) ===");
             return response()->json(['locations' => []]);
         }
 
         $verifiedDoctorIds = [];
         foreach ($schedulesFound as $schedule) {
-            $doctorUser = $schedule->doctor;
-            if (!$doctorUser) continue;
-            if ($doctorUser->role !== 'doctor') continue;
-            if ($doctorUser->status !== 'active') continue;
+            $doc = $schedule->doctor;
+            
+            // Debugging why a doctor might be skipped
+            if (!$doc) { Log::info("Schedule #{$schedule->id} skipped: No User linked."); continue; }
+            
+            // Flexible Role Check (case-insensitive)
+            if (strtolower($doc->role) !== 'doctor') { 
+                Log::info("Schedule #{$schedule->id} skipped: User role is '{$doc->role}'"); continue; 
+            }
+            
+            // Flexible Status Check
+            if (strtolower($doc->status) !== 'active') { 
+                Log::info("Schedule #{$schedule->id} skipped: User status is '{$doc->status}'"); continue; 
+            }
 
-            $doctorProfile = $doctorUser->doctorProfile;
-            if (!$doctorProfile) continue;
-            if ($doctorProfile->status !== 'verified') continue;
+            // Flexible Profile Check (If profile exists, must be verified. If missing, we might allow or skip)
+            if ($doc->doctorProfile) {
+                if (strtolower($doc->doctorProfile->status) !== 'verified') {
+                    Log::info("Schedule #{$schedule->id} skipped: Profile status '{$doc->doctorProfile->status}'"); 
+                    continue;
+                }
+            } else {
+                Log::warning("Schedule #{$schedule->id}: Doctor has no profile table entry. Skipping safety check.");
+            }
 
-            $verifiedDoctorIds[] = $doctorUser->id;
+            $verifiedDoctorIds[] = $doc->id;
         }
 
         $uniqueVerifiedDoctorIds = array_unique($verifiedDoctorIds);
-        Log::info("Unique Verified Doctor User IDs found: " . json_encode($uniqueVerifiedDoctorIds));
-
+        Log::info("Valid Doctor IDs: " . implode(',', $uniqueVerifiedDoctorIds));
+        
+        // Filter schedules to only valid doctors
         $finalSchedules = $schedulesFound->whereIn('doctor_id', $uniqueVerifiedDoctorIds);
-        Log::info("Found " . $finalSchedules->count() . " schedules linked to verified doctors.");
-
-        $availableLocationIds = $finalSchedules->pluck('location')->unique()->values();
-        Log::info("Unique location IDs from final schedules: " . json_encode($availableLocationIds));
-
+        
+        // Extract Locations
+        $locationIds = $finalSchedules->pluck('location')->unique()->values();
         $locations = [];
-        $clinicIds = [];
-        foreach ($availableLocationIds as $locationId) {
-            if ($locationId === 'virtual') {
+        $dbClinicIds = [];
+
+        foreach ($locationIds as $locId) {
+            if ($locId === 'virtual') {
                 $locations[] = ['id' => 'virtual', 'name' => 'Virtual Session'];
-            } else if (is_numeric($locationId)) {
-                $clinicIds[] = (int)$locationId;
+            } elseif (is_numeric($locId)) {
+                $dbClinicIds[] = $locId;
             }
         }
 
-        if (!empty($clinicIds)) {
-            $clinics = Clinic::whereIn('id', $clinicIds)->select('id', 'name')->get();
+        if (!empty($dbClinicIds)) {
+            $clinics = Clinic::whereIn('id', $dbClinicIds)->get();
             foreach ($clinics as $clinic) {
                 $locations[] = ['id' => $clinic->id, 'name' => $clinic->name];
             }
         }
 
-        usort($locations, function ($a, $b) {
-            return strcmp($a['name'], $b['name']);
-        });
-
-        Log::info("Returning final locations list: " . json_encode($locations));
-        Log::info("=== AppointmentQueryService@getAvailableLocations End ===");
         return response()->json(['locations' => $locations]);
     }
 
     /**
-     * Get available doctors based on date, time, location, AND check for conflicts.
-     * This logic is now centralized here.
+     * Get available doctors based on date, time, location.
      */
     public function getAvailableDoctors(string $dateTimeString, string $clinicId, int $duration)
     {
-        Log::info("=== AppointmentQueryService@getAvailableDoctors Start ===");
-        Log::info("Received: date='{$dateTimeString}', clinic='{$clinicId}', duration='{$duration}'");
-
-        if (!$dateTimeString || !$clinicId) {
-            Log::warning("Missing date/time string or clinic ID.");
-            return response()->json(['doctors' => []]);
-        }
+        if (!$dateTimeString || !$clinicId) return response()->json(['doctors' => []]);
 
         try {
-            $appointmentStart = Carbon::createFromFormat('l d F Y - H:i', $dateTimeString);
-            $appointmentEnd = $appointmentStart->copy()->addMinutes($duration);
-            Log::info("Calculated Appointment Slot: Start={$appointmentStart->toDateTimeString()}, End={$appointmentEnd->toDateTimeString()}");
+            $start = Carbon::createFromFormat('l d F Y - H:i', $dateTimeString);
+            $end = $start->copy()->addMinutes($duration);
         } catch (\Exception $e) {
-            Log::error("!!! Date parsing error: " . $e->getMessage() . " | Input: " . $dateTimeString);
-            return response()->json(['doctors' => [], 'error' => 'Invalid date format.']);
-        }
-
-        $dayOfWeek = strtolower($appointmentStart->format('l'));
-        $startTime = $appointmentStart->format('H:i:s');
-        $date = $appointmentStart->format('Y-m-d');
-        Log::info("Checking Schedule Rulebook for: Day={$dayOfWeek}, Date={$date}, Time={$startTime}, Location={$clinicId}");
-
-        $scheduledDoctorIds = DoctorSchedule::where('location', $clinicId)
-            ->where('day_of_week', $dayOfWeek)
-            ->where('start_date', '<=', $date)
-            ->where('end_date', '>=', $date)
-            ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $startTime)
-            ->where(DB::raw('CAST(end_time AS TIME)'), '>=', $appointmentEnd->format('H:i:s'))
-            ->pluck('doctor_id')
-            ->unique();
-        Log::info("Found " . $scheduledDoctorIds->count() . " doctor IDs matching schedule rules.");
-
-        if ($scheduledDoctorIds->isEmpty()) {
-            Log::info("=== AppointmentQueryService@getAvailableDoctors End (No schedules) ===");
             return response()->json(['doctors' => []]);
         }
 
-        $verifiedDoctorIds = User::whereIn('id', $scheduledDoctorIds)
+        $dayOfWeek = strtolower($start->format('l')); 
+        $startTime = $start->format('H:i:s');
+        $date = $start->format('Y-m-d');
+
+        // 1. Find Schedules
+        $doctorIds = DoctorSchedule::where('location', $clinicId)
+            ->where(DB::raw('LOWER(day_of_week)'), $dayOfWeek)
+            ->where(function($q) use ($date) { $q->whereNull('start_date')->orWhere('start_date', '<=', $date); })
+            ->where(function($q) use ($date) { $q->whereNull('end_date')->orWhere('end_date', '>=', $date); })
+            ->where(DB::raw('CAST(start_time AS TIME)'), '<=', $startTime)
+            ->where(DB::raw('CAST(end_time AS TIME)'), '>=', $end->format('H:i:s'))
+            ->pluck('doctor_id')
+            ->unique();
+
+        if ($doctorIds->isEmpty()) return response()->json(['doctors' => []]);
+
+        // 2. Validate Doctors
+        $validDoctors = User::whereIn('id', $doctorIds)
             ->where('role', 'doctor')
             ->where('status', 'active')
-            ->whereHas('doctorProfile', function ($query) {
-                $query->where('status', 'verified');
-            })
             ->pluck('id');
-        Log::info("Found " . $verifiedDoctorIds->count() . " verified doctors matching schedule.");
 
-        if ($verifiedDoctorIds->isEmpty()) {
-            Log::info("=== AppointmentQueryService@getAvailableDoctors End (No verified) ===");
-            return response()->json(['doctors' => []]);
-        }
+        if ($validDoctors->isEmpty()) return response()->json(['doctors' => []]);
 
-        Log::info("Checking for conflicts for doctor IDs: " . json_encode($verifiedDoctorIds->toArray()));
-        $conflictingDoctorIds = Consultation::whereIn('doctor_id', $verifiedDoctorIds)
+        // 3. Check Conflicts
+        $conflicts = Consultation::whereIn('doctor_id', $validDoctors)
             ->whereNotIn('status', ['completed', 'missed', 'cancelled'])
-            ->where(function ($query) use ($appointmentStart, $appointmentEnd) {
-                $query->where('start_time', '<', $appointmentEnd)
-                    ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $appointmentStart);
+            ->where(function ($q) use ($start, $end) {
+                $q->where('start_time', '<', $end)
+                  ->where(DB::raw('DATE_ADD(start_time, INTERVAL duration_minutes MINUTE)'), '>', $start);
             })
             ->pluck('doctor_id')
             ->unique();
-        Log::info("Found " . $conflictingDoctorIds->count() . " doctors with conflicts.");
 
-        $trulyAvailableDoctorIds = collect($verifiedDoctorIds)->diff($conflictingDoctorIds);
-        Log::info("Final available doctor IDs: " . json_encode($trulyAvailableDoctorIds->toArray()));
+        $availableIds = $validDoctors->diff($conflicts);
 
-        $doctors = User::whereIn('id', $trulyAvailableDoctorIds)
-            ->select('id', 'name')
-            ->get();
-        Log::info("Returning " . $doctors->count() . " final available doctors.");
-        Log::info("=== AppointmentQueryService@getAvailableDoctors End ===");
+        $doctors = User::whereIn('id', $availableIds)->select('id', 'name')->get();
+
         return response()->json(['doctors' => $doctors]);
     }
 }

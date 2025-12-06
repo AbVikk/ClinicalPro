@@ -5,25 +5,28 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\AppointmentReason;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class Appointment extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable, BelongsToHospital;
 
     protected $fillable = [
         'doctor_id',
         'patient_id',
+        'hospital_id',
         'appointment_time',
         'type',
         'status',
         'notes',
         'reason',
         'appointment_reason_id',
-        'consultation_id', // <-- You added this (Correct!)
-        'payment_id',      // <-- THIS IS THE NEW FIX (Bug A)
-        'started_at',      // <-- Added this for appointment start tracking
-        'completed_at',    // <-- Added this for appointment completion tracking
-        'end_reason',      // <-- Added this for appointment end reason
+        'consultation_id',
+        'payment_id',
+        'started_at',
+        'completed_at',
+        'end_reason',
     ];
 
     protected $casts = [

@@ -38,6 +38,12 @@ class RedirectIfAuthenticated
                         return redirect('/donor/dashboard');
                     case 'nurse':
                         return redirect('/nurse/dashboard');
+                    case 'primary_pharmacist':
+                        return redirect('/primary_pharmacist/dashboard');
+                    case 'senior_pharmacist':
+                        return redirect('/senior_pharmacist/dashboard');
+                    case 'clinic_pharmacist':
+                        return redirect('/clinic_pharmacist/dashboard');
                     default:
                         return redirect('/admin/index');
                 }

@@ -14,6 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserHasRole::class,
             'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
+            'clinic_pharmacist' => \App\Http\Middleware\ClinicPharmacistMiddleware::class,
+            'senior_pharmacist' => \App\Http\Middleware\SeniorPharmacistMiddleware::class,
+            'primary_pharmacist' => \App\Http\Middleware\PrimaryPharmacistMiddleware::class,
+            'hospital.context' => \App\Http\Middleware\EnsureHospitalContext::class,
+            'hospital.subdomain' => \App\Http\Middleware\HospitalSubdomainMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

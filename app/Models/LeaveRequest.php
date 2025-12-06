@@ -3,11 +3,16 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class LeaveRequest extends Model
 {
+    use Auditable, BelongsToHospital;
+
     protected $fillable = [
         'user_id',
+        'hospital_id',
         'leave_type',
         'start_date',
         'end_date',

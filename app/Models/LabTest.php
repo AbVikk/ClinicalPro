@@ -4,14 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class LabTest extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable, BelongsToHospital;
 
     protected $fillable = [
         'appointment_id',
-        'doctor_id',  // Added this field
+        'doctor_id',
+        'hospital_id',
         'test_name',
         'file_path',
     ];

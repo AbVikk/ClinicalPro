@@ -196,6 +196,7 @@ class InvitationController extends Controller
             'photo' => $photoPath,
             'status' => 'active', // Auto-activate invited users
             'email_verified_at' => now(), // Auto-verify invited users
+            'registration_date' => now(), // Add registration date
         ];
         
         // Generate user_id based on role
@@ -266,9 +267,11 @@ class InvitationController extends Controller
             case 'donor':
                 return redirect()->route('donor.dashboard');
             case 'primary_pharmacist':
+                return redirect()->route('primary_pharmacist.dashboard');
             case 'senior_pharmacist':
+                return redirect()->route('senior_pharmacist.dashboard');
             case 'clinic_pharmacist':
-                return redirect()->route('pharmacy.dashboard');
+                return redirect()->route('clinic_pharmacist.dashboard');
             case 'hod':
                 return redirect()->route('hod.dashboard');
             default:

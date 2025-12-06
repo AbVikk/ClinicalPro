@@ -5,6 +5,7 @@ namespace App\Console;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use App\Console\Commands\SendDueReminders; // <-- Your Command is imported here
+use App\Console\Commands\GenerateInventoryPredictions; // <-- New Inventory Prediction Command
 
 class Kernel extends ConsoleKernel
 {
@@ -16,6 +17,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         // Your custom commands will be added here
         SendDueReminders::class,
+        GenerateInventoryPredictions::class, // <-- Register the new command
     ];
 
     /**
@@ -28,8 +30,11 @@ class Kernel extends ConsoleKernel
     {
         // 1. Add your custom reminder command to run every minute
         $schedule->command(SendDueReminders::class)->everyMinute();
+        
+        // 2. Add inventory prediction command to run nightly
+        $schedule->command(GenerateInventoryPredictions::class)->dailyAt('02:00');
 
-        // 2. You can add other built-in commands here, like caching and session cleanup
+        // 3. You can add other built-in commands here, like caching and session cleanup
         // $schedule->command('cache:clear')->daily();
     }
 

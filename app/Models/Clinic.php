@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\BelongsToHospital;
 
 class Clinic extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToHospital;
 
     /**
      * The attributes that are mass assignable.
@@ -15,6 +16,7 @@ class Clinic extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'hospital_id',
         'name',
         'address',
         'is_physical',

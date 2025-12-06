@@ -1,11 +1,17 @@
 <?php
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class Patient extends Model
 {
+    use Auditable, BelongsToHospital;
+    
     protected $fillable = [
-        'user_id', // Foreign key to users table
+        'user_id',
+        'hospital_id',
         'phone',
         'medical_history',
     ];

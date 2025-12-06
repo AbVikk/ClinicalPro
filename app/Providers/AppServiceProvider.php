@@ -7,6 +7,8 @@ use Gemini\Client;
 use Gemini\Factory as GeminiFactory;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Support\ServiceProvider;
+use App\Services\InventoryAiService;
+use App\Services\AiAssistantService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -30,6 +32,11 @@ class AppServiceProvider extends ServiceProvider
                 ->withBaseUrl($baseUrl) 
                 ->withHttpClient($httpClient)
                 ->make();
+        });
+        
+        // Bind InventoryAiService
+        $this->app->singleton(InventoryAiService::class, function ($app) {
+            return new InventoryAiService($app->make(AiAssistantService::class));
         });
     }
 

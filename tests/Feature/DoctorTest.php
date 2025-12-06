@@ -35,6 +35,7 @@ class DoctorTest extends TestCase
             'first_name' => 'John',
             'last_name' => 'Doe',
             'email' => 'john.doe@example.com',
+            'phone' => '1234567890',
             'license_number' => 'DOC12345',
             'specialization_id' => $category->id,
             'department_id' => $department->id,
@@ -42,11 +43,11 @@ class DoctorTest extends TestCase
             'password_confirmation' => 'password123',
         ];
         
-        // Try to access the route directly first to see if it exists
-        $response = $this->actingAs($admin)->get('/admin/doctor');
-        
         // Create the doctor using the named route
         $response = $this->actingAs($admin)->post(route('admin.doctor.store'), $doctorData);
+        
+        // Should redirect after successful creation
+        $response->assertStatus(302);
         
         // Assert the user was created with the correct data
         $this->assertDatabaseHas('users', [

@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Carbon\Carbon; // Make sure Carbon is imported
+use App\Traits\Auditable;           // <--- Track Changes
+use App\Traits\BelongsToHospital;
 
 /**
  * @property int $patient_id
@@ -14,11 +16,12 @@ use Carbon\Carbon; // Make sure Carbon is imported
 
 class Prescription extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable, BelongsToHospital;
 
     protected $fillable = [
         'patient_id',
         'doctor_id',
+        'hospital_id',
         'consultation_id',
         'status',
         'notes',

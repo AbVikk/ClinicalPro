@@ -14,6 +14,12 @@ class DrugCategoryController extends Controller
     public function index()
     {
         $categories = DrugCategory::all();
+        
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.categories.*')) {
+            return view('pharmacy.primary_pharmacist.pharmacy.categories.index', compact('categories'));
+        }
+        
         return view('admin.pharmacy.categories.index', compact('categories'));
     }
 
@@ -22,6 +28,11 @@ class DrugCategoryController extends Controller
      */
     public function create()
     {
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.categories.*')) {
+            return view('pharmacy.primary_pharmacist.pharmacy.categories.create');
+        }
+        
         return view('admin.pharmacy.categories.create');
     }
 
@@ -40,6 +51,12 @@ class DrugCategoryController extends Controller
             'description' => $request->description,
         ]);
 
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.categories.*')) {
+            return redirect()->route('primary_pharmacist.pharmacy.categories.index')
+                ->with('success', 'Drug category created successfully.');
+        }
+
         return redirect()->route('admin.pharmacy.categories.index')
             ->with('success', 'Drug category created successfully.');
     }
@@ -49,6 +66,11 @@ class DrugCategoryController extends Controller
      */
     public function edit(DrugCategory $category)
     {
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.categories.*')) {
+            return view('pharmacy.primary_pharmacist.pharmacy.categories.edit', compact('category'));
+        }
+        
         return view('admin.pharmacy.categories.edit', compact('category'));
     }
 
@@ -67,6 +89,12 @@ class DrugCategoryController extends Controller
             'description' => $request->description,
         ]);
 
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.categories.*')) {
+            return redirect()->route('primary_pharmacist.pharmacy.categories.index')
+                ->with('success', 'Drug category updated successfully.');
+        }
+
         return redirect()->route('admin.pharmacy.categories.index')
             ->with('success', 'Drug category updated successfully.');
     }
@@ -78,11 +106,23 @@ class DrugCategoryController extends Controller
     {
         // Check if the category is being used by any drugs
         if ($category->drugs()->count() > 0) {
+            // Check if the route is for primary pharmacist
+            if (request()->routeIs('primary_pharmacist.pharmacy.categories.*')) {
+                return redirect()->route('primary_pharmacist.pharmacy.categories.index')
+                    ->with('error', 'Cannot delete category because it is being used by drugs.');
+            }
+            
             return redirect()->route('admin.pharmacy.categories.index')
                 ->with('error', 'Cannot delete category because it is being used by drugs.');
         }
 
         $category->delete();
+
+        // Check if the route is for primary pharmacist
+        if (request()->routeIs('primary_pharmacist.pharmacy.categories.*')) {
+            return redirect()->route('primary_pharmacist.pharmacy.categories.index')
+                ->with('success', 'Drug category deleted successfully.');
+        }
 
         return redirect()->route('admin.pharmacy.categories.index')
             ->with('success', 'Drug category deleted successfully.');

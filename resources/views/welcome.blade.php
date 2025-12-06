@@ -53,7 +53,10 @@
                 <div class="content text-center">                                                
                     <a href="{{ route('login') }}" class="btn btn-primary btn-lg mr-3">Log in</a>
                     @if (Route::has('register.initial'))
-                        <a href="{{ route('register.initial') }}" class="btn btn-success btn-lg">Register</a>
+                        <a href="{{ route('register.initial') }}" class="btn btn-success btn-lg mr-3">Register</a>
+                    @endif
+                    @if (Route::has('hospital.register.form'))
+                        <a href="{{ route('hospital.register.form') }}" class="btn btn-info btn-lg">Register Hospital</a>
                     @endif
                 </div>
             </div>

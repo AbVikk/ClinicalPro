@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class Disbursement extends Model
 {
-    use HasFactory;
+    use HasFactory, Auditable, BelongsToHospital;
 
     /**
      * The attributes that are mass assignable.
@@ -15,6 +17,7 @@ class Disbursement extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'hospital_id',
         'recipient_id',
         'clinic_id',
         'amount',

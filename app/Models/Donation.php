@@ -1,14 +1,19 @@
 <?php
 namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\Auditable;
+use App\Traits\BelongsToHospital;
 
 class Donation extends Model
 {
+    use Auditable, BelongsToHospital;
+
     protected $fillable = [
+        'hospital_id',
         'patient_id',
         'amount',
         'payment_method',
-        'status', // e.g., 'pending', 'completed'
+        'status',
         'donated_at',
     ];
 
